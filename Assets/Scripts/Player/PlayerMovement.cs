@@ -1,4 +1,6 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
+
 // using Unity.Netcode; // TODO: 네트워크 테스트 시 주석 해제
 
 [RequireComponent(typeof(CharacterController))]
@@ -6,15 +8,28 @@ using UnityEngine;
 public class PlayerMovement : MonoBehaviour // TODO: 네트워크 테스트 시 NetworkBehaviour로 복구
 {
     [Header("이동")]
-    [SerializeField] private float m_moveSpeed = 5f;
-    [SerializeField] private float m_sprintSpeed = 8f;
-    [SerializeField] private float m_gravity = -9.81f;
+    [SerializeField]
+    private float m_moveSpeed = 5f;
+
+    [SerializeField]
+    private float m_sprintSpeed = 8f;
+
+    [SerializeField]
+    private float m_gravity = -9.81f;
 
     [Header("1인칭 시점")]
-    [SerializeField] private Camera playerCamera;
-    [SerializeField] private float m_mouseSensitivity = 1f;
-    [SerializeField] private float m_minPitch = -80f;
-    [SerializeField] private float m_maxPitch = 80f;
+    [SerializeField]
+    private Camera playerCamera;
+
+    [SerializeField]
+    private float m_mouseSensitivity = 1f;
+
+    [SerializeField]
+    private float m_minPitch = -80f;
+
+    [SerializeField]
+    private float m_maxPitch = 80f;
+
     // [SerializeField] private Transform m_ownBodyRoot; // TODO: 네트워크 테스트 시 주석 해제, 캐릭터 몸(머리) 루트 연결
 
     private CharacterController m_controller;
@@ -54,6 +69,19 @@ public class PlayerMovement : MonoBehaviour // TODO: 네트워크 테스트 시 
     {
         HandleLook();
         HandleMove();
+        HandleCursorToggle();
+    }
+
+    private void HandleCursorToggle()
+    {
+        if (Keyboard.current == null || !Keyboard.current.escapeKey.wasPressedThisFrame)
+        {
+            return;
+        }
+
+        bool isLocked = Cursor.lockState == CursorLockMode.Locked;
+        Cursor.lockState = isLocked ? CursorLockMode.None : CursorLockMode.Locked;
+        Cursor.visible = isLocked;
     }
 
     private void HandleLook()
@@ -69,7 +97,9 @@ public class PlayerMovement : MonoBehaviour // TODO: 네트워크 테스트 시 
     private void HandleMove()
     {
         Vector2 input = m_inputHandler.MoveInput;
-        Vector3 moveDirection = (transform.right * input.x + transform.forward * input.y).normalized;
+        Vector3 moveDirection = (
+            transform.right * input.x + transform.forward * input.y
+        ).normalized;
 
         if (m_controller.isGrounded && m_verticalVelocity < 0f)
         {
