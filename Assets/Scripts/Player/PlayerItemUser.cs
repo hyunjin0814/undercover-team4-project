@@ -26,12 +26,14 @@ public class PlayerItemUser : MonoBehaviour
 
     private void OnEnable()
     {
-        m_inputHandler.OnAttackPerformed += HandleUseItem;
+        m_inputHandler.OnAttackStarted += HandleUseItem;
+        m_inputHandler.OnAttackCanceled += HandleCancelItem;
     }
 
     private void OnDisable()
     {
-        m_inputHandler.OnAttackPerformed -= HandleUseItem;
+        m_inputHandler.OnAttackStarted -= HandleUseItem;
+        m_inputHandler.OnAttackCanceled -= HandleCancelItem;
     }
 
     public void SetEquippedItem(ItemBase item)
@@ -57,5 +59,12 @@ public class PlayerItemUser : MonoBehaviour
         // 겨냥한 대상을 함께 넘긴다 — 각 아이템이 대상에서 필요한 정보를 조회한다.
         GameObject target = m_interactor != null ? m_interactor.CurrentTarget : null;
         m_equippedItem.Use(target);
+    }
+
+    private void HandleCancelItem()
+    {
+        // 채널링 중이 아니면 CancelUse는 무동작이라 항상 호출해도 안전하다.
+        // CanUse() 체크 금지 — 채널링 중엔 false라서 취소가 막힌다 (#91)
+        m_equippedItem?.CancelUse();
     }
 }
