@@ -20,7 +20,7 @@ GameObject:
   - component: {fileID: 8156950665793670387}
   - component: {fileID: 8301901334336164859}
   - component: {fileID: 5127349806152873460}
-  m_Layer: 0
+  m_Layer: 7
   m_Name: NPC_Citizen
   m_TagString: Untagged
   m_Icon: {fileID: 0}
