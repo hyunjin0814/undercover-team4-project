@@ -32,7 +32,6 @@ Transform:
   - {fileID: 45454874269807273}
   m_Father: {fileID: 322532580044278375}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-
 --- !u!1 &554224255856011205
 GameObject:
   m_ObjectHideFlags: 0
@@ -1518,6 +1517,7 @@ GameObject:
   - component: {fileID: 4797622518154175178}
   - component: {fileID: 7757215531818328684}
   - component: {fileID: 6677678871598212644}
+  - component: {fileID: 979386637743612742}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -1810,6 +1810,22 @@ MonoBehaviour:
   - {fileID: 6465765157232573796, guid: ef3d4594c5614be42ad3cdf1ec34cb19, type: 3}
   - {fileID: 7706984690027994764, guid: f9679efa0de9358449d82923ccfc9755, type: 3}
   m_itemAnchor: {fileID: 0}
+--- !u!208 &979386637743612742
+NavMeshObstacle:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5466483465133727208}
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Shape: 0
+  m_Extents: {x: 0.45, y: 1, z: 0.45}
+  m_MoveThreshold: 0.1
+  m_Carve: 0
+  m_CarveOnlyStationary: 1
+  m_Center: {x: 0, y: 1, z: 0}
+  m_TimeToStationary: 0.5
 --- !u!1 &5536001738967602051
 GameObject:
   m_ObjectHideFlags: 0
