@@ -5,8 +5,9 @@ using UnityEngine;
 // using Unity.Netcode; // TODO: 네트워크 테스트 시 주석 해제
 
 /// <summary>
-/// 수갑 아이템. 사용 시 겨냥한 NPC(레이캐스트 타겟)를 대상으로 잡아
-/// 3초 채널링 후 대상 FSM을 Captured로 전이시킨다. (GDD 8-2, 이슈 #36/#35)
+/// 수갑 아이템 — 체포 채널링 전용. 좌클릭 홀드로 겨냥한 NPC(레이캐스트 타겟)를 대상으로 잡아
+/// 3초 채널링 후 대상 FSM을 Captured로 전이시킨다. 홀드 중 클릭을 떼면 취소된다. (GDD 8-2, #36/#35/#91)
+/// 연행 놓기·재연행은 상호작용키(E)로 이관됨 — PlayerInteractor/NpcSubdueInteractable 참고 (#91).
 /// 배터리 등 자원 소모는 없다.
 /// </summary>
 public class Handcuffs : ItemBase
@@ -44,13 +45,6 @@ public class Handcuffs : ItemBase
             return;
         }
 
-        // 연행 중이면 이번 입력은 "놓기" — NPC는 그 자리에서 체포 상태로 멈춘다 (#59)
-        if (m_escorter != null && m_escorter.IsEscorting)
-        {
-            m_escorter.Release();
-            return;
-        }
-
         // 겨냥한 대상에서 NPC를 조회한다 (#35). 대상이 없거나 NPC가 아니면 채널링 자체를 시작하지 않는다.
         NpcController target = ResolveTarget(aimTarget);
         if (target == null)
@@ -66,11 +60,11 @@ public class Handcuffs : ItemBase
             return;
         }
 
-        // 이미 체포되어 멈춰 있는 대상은 채널링 없이 즉시 재연행한다 (#59)
+        // 이미 체포된 대상은 채널링 대상이 아니다 — 재연행은 상호작용키(E)로 (#91)
         // 상태는 반드시 동기화된 CurrentState로 읽는다 — StateMachine 값은 서버에서만 갱신됨 (#56)
         if (target.CurrentState == NpcState.Captured)
         {
-            m_escorter?.StartEscort(target);
+            Debug.Log("이미 체포된 대상 — 재연행은 상호작용키로");
             return;
         }
 
@@ -87,13 +81,19 @@ public class Handcuffs : ItemBase
 
         try
         {
-            await UniTask.Delay(TimeSpan.FromSeconds(m_channelSeconds), cancellationToken: m_cts.Token);
-
-            // 채널링 동안 대상이 파괴됐거나 사거리를 벗어났으면 실패 — 도주형 NPC 대응 (GDD 6장)
-            if (target == null || !IsInRange(target))
+            // 단일 Delay가 아닌 프레임 루프 — 도중 거리 이탈을 즉시 실패시킨다 (#91, 도주형 NPC 대응 GDD 6장)
+            // 뗌 취소는 Yield의 토큰 예외(catch)로, 거리 이탈은 return으로 — 취소 사유가 구분된다
+            float elapsed = 0f;
+            while (elapsed < m_channelSeconds)
             {
-                Debug.Log("구속 실패 — 대상이 범위를 벗어남");
-                return;
+                if (target == null || !IsInRange(target))
+                {
+                    Debug.Log("구속 실패 — 대상이 범위를 벗어남");
+                    return;
+                }
+
+                await UniTask.Yield(PlayerLoopTiming.Update, m_cts.Token);
+                elapsed += Time.deltaTime;
             }
 
             // 채널링 성공 순간 대상의 반응이 갈린다 (GDD 6-1, #76).
@@ -135,6 +135,9 @@ public class Handcuffs : ItemBase
             m_cts = null;
         }
     }
+
+    /// <summary>좌클릭 뗌 — 진행 중인 구속 채널링을 취소한다 (#91).</summary>
+    public override void CancelUse() => CancelRestrain();
 
     /// <summary>진행 중인 구속 채널링을 취소한다. (이동·피격 등 방해 시 호출)</summary>
     public void CancelRestrain() => m_cts?.Cancel();

@@ -60,4 +60,11 @@ public abstract class ItemBase : MonoBehaviour
     /// </param>
     // TODO: 네트워크 테스트 시 서버 권위로 실행되게 (오너 입력 → ServerRpc 요청 → 서버가 실제 효과 실행/검증 후 동기화)
     public abstract void Use(GameObject target);
+
+    /// <summary>
+    /// 진행 중인 사용(채널링)을 중단한다. 좌클릭을 떼면 PlayerItemUser가 호출한다 (#91).
+    /// 채널링이 없는 즉발 아이템은 기본 구현(무동작)을 그대로 쓴다.
+    /// </summary>
+    // TODO: 네트워크 테스트 시 취소도 서버 권위로 (오너 뗌 입력 → CancelUseServerRpc → 서버가 채널링 중단)
+    public virtual void CancelUse() { }
 }

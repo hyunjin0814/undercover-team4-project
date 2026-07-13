@@ -31,10 +31,11 @@ public class PlayerInputHandler : NetworkBehaviour
     public Vector2 LookInput { get; private set; }
     public bool IsSprinting { get; private set; }
 
-    public event Action OnInteractStarted; // 채널링 시작 (버튼 누름)
-    public event Action OnInteractPerformed; // Hold 완료 (3초 채움)
-    public event Action OnInteractCanceled; // 중간에 뗌
-    public event Action OnAttackPerformed; // 아이템 사용 (조준 대상에 사용)
+    public event Action OnInteractStarted; // 상호작용 버튼 누름
+    public event Action OnInteractPerformed; // 상호작용 발동 — 순수 Button이라 누르는 즉시 발화 (즉시발동)
+    public event Action OnInteractCanceled; // 상호작용 버튼 뗌
+    public event Action OnAttackStarted; // 아이템 사용 시작 (좌클릭 누름 — 채널링 시작, #91)
+    public event Action OnAttackCanceled; // 아이템 사용 중단 (좌클릭 뗌 — 채널링 취소, #91)
     public event Action OnPreviousItem; // 마우스 휠 위 — 이전 아이템으로 전환 (#46)
     public event Action OnNextItem; // 마우스 휠 아래 — 다음 아이템으로 전환 (#46)
 
@@ -63,7 +64,8 @@ public class PlayerInputHandler : NetworkBehaviour
         m_interactAction.action.canceled += OnInteractCanceledHandler;
         m_sprintAction.action.performed += OnSprintPerformed;
         m_sprintAction.action.canceled += OnSprintCanceled;
-        m_attackAction.action.performed += OnAttackPerformedHandler;
+        m_attackAction.action.started += OnAttackStartedHandler;
+        m_attackAction.action.canceled += OnAttackCanceledHandler;
         m_previousAction.action.performed += OnPreviousItemHandler;
         m_nextAction.action.performed += OnNextItemHandler;
     }
@@ -82,7 +84,8 @@ public class PlayerInputHandler : NetworkBehaviour
         m_interactAction.action.canceled -= OnInteractCanceledHandler;
         m_sprintAction.action.performed -= OnSprintPerformed;
         m_sprintAction.action.canceled -= OnSprintCanceled;
-        m_attackAction.action.performed -= OnAttackPerformedHandler;
+        m_attackAction.action.started -= OnAttackStartedHandler;
+        m_attackAction.action.canceled -= OnAttackCanceledHandler;
         m_previousAction.action.performed -= OnPreviousItemHandler;
         m_nextAction.action.performed -= OnNextItemHandler;
 
@@ -112,8 +115,11 @@ public class PlayerInputHandler : NetworkBehaviour
 
     private void OnSprintCanceled(InputAction.CallbackContext ctx) => IsSprinting = false;
 
-    private void OnAttackPerformedHandler(InputAction.CallbackContext ctx) =>
-        OnAttackPerformed?.Invoke();
+    private void OnAttackStartedHandler(InputAction.CallbackContext ctx) =>
+        OnAttackStarted?.Invoke();
+
+    private void OnAttackCanceledHandler(InputAction.CallbackContext ctx) =>
+        OnAttackCanceled?.Invoke();
 
     private void OnPreviousItemHandler(InputAction.CallbackContext ctx) => OnPreviousItem?.Invoke();
 

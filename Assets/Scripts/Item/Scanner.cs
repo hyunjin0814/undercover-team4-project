@@ -14,6 +14,10 @@ public class Scanner : ItemBase, IChargeable
     [SerializeField]
     private float m_channelSeconds = 3f;
 
+    [Tooltip("채널링 도중 대상이 이 거리(m)를 벗어나면 스캔 실패로 처리한다 (#91)")]
+    [SerializeField]
+    private float m_scanKeepRange = 5f;
+
     [SerializeField]
     private int m_maxBattery = 5;
 
@@ -92,20 +96,37 @@ public class Scanner : ItemBase, IChargeable
             return;
         }
 
-        ScanAsync(identity.Profile).Forget();
+        // 프로필만이 아니라 신원 컴포넌트째 넘긴다 — 채널링 도중 거리 이탈 판정에 대상 위치가 필요 (#91)
+        ScanAsync(identity).Forget();
     }
 
     // ---- 스캔 채널링 ----
 
     // TODO: 네트워크 테스트 시 채널링 타이밍/배터리 소모를 서버 권위로 (클라 시간 조작 방지). 스캔 결과는 ClientRpc/NetworkVariable로 전파
-    private async UniTaskVoid ScanAsync(CitizenProfile profile)
+    private async UniTaskVoid ScanAsync(CitizenIdentity identity)
     {
         m_isScanning = true;
         m_cts = new CancellationTokenSource();
 
+        // 프로필은 시작 시점 값으로 고정 — 채널링 도중 재배정될 일은 없다
+        CitizenProfile profile = identity.Profile;
+
         try
         {
-            await UniTask.Delay(TimeSpan.FromSeconds(m_channelSeconds), cancellationToken: m_cts.Token);
+            // 단일 Delay가 아닌 프레임 루프 — 도중 거리 이탈을 즉시 실패시킨다 (#91)
+            // 뗌 취소는 Yield의 토큰 예외(catch)로, 거리 이탈은 return으로 — 취소 사유가 구분된다
+            float elapsed = 0f;
+            while (elapsed < m_channelSeconds)
+            {
+                if (identity == null || !IsInRange(identity.transform))
+                {
+                    Debug.Log("스캔 실패 — 대상이 범위를 벗어남");
+                    return;
+                }
+
+                await UniTask.Yield(PlayerLoopTiming.Update, m_cts.Token);
+                elapsed += Time.deltaTime;
+            }
 
             m_currentBattery = Mathf.Max(m_currentBattery - 1, 0);
             Debug.Log($"NPC 스캔됨: {GetScanInfo(profile)}");
@@ -124,8 +145,17 @@ public class Scanner : ItemBase, IChargeable
         }
     }
 
+    /// <summary>좌클릭 뗌 — 진행 중인 스캔 채널링을 취소한다 (#91).</summary>
+    public override void CancelUse() => CancelScan();
+
     /// <summary>진행 중인 스캔 채널링을 취소한다. (이동·피격 등 방해 시 호출)</summary>
     public void CancelScan() => m_cts?.Cancel();
+
+    private bool IsInRange(Transform target)
+    {
+        return (target.position - transform.position).sqrMagnitude
+            <= m_scanKeepRange * m_scanKeepRange;
+    }
 
     private static string GetScanInfo(CitizenProfile profile)
     {

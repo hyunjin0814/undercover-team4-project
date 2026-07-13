@@ -2,7 +2,8 @@ using UnityEngine;
 
 /// <summary>
 /// 플레이어의 연행 상태 관리 — 지금 누구를 연행 중인지 추적한다. (이슈 #59)
-/// 연행 시작(체포 성공)과 놓기는 같은 E 입력을 받는 Handcuffs가 분기해서 호출한다.
+/// 연행 시작: 체포 성공 시 Handcuffs가 자동 호출, 재연행은 NpcSubdueInteractable(E).
+/// 놓기: PlayerInteractor가 E 입력을 선점해 호출한다. (#91)
 /// 한 번에 1명만 연행 가능 (이슈 완료 기준).
 /// </summary>
 // TODO: 네트워크 전환 시 연행 소유권을 서버 권위로 (플레이어별 NetworkVariable)
