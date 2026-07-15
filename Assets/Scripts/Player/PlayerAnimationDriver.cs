@@ -11,7 +11,7 @@ using UnityEngine;
 /// </summary>
 public class PlayerAnimationDriver : MonoBehaviour
 {
-    // 블렌드 트리 좌표 (PlayerAnimatorControllerBuilder가 클립 배치에 같은 상수를 사용)
+    // 블렌드 트리 좌표 — .controller의 걷기/달리기 클립 배치와 같은 값이어야 한다
     public const float k_walkParam = 1f;
     public const float k_runParam = 2f;
 
