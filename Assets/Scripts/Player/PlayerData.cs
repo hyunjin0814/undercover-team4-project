@@ -21,6 +21,13 @@ public class PlayerData : NetworkBehaviour, IDamageable
     public int MaxHp => m_maxHp;
     public int CurrentHp => IsSpawned ? m_syncedHp.Value : m_hp;
 
+    /// <summary>
+    /// 아직 행동 가능한 상태인지 — 살아있고(HP&gt;0) 무력화되지 않은 플레이어. (#105, #106)
+    /// 돌발 이벤트·NPC가 표적을 고를 때 쓴다: 다운된 플레이어는 이미 무력화됐으므로 표적에서 뺀다.
+    /// </summary>
+    public bool IsTargetable =>
+        CurrentHp > 0 && (m_incapacitation == null || !m_incapacitation.IsIncapacitated);
+
     private void Awake()
     {
         m_hp = m_maxHp; // 오프라인(비네트워크) Play 테스트 폴백 초기값

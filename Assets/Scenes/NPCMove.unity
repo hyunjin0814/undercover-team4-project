@@ -390,27 +390,27 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 113532904361550276, guid: 96e8f7ccee94910459b21ba3238dcadb, type: 3}
       propertyPath: m_AnchorMax.y
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 113532904361550276, guid: 96e8f7ccee94910459b21ba3238dcadb, type: 3}
       propertyPath: m_AnchorMin.y
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 113532904361550276, guid: 96e8f7ccee94910459b21ba3238dcadb, type: 3}
       propertyPath: m_SizeDelta.x
-      value: 610
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 113532904361550276, guid: 96e8f7ccee94910459b21ba3238dcadb, type: 3}
       propertyPath: m_SizeDelta.y
-      value: 160
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 113532904361550276, guid: 96e8f7ccee94910459b21ba3238dcadb, type: 3}
       propertyPath: m_AnchoredPosition.x
-      value: 305
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 113532904361550276, guid: 96e8f7ccee94910459b21ba3238dcadb, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: -240
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 3188389819452270898, guid: 96e8f7ccee94910459b21ba3238dcadb, type: 3}
       propertyPath: m_Material
@@ -458,27 +458,27 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4739559709598093264, guid: 96e8f7ccee94910459b21ba3238dcadb, type: 3}
       propertyPath: m_AnchorMax.y
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 4739559709598093264, guid: 96e8f7ccee94910459b21ba3238dcadb, type: 3}
       propertyPath: m_AnchorMin.y
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 4739559709598093264, guid: 96e8f7ccee94910459b21ba3238dcadb, type: 3}
       propertyPath: m_SizeDelta.x
-      value: 610
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 4739559709598093264, guid: 96e8f7ccee94910459b21ba3238dcadb, type: 3}
       propertyPath: m_SizeDelta.y
-      value: 160
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 4739559709598093264, guid: 96e8f7ccee94910459b21ba3238dcadb, type: 3}
       propertyPath: m_AnchoredPosition.x
-      value: 305
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 4739559709598093264, guid: 96e8f7ccee94910459b21ba3238dcadb, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: -80
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 4821452834029032966, guid: 96e8f7ccee94910459b21ba3238dcadb, type: 3}
       propertyPath: GlobalObjectIdHash
@@ -494,27 +494,27 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6965857576204792976, guid: 96e8f7ccee94910459b21ba3238dcadb, type: 3}
       propertyPath: m_AnchorMax.y
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 6965857576204792976, guid: 96e8f7ccee94910459b21ba3238dcadb, type: 3}
       propertyPath: m_AnchorMin.y
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 6965857576204792976, guid: 96e8f7ccee94910459b21ba3238dcadb, type: 3}
       propertyPath: m_SizeDelta.x
-      value: 610
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 6965857576204792976, guid: 96e8f7ccee94910459b21ba3238dcadb, type: 3}
       propertyPath: m_SizeDelta.y
-      value: 160
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 6965857576204792976, guid: 96e8f7ccee94910459b21ba3238dcadb, type: 3}
       propertyPath: m_AnchoredPosition.x
-      value: 305
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 6965857576204792976, guid: 96e8f7ccee94910459b21ba3238dcadb, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: -400
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 6972632809807839780, guid: 96e8f7ccee94910459b21ba3238dcadb, type: 3}
       propertyPath: m_equippedItem
@@ -1083,6 +1083,135 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1067317176}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!1 &1083012404
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1083012406}
+  - component: {fileID: 1083012405}
+  - component: {fileID: 1083012408}
+  - component: {fileID: 1083012407}
+  - component: {fileID: 1083012410}
+  - component: {fileID: 1083012409}
+  m_Layer: 0
+  m_Name: SuddenEvents
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1083012405
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1083012404}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
+  GlobalObjectIdHash: 2474232426
+  InScenePlacedSourceGlobalObjectIdHash: 0
+  DeferredDespawnTick: 0
+  Ownership: 1
+  AlwaysReplicateAsRoot: 0
+  SynchronizeTransform: 1
+  <InScenePlaced>k__BackingField: 0
+  ActiveSceneSynchronization: 0
+  SceneMigrationSynchronization: 0
+  SpawnWithObservers: 1
+  DontDestroyWithOwner: 0
+  AutoObjectParentSync: 1
+  SyncOwnerTransformWhenParented: 1
+  AllowOwnerToParent: 0
+--- !u!4 &1083012406
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1083012404}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1083012407
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1083012404}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 048a56f72e625bd4582bc22ad3662a24, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ThugAssaultEvent
+  m_thugPrefab: {fileID: 2937104856208815511, guid: b346482e77513644ea3522271c62578d, type: 3}
+  m_durationSeconds: 20
+  m_spawnDistanceMin: 8
+  m_spawnDistanceMax: 15
+  m_navSampleMaxDistance: 4
+  m_maxSpawnAttempts: 8
+--- !u!114 &1083012408
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1083012404}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e7b607202c68ecf4f98e54187d8a25eb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SuddenEventManager
+  ShowTopMostFoldoutHeaderGroup: 1
+  m_round: {fileID: 695786082}
+  m_minInterval: 8
+  m_maxInterval: 15
+  m_startDelay: 5
+  m_enabled: 1
+--- !u!114 &1083012409
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1083012404}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 58752d6af7438004cb50c7b401dbabbe, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DeviceBlackoutView
+  m_blackout: {fileID: 0}
+  m_vivox: {fileID: 0}
+  m_overlayAlpha: 0.75
+  m_overlayLabel: "\u26A0 \uC804\uC790\uAE30\uAE30 \uBA39\uD1B5 \u2014 \uC2DC\uC57C\xB7\uD1B5\uC2E0
+    \uC7A5\uC560"
+--- !u!114 &1083012410
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1083012404}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a22184e6d60531647aad8c4af74eeff3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DeviceBlackoutEvent
+  ShowTopMostFoldoutHeaderGroup: 1
+  m_durationSeconds: 12
 --- !u!1 &1179928418
 GameObject:
   m_ObjectHideFlags: 0
@@ -1965,3 +2094,4 @@ SceneRoots:
   - {fileID: 68332408}
   - {fileID: 1449684090}
   - {fileID: 695786083}
+  - {fileID: 1083012406}

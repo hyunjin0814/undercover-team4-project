@@ -1442,6 +1442,11 @@ MonoBehaviour:
   m_channelPrefix: Radio
   m_pushToTalkAction: {fileID: -3939125208035815356, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_session: {fileID: 1659654874}
+  m_proximityChannelPrefix: Proximity
+  m_conversationalDistance: 3
+  m_audibleDistance: 15
+  m_audioFadeIntensity: 1
+  m_positionUpdateInterval: 0.1
   m_guiTopOffset: 10
 --- !u!4 &1042802660
 Transform:
@@ -2052,7 +2057,6 @@ GameObject:
   - component: {fileID: 1508727288}
   - component: {fileID: 1508727290}
   - component: {fileID: 1508727289}
-  - component: {fileID: 1508727291}
   m_Layer: 0
   m_Name: NetworkManager
   m_TagString: Untagged
@@ -2148,19 +2152,6 @@ MonoBehaviour:
     OldPrefabList: []
   RunInBackground: 1
   LogLevel: 1
---- !u!114 &1508727291
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1508727287}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: de4e4133ac2eaf54db90654ea82c019a, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::NetworkBootstrap
-  m_guiTopOffset: 10
 --- !u!1 &1637972538
 GameObject:
   m_ObjectHideFlags: 0
@@ -2576,7 +2567,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::AuthBootstrap
   m_signInOnStart: 1
   m_environmentName: production
-  m_profile: test2
+  m_profile: 
   m_guiTopOffset: 10
 --- !u!4 &1925858311
 Transform:

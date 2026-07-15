@@ -12,6 +12,9 @@ public class PlayerInteractor : NetworkBehaviour
     public IInteractable CurrentInteractable { get; private set; }
     public GameObject CurrentTarget { get; private set; } // 아이템 타겟팅/UI용
 
+    /// <summary>조준 대상이 바뀔 때 발행 — 조준 피드백(아웃라인·크로스헤어)용. null = 대상 없음. (#184)</summary>
+    public event System.Action<GameObject> OnTargetChanged;
+
     /// <summary>상호작용 레이캐스트 사거리(m). 서버 줍기 거리 검증(#147)이 같은 값을 재사용한다.</summary>
     public float Range => m_range;
 
@@ -54,6 +57,8 @@ public class PlayerInteractor : NetworkBehaviour
     {
         if (m_camera == null) return;
 
+        GameObject previousTarget = CurrentTarget;
+
         Ray ray = new Ray(m_camera.transform.position, m_camera.transform.forward);
         if (Physics.Raycast(ray, out RaycastHit hit, m_range, m_interactMask))
         {
@@ -65,6 +70,8 @@ public class PlayerInteractor : NetworkBehaviour
             CurrentTarget = null;
             CurrentInteractable = null;
         }
+
+        if (CurrentTarget != previousTarget) OnTargetChanged?.Invoke(CurrentTarget);
     }
 
     private void HandleInteract()

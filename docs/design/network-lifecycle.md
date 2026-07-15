@@ -105,7 +105,7 @@ VivoxManager ──▶ SessionManager ──▶ AuthBootstrap
 
 | 순서 | 이슈 | 구현하는 규칙 |
 |------|------|--------------|
-| 1 | #166 | 원칙 1 — SessionManager를 NGO 단일 소유자로, NetworkBootstrap 격리 |
+| 1 | #166 ✅ | 원칙 1 — SessionManager를 NGO 단일 소유자로, NetworkBootstrap **제거**(수동 경로 삭제) |
 | 2 | #167 | 원칙 5 — 끊김 신호 정규화 → `OnConnectionLost` 방출 |
 | 3 | #168 | 원칙 4 — `CanSignOut` 델리게이트 게이트 (#164 흡수) |
 | 4 | #169 | 원칙 2 + 종료 순서 — `LeaveAsync` 단일 레버 + 호출부 오케스트레이션 |
@@ -117,4 +117,4 @@ VivoxManager ──▶ SessionManager ──▶ AuthBootstrap
 - **teardown 오케스트레이션 주체:** 별도 클래스 vs 로비/메뉴 컨트롤러 겸임.
   최소핵심 관점에선 **후자 권장** — 새 클래스 없이 "나가기/로그아웃" 핸들러가 정해진 순서만 호출.
 - `SessionManager.cs`의 `TODO(#51/#55/#56)` 주석은 **stale**(해당 이슈들은 플레이어/아이템/NPC 네트워크 전환이며 CLOSED). #169 작업 시 주석을 올바른 이슈 번호로 갱신할 것.
-- 세션 SDK가 `LeaveAsync` 시 NGO를 자동 Shutdown 하는지 확인 필요. 안 하면 `SessionManager`가 명시적으로 책임진다(원칙 1).
+- ~~세션 SDK가 `LeaveAsync` 시 NGO를 자동 Shutdown 하는지 확인 필요.~~ **확인 완료(#166, 2026-07-15):** Multiplayer SDK 2.2.4가 `LeaveAsync` 시 NGO를 자동으로 내려준다(MPPM에서 Leave 후 `NetworkManager.Singleton.IsListening → false` 검증). 따라서 `SessionManager`가 명시적으로 `Shutdown()`을 호출할 필요 없음.

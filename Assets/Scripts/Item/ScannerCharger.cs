@@ -14,6 +14,14 @@ public class ScannerCharger : MonoBehaviour, IInteractable
     [Tooltip("m_chargeToFull이 false일 때 1회 상호작용당 충전량")]
     [SerializeField] private int m_chargeAmount = 1;
 
+    /// <summary>장착 아이템이 충전 대상(IChargeable)이고 완충이 아닐 때만 상호작용 의미가 있다 —
+    /// 조준 피드백(윤곽선) 판정용. Interact()의 조기 반환 조건과 동일 기준. (#184)</summary>
+    public bool CanInteract(GameObject interactor)
+    {
+        IChargeable chargeable = interactor.GetComponentInParent<PlayerItemUser>()?.EquippedItem as IChargeable;
+        return chargeable != null && !chargeable.IsFullyCharged;
+    }
+
     public void Interact(GameObject interactor)
     {
         IChargeable chargeable = interactor.GetComponentInParent<PlayerItemUser>()?.EquippedItem as IChargeable;

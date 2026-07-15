@@ -21,9 +21,14 @@ public class NpcSubdueInteractable : MonoBehaviour, IInteractable
         m_controller = GetComponent<NpcController>();
     }
 
+    /// <summary>E 상호작용이 실제로 동작하는 상태인지 — 조준 피드백(윤곽선) 판정용. (#184)</summary>
+    public bool CanInteract(GameObject interactor) =>
+        NpcStateRules.HasSubdueInteraction(m_controller.CurrentState);
+
     public void Interact(GameObject interactor)
     {
         // 도주·저항·체포 상태일 때만 반응 — 배회 중인 NPC 오작동 방지 (체포는 수갑 채널링이 정식 경로)
+        // 이 switch의 분기 집합은 NpcStateRules.HasSubdueInteraction과 반드시 일치해야 한다 (#184)
         switch (m_controller.CurrentState)
         {
             case NpcState.Run:

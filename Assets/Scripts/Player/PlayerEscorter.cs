@@ -16,8 +16,28 @@ public class PlayerEscorter : NetworkBehaviour
     [Header("수갑 채널링 (서버 권위)")]
     [Tooltip("체포 채널링 시간(초)")]
     [SerializeField] private float m_channelSeconds = 3f;
-    [Tooltip("채널링 시작/완료 시 대상이 이 거리(m)를 벗어나면 실패")]
-    [SerializeField] private float m_captureRange = 2.5f;
+
+    // 사거리는 조준·윤곽선과 같은 기준을 쓴다 — PlayerInteractor.Range 재사용 (#147 패턴, #184).
+    // "윤곽선은 뜨는데 체포가 안 되는" 거리 불일치를 구조적으로 차단한다.
+    private const float k_fallbackRange = 3f; // 테스트 구성 등 PlayerInteractor가 없을 때
+
+    private PlayerInteractor m_interactor;
+
+    private PlayerInteractor Interactor
+    {
+        get
+        {
+            if (m_interactor == null) m_interactor = GetComponent<PlayerInteractor>();
+            return m_interactor;
+        }
+    }
+
+    private float CaptureRange => Interactor != null ? Interactor.Range : k_fallbackRange;
+
+    // 거리 기준점 — 조준 레이캐스트·윤곽선 게이트와 동일한 AimOrigin(카메라).
+    // 루트(발밑) 기준이면 카메라 오프셋만큼 사거리 경계에서 판정이 어긋난다 (#147 관례, #184)
+    private Vector3 AimOriginPosition =>
+        Interactor != null ? Interactor.AimOrigin.position : transform.position;
 
     /// <summary>지금 연행 중인 NPC. 없으면 null. 서버(또는 오프라인)에서만 유효.</summary>
     public NpcController EscortingNpc { get; private set; }
@@ -151,10 +171,8 @@ public class PlayerEscorter : NetworkBehaviour
             return; // 중복 채널링 방지
         if (IsEscorting)
             return; // 연행 중엔 체포 불가 — 놓기는 상호작용키(E)의 RequestRelease 전용 (#91)
-        if (target.CurrentState == NpcState.Escorted)
-            return; // 이미(타인이) 연행 중 — 가로채기 방지
-        if (target.CurrentState == NpcState.Captured)
-            return; // 체포된 대상 재연행은 상호작용키(E)의 RequestEscort 경로로 (#91)
+        if (!NpcStateRules.IsCapturable(target.CurrentState))
+            return; // 연행 중(가로채기 방지 #59)·체포됨(재연행은 E 경로 #91) — 클라 검증·윤곽선과 단일 기준 (#184)
         if (!IsInRange(target))
             return; // 사거리 밖이면 시작조차 안 함
 
@@ -164,10 +182,20 @@ public class PlayerEscorter : NetworkBehaviour
     private async UniTaskVoid ServerChannelAsync(NpcController target)
     {
         NotifyOwner($"구속 채널링 시작: {target.name} ({m_channelSeconds}초)");
+        NotifyChannelGaugeStart(m_channelSeconds);
 
         // 프레임 루프 기반 keepAlive — 채널링 도중 거리 이탈을 즉시 실패시킨다 (#91, 도주형 NPC 대응 GDD 6장)
-        ServerChannel.Result result = await m_channel.RunAsync(
-            m_channelSeconds, () => target != null && IsInRange(target));
+        ServerChannel.Result result;
+        try
+        {
+            result = await m_channel.RunAsync(
+                m_channelSeconds, () => target != null && IsInRange(target));
+        }
+        finally
+        {
+            // 완료·뗌·거리이탈·예외 어떤 경로로 끝나도 게이지 숨김을 보장한다 (#184)
+            NotifyChannelGaugeEnd();
+        }
 
         switch (result)
         {
@@ -225,8 +253,8 @@ public class PlayerEscorter : NetworkBehaviour
 
     private bool IsInRange(NpcController target)
     {
-        return (target.transform.position - transform.position).sqrMagnitude
-            <= m_captureRange * m_captureRange;
+        return (target.transform.position - AimOriginPosition).sqrMagnitude
+            <= CaptureRange * CaptureRange;
     }
 
     /// <summary>채널링 성공 순간의 반응. 기절 중이거나 신원이 없으면 순응(즉시 연행) 취급. (#76)</summary>
@@ -252,6 +280,36 @@ public class PlayerEscorter : NetworkBehaviour
 
     [Rpc(SendTo.Owner)]
     private void OwnerLogRpc(string message) => Debug.Log($"[서버 판정] {message}");
+
+    // ---- 채널링 게이지 피드백 (#184) ----
+    // NotifyOwner와 동일 분기 — 호스트 오너·오프라인은 직접 호출, 원격 오너에게만 RPC.
+    // 데디케이티드 서버 등 HUD가 없는 환경에선 Instance가 null이라 무동작(안전).
+
+    private void NotifyChannelGaugeStart(float seconds)
+    {
+        if (IsSpawned && IsServer && !IsOwner)
+        {
+            ChannelGaugeStartRpc(seconds);
+            return;
+        }
+        ChannelingGaugeUI.Instance?.Show(seconds);
+    }
+
+    private void NotifyChannelGaugeEnd()
+    {
+        if (IsSpawned && IsServer && !IsOwner)
+        {
+            ChannelGaugeEndRpc();
+            return;
+        }
+        ChannelingGaugeUI.Instance?.Hide();
+    }
+
+    [Rpc(SendTo.Owner)]
+    private void ChannelGaugeStartRpc(float seconds) => ChannelingGaugeUI.Instance?.Show(seconds);
+
+    [Rpc(SendTo.Owner)]
+    private void ChannelGaugeEndRpc() => ChannelingGaugeUI.Instance?.Hide();
 
     // ---- 서버 내부 연행 상태 조작 ----
 

@@ -104,6 +104,16 @@ public class Scanner : ItemBase, IChargeable
     /// <summary>스캔 중이 아니고 배터리가 남아 있을 때만 사용 가능. (UI 힌트용 — 최종 판정은 서버가 재검증)</summary>
     public override bool CanUse() => !m_pendingScan && !IsDepleted;
 
+    /// <summary>스캔 가능한 대상인지 — 신원(CitizenIdentity)이 있고 배터리·중복 스캔 게이트(CanUse) 통과.
+    /// Use()의 조기 검증과 동일 기준 — 조준 피드백(윤곽선) 판정용. (#184)</summary>
+    public override bool CanTarget(GameObject aimTarget)
+    {
+        if (!CanUse())
+            return false;
+
+        return aimTarget != null && aimTarget.GetComponentInParent<CitizenIdentity>() != null;
+    }
+
     /// <summary>
     /// 아이템 사용 진입점. 오너의 의도를 서버로 전달한다.
     /// 대상 해석(CitizenIdentity/Profile 유무)은 진단 로그·조기 반환을 위해 클라에서 수행.
@@ -223,9 +233,19 @@ public class Scanner : ItemBase, IChargeable
         CitizenProfile profile = identity.Profile;
 
         NotifyOwner($"스캔 채널링 시작: {identity.name} ({m_channelSeconds}초)");
+        NotifyChannelGaugeStart(m_channelSeconds);
 
-        ServerChannel.Result result = await m_channel.RunAsync(
-            m_channelSeconds, () => identity != null && IsInRange(identity.transform));
+        ServerChannel.Result result;
+        try
+        {
+            result = await m_channel.RunAsync(
+                m_channelSeconds, () => identity != null && IsInRange(identity.transform));
+        }
+        finally
+        {
+            // 완료·뗌·거리이탈·예외 어떤 경로로 끝나도 게이지 숨김을 보장한다 (#184)
+            NotifyChannelGaugeEnd();
+        }
 
         switch (result)
         {
@@ -292,6 +312,36 @@ public class Scanner : ItemBase, IChargeable
     [Rpc(SendTo.Owner)]
     private void OwnerLogRpc(string message) => Debug.Log($"[서버 판정] {message}");
 
+    // ---- 채널링 게이지 피드백 (#184) ----
+    // NotifyOwner와 동일 분기 — 호스트 오너·오프라인은 직접 호출, 원격 오너에게만 RPC.
+    // 스캐너는 줍기 시 소유권이 홀더로 이전되므로(#88) SendTo.Owner가 정확히 든 사람에게 간다.
+
+    private void NotifyChannelGaugeStart(float seconds)
+    {
+        if (IsSpawned && IsServer && !IsOwner)
+        {
+            ChannelGaugeStartRpc(seconds);
+            return;
+        }
+        ChannelingGaugeUI.Instance?.Show(seconds);
+    }
+
+    private void NotifyChannelGaugeEnd()
+    {
+        if (IsSpawned && IsServer && !IsOwner)
+        {
+            ChannelGaugeEndRpc();
+            return;
+        }
+        ChannelingGaugeUI.Instance?.Hide();
+    }
+
+    [Rpc(SendTo.Owner)]
+    private void ChannelGaugeStartRpc(float seconds) => ChannelingGaugeUI.Instance?.Show(seconds);
+
+    [Rpc(SendTo.Owner)]
+    private void ChannelGaugeEndRpc() => ChannelingGaugeUI.Instance?.Hide();
+
     // ---- 스캔 취소 ----
 
     /// <summary>좌클릭 뗌 — 진행 중인 스캔 채널링 취소를 서버에 요청한다 (#91).</summary>
@@ -319,7 +369,11 @@ public class Scanner : ItemBase, IChargeable
 
     private bool IsInRange(Transform target)
     {
-        return (target.position - transform.position).sqrMagnitude
+        // 기준점은 든 플레이어의 AimOrigin(카메라) — 조준·윤곽선 게이트와 동일 (#184).
+        // 아이템은 줍기/버리기로 부모가 바뀌므로 캐시하지 않고 호출 시점에 해석한다 (Handcuffs.Escorter 관례).
+        PlayerInteractor interactor = GetComponentInParent<PlayerInteractor>();
+        Vector3 origin = interactor != null ? interactor.AimOrigin.position : transform.position;
+        return (target.position - origin).sqrMagnitude
             <= m_scanKeepRange * m_scanKeepRange;
     }
 

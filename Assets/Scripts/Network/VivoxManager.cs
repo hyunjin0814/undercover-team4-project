@@ -14,8 +14,9 @@ public class VivoxManager : MonoBehaviour
     [SerializeField] private InputActionReference m_pushToTalkAction;
     [SerializeField] private SessionManager m_session;   // 인스펙터에서 연결
     private bool m_loggedIn;
-    private bool m_transmitting;
+    private bool m_transmitting;   // PTT를 누르고 있는지 — 먹통 중에도 계속 추적해 해제 시 복원한다
     private bool m_starting;
+    private bool m_jammed;         // 전자기기 먹통(#106) 중 무전 차단 — 근접 음성은 막지 않는다
     private string m_status = "대기 중...";
 
     [Header("근접 음성 (positional)")]
@@ -225,11 +226,45 @@ public class VivoxManager : MonoBehaviour
     private void SetRadioTransmit(bool on)
     {
         if (!m_radioJoined || !m_proximityJoined) return;
-        m_transmitting = on;
+        m_transmitting = on; // 먹통 중에도 PTT 상태는 기록해 둔다 — 해제 시 누른 채면 바로 재개하기 위함 (#106)
 
+        if (m_jammed) return; // 먹통 중에는 무전이 나가지 않는다 — 근접 음성은 그대로 (#106)
+
+        ApplyRadioTransmission(on);
+    }
+
+    // 무전 채널 송신을 켜고 끈다 — 끄면 근접 채널로만 송신한다(참가 시 기본값과 동일).
+    private void ApplyRadioTransmission(bool on)
+    {
         var mode = on ? TransmissionMode.All : TransmissionMode.Single;
         string ch = on ? null : m_proximityChannelName;
         VivoxService.Instance.SetChannelTransmissionModeAsync(mode, ch).AsUniTask().Forget();
+    }
+
+    /// <summary>
+    /// 무전 차단(먹통) 설정 — 전자기기 먹통 돌발 이벤트(#106)가 켜고 끈다. (GDD 4-4/6-4)
+    /// 차단 대상은 <b>무전(거리 무관 채널)뿐</b>이다 — 근접 음성은 살아 있어 옆에 선 동료와는 계속 말할 수 있고
+    /// 본부와의 무전만 끊긴다. 본부·현장 분리가 이 이벤트의 노림수다.
+    /// 해제 시 PTT를 계속 누르고 있었다면 즉시 무전이 재개된다.
+    /// </summary>
+    public void SetCommsJammed(bool jammed)
+    {
+        if (m_jammed == jammed) return;
+        m_jammed = jammed;
+
+        // 채널 참가 전이면 건드릴 송신 상태가 없다 — 참가 시 기본값(근접 전용)이 곧 차단 상태와 같다
+        if (!m_radioJoined || !m_proximityJoined) return;
+
+        if (jammed)
+        {
+            ApplyRadioTransmission(false); // 진행 중이던 무전 송신을 즉시 끊는다
+            m_status = "무전 차단(먹통)";
+        }
+        else
+        {
+            ApplyRadioTransmission(m_transmitting); // 누르고 있던 PTT를 그대로 복원
+            m_status = "무전 복구";
+        }
     }
 
     private async UniTask LeaveAsync()

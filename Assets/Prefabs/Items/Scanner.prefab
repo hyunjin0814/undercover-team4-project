@@ -77,7 +77,9 @@ MonoBehaviour:
   m_itemIcon: {fileID: 0}
   m_itemDescription: 
   m_heldModelPrefab: {fileID: 1603617425342002, guid: d4b0d3b273b187c4696240caebff3f7a, type: 3}
+  m_targetOutlineColor: {r: 0, g: 0.25335073, b: 1, a: 1}
   m_channelSeconds: 3
+  m_scanKeepRange: 5
   m_maxBattery: 5
 --- !u!114 &7887068396476588369
 MonoBehaviour:

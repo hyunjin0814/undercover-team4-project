@@ -26,6 +26,11 @@ public abstract class ItemBase : NetworkBehaviour
     [SerializeField]
     private GameObject m_heldModelPrefab;
 
+    [Header("조준 피드백")]
+    [Tooltip("이 아이템으로 사용 가능한 대상을 조준했을 때의 윤곽선 색 (#184)")]
+    [SerializeField]
+    private Color m_targetOutlineColor = new Color(1f, 0.85f, 0.2f);
+
     /// <summary>인벤토리·UI에 표시되는 아이템 이름.</summary>
     public string ItemName => m_itemName;
 
@@ -37,6 +42,17 @@ public abstract class ItemBase : NetworkBehaviour
 
     /// <summary>장착 시 1인칭 손에 들리는 모델 프리팹. 없으면 null — PlayerHandView가 표시를 생략한다. (#45)</summary>
     public GameObject HeldModelPrefab => m_heldModelPrefab;
+
+    /// <summary>이 아이템으로 사용 가능한 대상을 조준 중일 때의 윤곽선 색. (#184)</summary>
+    public Color TargetOutlineColor => m_targetOutlineColor;
+
+    /// <summary>
+    /// 이 아이템을 지금 저 대상에 사용할 수 있는지 — 조준 피드백(윤곽선) 판정용. (#184)
+    /// Use()의 조기 검증과 같은 기준을 유지해야 "윤곽선이 떴는데 사용은 안 됨"이 안 생긴다.
+    /// 기본값 false — 대상 지정 사용이 없는 아이템은 재정의하지 않는다.
+    /// 매 프레임 호출되므로(InteractionFeedback) 무거운 연산은 피할 것.
+    /// </summary>
+    public virtual bool CanTarget(GameObject aimTarget) => false;
 
     /// <summary>
     /// 현재 아이템을 사용할 수 있는지 여부.

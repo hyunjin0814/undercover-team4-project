@@ -14,8 +14,9 @@ public class PlayerReviver : NetworkBehaviour
     [Header("구조 채널링 (서버 권위)")]
     [Tooltip("구조 채널링 시간(초)")]
     [SerializeField] private float m_reviveSeconds = 3f;
-    [Tooltip("채널링 시작/진행 중 대상이 이 거리(m)를 벗어나면 실패")]
-    [SerializeField] private float m_reviveRange = 2.5f;
+
+    // 사거리는 조준·윤곽선과 같은 기준 — PlayerInteractor.Range 재사용 (#147 패턴, #184)
+    private const float k_fallbackRange = 3f; // 테스트 구성 등 PlayerInteractor가 없을 때
 
     private PlayerInputHandler m_inputHandler;
     private PlayerInteractor m_interactor;      // 조준 대상 조회용
@@ -173,9 +174,19 @@ public class PlayerReviver : NetworkBehaviour
     private async UniTaskVoid ServerChannelAsync(PlayerData target, PlayerIncapacitation targetIncap)
     {
         NotifyOwner($"구조 채널링 시작: {target.name} ({m_reviveSeconds}초)");
+        NotifyChannelGaugeStart(m_reviveSeconds);
 
         // keepAlive 생략 — 단일 Delay로 대기하고, 완료 시점에만 거리·중복복구를 검사한다 (기존 동작 유지)
-        ServerChannel.Result result = await m_channel.RunAsync(m_reviveSeconds);
+        ServerChannel.Result result;
+        try
+        {
+            result = await m_channel.RunAsync(m_reviveSeconds);
+        }
+        finally
+        {
+            // 완료·뗌·예외 어떤 경로로 끝나도 게이지 숨김을 보장한다 (#184)
+            NotifyChannelGaugeEnd();
+        }
 
         switch (result)
         {
@@ -212,8 +223,11 @@ public class PlayerReviver : NetworkBehaviour
 
     private bool IsInRange(PlayerData target)
     {
-        return (target.transform.position - transform.position).sqrMagnitude
-            <= m_reviveRange * m_reviveRange;
+        float range = m_interactor != null ? m_interactor.Range : k_fallbackRange;
+        // 기준점은 조준·윤곽선 게이트와 동일한 AimOrigin(카메라) (#184)
+        Vector3 origin = m_interactor != null ? m_interactor.AimOrigin.position : transform.position;
+        return (target.transform.position - origin).sqrMagnitude
+            <= range * range;
     }
 
     // ---- 오너 로그 피드백 ----
@@ -229,6 +243,36 @@ public class PlayerReviver : NetworkBehaviour
 
     [Rpc(SendTo.Owner)]
     private void OwnerLogRpc(string message) => Debug.Log($"[서버 판정] {message}");
+
+    // ---- 채널링 게이지 피드백 (#184) ----
+    // NotifyOwner와 동일 분기 — 호스트 오너·오프라인은 직접 호출, 원격 오너에게만 RPC.
+    // (RPC는 NGO 코드젠 제약상 클래스별 선언 필요 — Escorter/Scanner와 동일 패턴 중복)
+
+    private void NotifyChannelGaugeStart(float seconds)
+    {
+        if (IsSpawned && IsServer && !IsOwner)
+        {
+            ChannelGaugeStartRpc(seconds);
+            return;
+        }
+        ChannelingGaugeUI.Instance?.Show(seconds);
+    }
+
+    private void NotifyChannelGaugeEnd()
+    {
+        if (IsSpawned && IsServer && !IsOwner)
+        {
+            ChannelGaugeEndRpc();
+            return;
+        }
+        ChannelingGaugeUI.Instance?.Hide();
+    }
+
+    [Rpc(SendTo.Owner)]
+    private void ChannelGaugeStartRpc(float seconds) => ChannelingGaugeUI.Instance?.Show(seconds);
+
+    [Rpc(SendTo.Owner)]
+    private void ChannelGaugeEndRpc() => ChannelingGaugeUI.Instance?.Hide();
 
     public override void OnDestroy()
     {

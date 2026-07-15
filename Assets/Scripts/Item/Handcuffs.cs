@@ -39,18 +39,16 @@ public class Handcuffs : ItemBase
             return;
         }
 
-        // 연행 중인 NPC는 대상에서 제외 — 중복 연행·타인의 연행 가로채기 방지 (#59)
+        // 체포 가능 상태 판정은 NpcStateRules 단일 기준 — 서버 가드·조준 피드백과 동일 (#184)
         // 상태는 반드시 동기화된 CurrentState로 읽는다 — StateMachine 값은 서버에서만 갱신됨 (#56)
-        if (target.CurrentState == NpcState.Escorted)
+        if (!NpcStateRules.IsCapturable(target.CurrentState))
         {
-            Debug.Log("이미 연행 중인 대상 — 체포 불가");
-            return;
-        }
-
-        // 이미 체포된 대상은 채널링 대상이 아니다 — 재연행은 상호작용키(E)로 (#91)
-        if (target.CurrentState == NpcState.Captured)
-        {
-            Debug.Log("이미 체포된 대상 — 재연행은 상호작용키로");
+            // 재연행은 상호작용키(E)로 (#91) / 연행 중 대상은 가로채기 방지 (#59)
+            Debug.Log(
+                target.CurrentState == NpcState.Captured
+                    ? "이미 체포된 대상 — 재연행은 상호작용키로"
+                    : "이미 연행 중인 대상 — 체포 불가"
+            );
             return;
         }
 
@@ -58,6 +56,18 @@ public class Handcuffs : ItemBase
         // 이 로그 뒤에 서버의 "[서버 판정] 구속 채널링 시작"이 안 오면 RPC 경로 문제다 (진단용)
         Debug.Log($"좌클릭 — 체포 채널링 요청: {target.name}");
         escorter.RequestCapture(target);
+    }
+
+    /// <summary>Use()의 조기 검증과 동일 기준 — 체포 채널링이 실제로 시작될 수 있는 대상인지. (#184)</summary>
+    public override bool CanTarget(GameObject aimTarget)
+    {
+        NpcController target = ResolveTarget(aimTarget);
+        if (target == null || !NpcStateRules.IsCapturable(target.CurrentState))
+            return false;
+
+        // 연행 중엔 체포 불가 (서버 ServerBeginCapture 가드와 동일) — 오너 클라는 동기화 플래그로 판정
+        PlayerEscorter escorter = Escorter;
+        return escorter != null && !escorter.IsEscorting;
     }
 
     /// <summary>좌클릭 뗌 — 진행 중인 체포 채널링 취소를 서버에 요청한다 (#91).</summary>

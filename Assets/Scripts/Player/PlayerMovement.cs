@@ -136,7 +136,7 @@ public class PlayerMovement : NetworkBehaviour
 
     private void Update()
     {
-        // 임시: ESC로 커서 잠금/해제 토글 — NetworkBootstrap의 OnGUI 버튼 조작용.
+        // 임시: ESC로 커서 잠금/해제 토글 — OnGUI 버튼 조작용.
         // lockState를 명시적으로 None으로 바꿔야 클릭 시 엔진이 재잠금하지 않는다.
         // 정식 UI(메뉴/로비)가 들어오면 그쪽 시스템으로 옮기고 이 블록은 제거할 것.
         if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
