@@ -96,9 +96,21 @@ public static class SuddenEventUtil
         }
     }
 
+    // 도달 가능성 검사용 경로 버퍼 — 서버(또는 오프라인)에서만 쓰므로 공유해도 안전하다
+    private static readonly NavMeshPath s_reachPath = new NavMeshPath();
+
     /// <summary>
-    /// 기준점 주변 링(min~max 거리) 안에서 NavMesh 위 스폰 지점을 찾는다 — 시도 실패가 반복되면 false.
-    /// 화면 밖·너무 붙지 않게 플레이어에게서 일정 거리를 두고 스폰하기 위함.
+    /// 기준점 주변 링(min~max 거리) 안에서 <b>기준점에서 걸어갈 수 있는</b> NavMesh 스폰 지점을 찾는다 —
+    /// 시도 실패가 반복되면 false.
+    ///
+    /// 화면 밖·너무 붙지 않게 일정 거리를 두는 것과 별개로, <b>NavMesh 위라는 것만으로는 부족하다</b>:
+    /// 도시 NavMesh는 건물 내부·펜스 안쪽처럼 서로 끊긴 섬으로 쪼개져 있어서, 그냥 SamplePosition만
+    /// 통과시키면 플레이어가 절대 갈 수 없는 곳에 폭탄·NPC가 생긴다(측정상 위치에 따라 20~100%).
+    /// 그래서 <see cref="NavMesh.CalculatePath"/>가 <see cref="NavMeshPathStatus.PathComplete"/>를
+    /// 낼 때만 후보로 받는다 — "그 플레이어가 지금 서 있는 곳에서 걸어서 닿는가"가 판정 기준이다.
+    ///
+    /// 근본 해결은 아니다(NavMesh 베이크가 건물 내부까지 굽는 것 자체가 원인) — 이건 잘못된 지점을
+    /// 스폰 단계에서 걸러내는 방어다.
     /// </summary>
     public static bool TryFindSpawnPositionNear(
         Vector3 origin,
@@ -116,21 +128,41 @@ public static class SuddenEventUtil
             Vector3 candidate = origin + new Vector3(dir.x, 0f, dir.y) * distance;
 
             if (
-                NavMesh.SamplePosition(
+                !NavMesh.SamplePosition(
                     candidate,
                     out NavMeshHit hit,
                     navSampleMaxDistance,
                     NavMesh.AllAreas
                 )
             )
-            {
-                result = hit.position;
-                return true;
-            }
+                continue;
+
+            if (!IsReachableFrom(origin, hit.position))
+                continue; // NavMesh 위이긴 하나 기준 플레이어가 걸어갈 수 없는 섬 — 버린다
+
+            result = hit.position;
+            return true;
         }
 
         result = default;
         return false;
+    }
+
+    /// <summary>
+    /// <paramref name="from"/>에서 <paramref name="to"/>까지 NavMesh를 따라 실제로 걸어갈 수 있는가.
+    ///
+    /// 출발점이 NavMesh에 못 붙으면(플레이어가 NavMesh 밖 바닥을 밟고 있는 등) 판정을 포기하고 true를
+    /// 준다 — 여기서 false를 주면 그 플레이어 주변에서는 어떤 이벤트도 발생하지 못하고 조용히 죽는다.
+    /// 잘못된 위치 하나보다 이벤트가 통째로 멈추는 쪽이 나쁘다.
+    /// </summary>
+    public static bool IsReachableFrom(Vector3 from, Vector3 to)
+    {
+        if (!NavMesh.SamplePosition(from, out NavMeshHit start, 4f, NavMesh.AllAreas))
+            return true;
+
+        // PathPartial(중간까지만 감) · PathInvalid(경로 없음) 둘 다 "못 간다"로 본다
+        return NavMesh.CalculatePath(start.position, to, NavMesh.AllAreas, s_reachPath)
+            && s_reachPath.status == NavMeshPathStatus.PathComplete;
     }
 
     /// <summary>스폰물을 정리한다 — 네트워크 세션이면 Despawn, 아니면 Destroy. null·미스폰 상황을 안전하게 처리한다.</summary>
