@@ -345,6 +345,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::NpcDespawnVfx
   ShowTopMostFoldoutHeaderGroup: 1
   m_vfxPrefab: {fileID: 206728948442734668, guid: 9e767c3e60a2d0b4a8e5a01d3f1019e1, type: 3}
+  m_ghostMaterial: {fileID: 2100000, guid: c963e5de356285c46a7cd4699624970b, type: 2}
   m_heightOffset: 1
 --- !u!1001 &2229125471116794606
 PrefabInstance:
