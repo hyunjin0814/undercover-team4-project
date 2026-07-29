@@ -24,6 +24,11 @@ public class NpcJailedState : NpcStateBase
         m_owner.Agent.isStopped = false;
         m_owner.Agent.stoppingDistance = 0f;
 
+        // 유치장 내부는 시민이 못 들어가는 별도 NavMesh 영역(Jail)이다 — 수감 대상만 이 순간 통행을 얻는다 (#415).
+        // SetDestination보다 반드시 먼저 켜야 셀까지의 경로가 잡힌다 — 목적지인 셀 지점이 Jail 영역 안이라
+        // 통행 없이 경로를 요청하면 그대로 실패한다.
+        m_owner.SetJailAccess(true);
+
         // 유치장이 없는 테스트 씬 — 그 자리에서 멈춘 것으로 처리한다 (멍하니 걷는 자세로 남지 않게)
         if (m_owner.JailCell == null)
         {

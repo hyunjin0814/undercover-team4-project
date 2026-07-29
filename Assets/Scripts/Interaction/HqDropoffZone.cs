@@ -1,51 +1,41 @@
-using System;
-using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// 본부 인계 구역 — 연행 중인 NPC가 들어오면 도달 이벤트를 발행한다. (이슈 #59)
-/// 실제 인계 처리(오검거 판정·라운드 연계)는 본부 연행 상호작용(#40)에서 이 이벤트를 구독해 구현한다.
-/// 콜라이더는 Is Trigger여야 한다.
+/// 본부 인계 구역 — "어디까지가 인계 가능한 자리인가"만 아는 순수 지오메트리 부품이다. (#59 → #414)
+/// 판정 트리거가 콜라이더 도달에서 인계 단말(<see cref="HqDropoffTerminal"/>)의 상호작용키(E)로
+/// 옮겨졌으므로, 여기엔 트리거 콜백도 이벤트도 서버 권위 게이트도 없다 — 물어보면 답만 한다.
+///
+/// 콜라이더는 <b>Convex</b>여야 한다(Box 권장) — 포함 판정에 ClosestPoint를 쓰기 때문이다.
+/// 트리거일 필요는 없지만, 플레이어·NPC를 막지 않으려면 Is Trigger로 두는 것이 편하다.
 /// </summary>
 [RequireComponent(typeof(Collider))]
 public class HqDropoffZone : MonoBehaviour
 {
-    /// <summary>연행된 NPC가 구역에 도달했을 때 — 인계 처리(#40)가 구독한다.</summary>
-    public event Action<NpcController> OnNpcDelivered;
+    // 안쪽 점은 ClosestPoint가 자기 자신을 돌려주므로 원래는 0이면 되는데, 부동소수 오차를 감안한 여유(m).
+    private const float k_containEpsilon = 0.01f;
 
-    private void OnTriggerEnter(Collider other)
+    private Collider m_collider;
+
+    private void Awake()
     {
-        TryDeliver(other);
+        m_collider = GetComponent<Collider>();
     }
 
-    // Enter만으로는 구멍이 있다 (#310 후속): 잔류·탈옥 방출된 경범죄 NPC가 본부 안까지 배회해 들어온 뒤
-    // '존 안에서' 제압·연행되면 진입 이벤트가 다시 울리지 않아 판정이 영영 안 난다. Stay가 매 물리 틱
-    // 자격을 재검사해 그 경우를 잡는다 — 판정 직후엔 연행/끌기가 풀려(Escorted/Roped 이탈) 아래 상태
-    // 게이트가 틱 재발화를 막고, 다시 연행해 데려오면 그때 한 번 더 판정된다(재판정 허용 #358). (자동
-    // 판정을 끈 구성에서는 Stay가 반복 발화할 수 있다 — 그 모드로 전환하는 시점(#40)에 1회 래치를 붙일 것)
-    private void OnTriggerStay(Collider other)
+    /// <summary>
+    /// 이 점이 인계 구역 안인가 — 인계 단말이 "끌고 온 NPC가 구역 안에 있는가"를 이걸로 판정한다. (#414)
+    ///
+    /// 트리거 진입/이탈 집합을 들고 있지 않은 이유: 수동 트리거로 바뀌면서 "지금 안에 있나"만 알면 되고,
+    /// 집합을 들면 NPC 파괴·비활성·워프로 Exit이 누락된 유령 항목을 따로 걸러야 한다.
+    ///
+    /// <b>높이는 보지 않는다</b> — 끌려오는 NPC는 밧줄에 묶여 바닥에 누운 채라(#369) 발밑 좌표가
+    /// 구역 박스 아래로 빠지기 쉽다. 구역은 게임플레이상 "바닥의 자리"라 평면 포함으로 판정하는 것이 맞다.
+    /// </summary>
+    public bool Contains(Vector3 point)
     {
-        TryDeliver(other);
-    }
+        if (m_collider == null)
+            m_collider = GetComponent<Collider>();
 
-    private void TryDeliver(Collider other)
-    {
-        // 서버 권위 게이트 (클라이언트에서는 실행 무시 - 로그 스팸 및 중복 발화 방지)
-        if (NetworkManager.Singleton != null && !NetworkManager.Singleton.IsServer)
-            return;
-
-        NpcController npc = other.GetComponentInParent<NpcController>();
-
-        if (npc == null)
-            return;
-
-        // 밧줄로 끌려온(Escorted) NPC만 인계 대상 — 배회 시민·놓아둔 체포(Captured)는 무시 (#59/#269/#369).
-        // 재판정 허용(#358): 판정 후엔 끌기가 즉시 풀려 이 게이트에 안 걸리므로 매 틱 재발화가 막히고,
-        // 다시 끌어(E) 데려오면 그때 한 번 더 판정된다. 중복 후처리(할당량·오검거·돈)는 판정 쪽에서 1회로 건다.
-        if (npc.CurrentState != NpcState.Escorted)
-            return;
-
-        Debug.Log($"본부 도달 — 인계 가능: {npc.name}");
-        OnNpcDelivered?.Invoke(npc);
+        Vector3 flat = new Vector3(point.x, m_collider.bounds.center.y, point.z);
+        return (m_collider.ClosestPoint(flat) - flat).sqrMagnitude <= k_containEpsilon * k_containEpsilon;
     }
 }

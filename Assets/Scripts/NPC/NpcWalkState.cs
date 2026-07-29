@@ -68,7 +68,8 @@ public class NpcWalkState : NpcStateBase
             Vector3 direction = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle));
             Vector3 candidate = m_owner.transform.position + direction * distance;
 
-            if (NavMesh.SamplePosition(candidate, out NavMeshHit hit, 2f, NavMesh.AllAreas))
+            // 통행 마스크로 샘플 — 에이전트가 못 가는 영역(Jail)을 뽑으면 경로가 문 앞에서 끊긴다 (#415)
+            if (NavMesh.SamplePosition(candidate, out NavMeshHit hit, 2f, m_owner.Agent.areaMask))
             {
                 m_owner.Agent.SetDestination(hit.position);
                 return;

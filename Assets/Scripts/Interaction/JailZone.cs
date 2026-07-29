@@ -18,6 +18,10 @@ public class JailZone : NetworkBehaviour
     [Tooltip("수감된 NPC가 걸어가 서는 지점들. 순서대로 배정된다 — NavMesh 위에 둘 것")]
     [SerializeField] private Transform[] m_cellPoints;
 
+    [Header("출구 지점 (비우면 유치장 자신의 위치)")]
+    [Tooltip("탈옥으로 방출된 수감자를 옮길 유치장 밖 지점 — 창살 안에 갇히지 않게 한다 (#415). 문 바깥 NavMesh 위에 둘 것")]
+    [SerializeField] private Transform m_exitPoint;
+
     [Header("자물쇠 (비우면 같은 오브젝트에서 자동 탐색)")]
     [Tooltip("새 수감자를 받을 때 자동으로 다시 잠근다 — 범인 탈출 이벤트(#231)로 열린 상태를 되돌리는 경로")]
     [SerializeField] private JailLock m_jailLock;
@@ -62,6 +66,12 @@ public class JailZone : NetworkBehaviour
 
     /// <summary>현재 수감자 — 범인 탈출 이벤트(#231)가 방출 대상을 고르려고 읽는다. 서버에서만 유효.</summary>
     public IReadOnlyCollection<NpcController> Inmates => m_inmates;
+
+    /// <summary>
+    /// 방출된 수감자를 내보낼 유치장 밖 지점 — 미배선이면 유치장 자신의 위치. (#415)
+    /// 유치장 내부가 시민 통행 금지 영역(Jail)이라, 방출만 하고 두면 경로가 없어 창살 안에 고착된다.
+    /// </summary>
+    public Transform ExitPoint => m_exitPoint != null ? m_exitPoint : transform;
 
     /// <summary>수용 인원 변경 — 서버·클라이언트 모든 피어에서 발생한다. 본부 UI(별도 이슈)가 구독.</summary>
     public event Action<int> OnInmateCountChanged;

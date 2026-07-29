@@ -116,7 +116,7 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
         // 오검거 카운트는 매 인계마다 오른다 — 무고한 시민을 다시 잡아 인계하면 또 한 번의 오검거다 (#358).
         // IsFirstDelivery로 막지 않는 이유: 시민은 석방(ReleaseFromCustody)돼도 ClearDelivered가 불리지 않아
         // IsDelivered가 영구 true로 남는다 → 가드를 걸면 첫 인계 이후 오검거가 영영 안 세진다. 재판정 스팸은
-        // HqDropoffZone의 Escorted/Roped 게이트 + 판정 즉시 Release로 물리 인계 1회당 Judge 1회라 애초에 없다.
+        // 인계가 수동 상호작용(E)이 되면서(#414) 구조적으로 없다 — 누른 횟수만큼만 판정된다.
 
         // 개인 집계는 실제 오검거 기록 — 페널티 결과와 무관하게 항상 +1 (정산 코믹 스탯용).
         // 밧줄이 걸린 채 인계존까지 들어갔으면 전원이 관여자다 (#390 규칙 4) — 줄다리기로 남이 밀어넣었어도

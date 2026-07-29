@@ -172,7 +172,7 @@ public class NpcChaseState : NpcStateBase
                 candidate,
                 out NavMeshHit hit,
                 m_fleeConfig.StepDistance,
-                NavMesh.AllAreas
+                m_owner.Agent.areaMask
             )
         )
             m_owner.Agent.SetDestination(hit.position);
@@ -206,7 +206,7 @@ public class NpcChaseState : NpcStateBase
                 candidate,
                 out NavMeshHit hit,
                 m_walkConfig.WanderRadius,
-                NavMesh.AllAreas
+                m_owner.Agent.areaMask
             )
         )
             m_owner.Agent.SetDestination(hit.position);

@@ -102,7 +102,8 @@ public partial class NpcController
         if (!timedOut && m_knockbackVelocity.y > 0f)
             return; // 아직 상승 중 — 착지 판정은 내려올 때부터
 
-        if (NavMesh.SamplePosition(transform.position, out NavMeshHit ground, m_commonConfig.KnockbackLandSampleDistance, NavMesh.AllAreas)
+        // 통행 마스크로 착지점을 찾는다 — 못 가는 영역(Jail)에 Warp되면 경로가 안 잡혀 그대로 고착된다 (#415)
+        if (NavMesh.SamplePosition(transform.position, out NavMeshHit ground, m_commonConfig.KnockbackLandSampleDistance, m_agent.areaMask)
             && !IsStrandedIsland(ground.position))
         {
             if (!timedOut && transform.position.y > ground.position.y + 0.05f)

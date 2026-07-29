@@ -85,6 +85,14 @@ public static class NpcStateRules
     /// 밧줄은 소모형이 아니라 상태만으로 가른다(수갑 시절의 자원 유무 조건 없음). 제압만으로 잡힌 Captured도 대상.</summary>
     public static bool CanRelease(NpcState state) => state == NpcState.Captured;
 
+    /// <summary>본부 인계 단말(#414)에 넘길 수 있는 상태인가 — 밧줄에 묶여 확보된 신병.
+    /// 끌려오는 중(Escorted)뿐 아니라 <b>인계존에 내려놓은 대상(Captured)도 포함</b>한다: 끌고 선 채로는
+    /// 단말을 겨누는 동안 대상이 존을 벗어나기 쉬워, "존에 내려놓고 접수한다"가 자연스러운 동선이다.
+    /// 클라의 조준 피드백(HqDropoffTerminal.CanInteract)과 서버 판정(ArrestJudge.TryDeliver)이
+    /// 이 한 곳을 함께 본다 — 갈라 두면 "윤곽선은 뜨는데 안 먹힘"이 생긴다 (#184).</summary>
+    public static bool CanDeliver(NpcState state) =>
+        state is NpcState.Escorted or NpcState.Captured;
+
     /// <summary>E 상호작용(제압·타격·재연행)이 반응하는 상태인가.
     /// 포함 목록 방식 — 새 상태는 기본 'E 불가'이므로 열어야 하면 여기 추가할 것.
     /// NpcSubdueInteractable.Interact의 분기 집합과 반드시 일치해야 한다.

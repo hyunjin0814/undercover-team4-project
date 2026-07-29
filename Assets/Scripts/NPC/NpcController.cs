@@ -64,8 +64,8 @@ public partial class NpcController : NetworkBehaviour
     /// <summary>
     /// 본부 인계 판정이 끝났는가 — <see cref="MarkDelivered"/>로 ArrestJudge가 세팅한다. (#230)
     /// 판정 완료분은 인계 방치 타이머에서 빠진다(본부에서 탈출하면 안 된다). 재판정 자체는 막지 않으며(#358 —
-    /// HqDropoffZone이 더는 IsDelivered NPC를 무시하지 않는다), 재판정 후처리 중복은 <see cref="ArrestResult.IsFirstDelivery"/>가 건다.
-    /// 서버(또는 오프라인)에서만 유효 — 판정·인계존 게이트가 모두 서버 전용이라 동기화하지 않는다.
+    /// 다시 끌고 와 인계 단말에서 E를 누르면 다시 판정된다), 재판정 후처리 중복은 <see cref="ArrestResult.IsFirstDelivery"/>가 건다.
+    /// 서버(또는 오프라인)에서만 유효 — 판정·인계 검증이 모두 서버 전용이라 동기화하지 않는다.
     /// 판정 후 본부에 남는 NPC의 처리는 유치장(#228)이 가져간다.
     /// </summary>
     public bool IsDelivered { get; private set; }

@@ -162,14 +162,19 @@ public class NpcSpawner : CommonManagerBase
             Vector2 offset = Random.insideUnitCircle * m_spawnRadius;
             Vector3 candidate = point.position + new Vector3(offset.x, 0f, offset.y);
 
-            // NavMesh 위 지점으로 보정 — NavMesh 밖에 스폰되면 NavMeshAgent가 동작하지 않아 배회가 멈춘다
-            if (!NavMesh.SamplePosition(candidate, out NavMeshHit hit, m_sampleMaxDistance, NavMesh.AllAreas))
+            // 프리팹을 먼저 고른다 — 아래 NavMesh 보정에 그 에이전트의 통행 마스크를 써야 하기 때문 (#415)
+            NpcController prefab = (m_npcPrefabAlt != null && Random.value < m_altRatio) ? m_npcPrefabAlt : m_npcPrefab;
+            NavMeshAgent prefabAgent = prefab.GetComponent<NavMeshAgent>();
+            int spawnAreaMask = prefabAgent != null ? prefabAgent.areaMask : NavMesh.AllAreas;
+
+            // NavMesh 위 지점으로 보정 — NavMesh 밖에 스폰되면 NavMeshAgent가 동작하지 않아 배회가 멈춘다.
+            // 못 가는 영역(Jail)에 붙여 놓으면 경로가 안 잡혀 그 자리에서 고착되므로 마스크를 건다 (#415)
+            if (!NavMesh.SamplePosition(candidate, out NavMeshHit hit, m_sampleMaxDistance, spawnAreaMask))
                 continue;
 
             Quaternion rotation = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
             // 부모를 지정하지 않고 씬 루트에 생성 — NetworkObject는 비NetworkObject 아래에
             // 부모로 붙인 채 스폰할 수 없다 (NGO가 경고 후 강제로 떼어낸다)
-            NpcController prefab = (m_npcPrefabAlt != null && Random.value < m_altRatio) ? m_npcPrefabAlt : m_npcPrefab;
             NpcController npc = Instantiate(prefab, hit.position, rotation);
             // 외형 랜덤 교체는 프리팹의 NpcAppearance가 담당한다 — 서버가 뽑은 인덱스를 전 클라에 동기화 (#56)
 

@@ -189,9 +189,9 @@ public class NpcFleeState : NpcStateBase
             // 먼 지점 우선(커밋 도주) — 건물 안 등으로 샘플이 실패한 방향은 가까운 지점으로 줄여 다시 시도
             if (
                 !TrySamplePoint(origin, direction, m_config.FarPointDistance,
-                    k_farNavSampleMaxDistance, out Vector3 point)
+                    k_farNavSampleMaxDistance, m_owner.Agent.areaMask, out Vector3 point)
                 && !TrySamplePoint(origin, direction, m_config.StepDistance,
-                    k_navSampleMaxDistance, out point)
+                    k_navSampleMaxDistance, m_owner.Agent.areaMask, out point)
             )
                 continue; // 어느 거리로도 갈 수 없는 방향
             float pathClearanceSqr = float.MaxValue; // 경로가 플레이어를 스치는 최단거리
@@ -319,13 +319,15 @@ public class NpcFleeState : NpcStateBase
         m_stuckRepicks = 0;
     }
 
-    /// <summary>origin에서 direction으로 distance만큼 간 지점을 NavMesh 위로 샘플한다 — 실패 시 false.</summary>
+    /// <summary>origin에서 direction으로 distance만큼 간 지점을 NavMesh 위로 샘플한다 — 실패 시 false.
+    /// areaMask는 도주 주체의 통행 마스크 — 못 가는 영역(Jail)으로 도주 지점을 잡지 않게 한다 (#415).</summary>
     private static bool TrySamplePoint(
-        Vector3 origin, Vector3 direction, float distance, float sampleMaxDistance, out Vector3 point)
+        Vector3 origin, Vector3 direction, float distance, float sampleMaxDistance, int areaMask,
+        out Vector3 point)
     {
         point = default;
         if (!NavMesh.SamplePosition(
-                origin + direction * distance, out NavMeshHit hit, sampleMaxDistance, NavMesh.AllAreas))
+                origin + direction * distance, out NavMeshHit hit, sampleMaxDistance, areaMask))
             return false;
 
         point = hit.position;

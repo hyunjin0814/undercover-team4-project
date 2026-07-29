@@ -185,7 +185,7 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         // 같은 프레임에 부르면 뒤이어 실행되는 InitBehavior가 Idle로 덮어쓸 수 있다.
         if (m_pendingStart && Time.frameCount > m_spawnFrame)
         {
-            m_intruder.StartIntrude(m_jailLock.transform, m_unlockSeconds);
+            m_intruder.StartIntrude(m_jailLock.ApproachPoint, m_unlockSeconds);
             m_pendingStart = false;
             m_hasStarted = true;
         }
@@ -358,6 +358,10 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
             if (WantedList != null)
                 WantedList.ReinstateByNpcId(inmate.NetworkObjectId);
         }
+
+        // 유치장 내부는 시민 통행이 금지된 NavMesh 영역(Jail)이라, 방출만 하면 나갈 경로가 없어 창살 안에
+        // 고착된다 (#415) — 문 밖 출구 지점으로 내보내고 Jail 통행을 회수한 뒤 도주시킨다.
+        inmate.ServerExitJail(m_jailZone.ExitPoint);
 
         // 유치장을 뛰쳐나와 도주한다 — 침입자를 위협으로 삼아 반대로 달아난 뒤 배회로 섞여 든다.
         // 근처에 플레이어가 없으면 도주 상태가 곧 배회로 복귀한다(NpcFleeState).

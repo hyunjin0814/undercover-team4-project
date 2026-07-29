@@ -14,6 +14,10 @@ using UnityEngine;
 /// </summary>
 public class JailLock : NetworkBehaviour
 {
+    [Header("접근 지점 (비우면 자물쇠 자신의 위치)")]
+    [Tooltip("침입자(#231)가 걸어와 서는 지점 — 창살 문 바깥에 둔다. 자물쇠 자신이 우리 안에 있으면 경로가 막힌다 (#415)")]
+    [SerializeField] private Transform m_approachPoint;
+
     // 서버 권위 잠금 상태 — 기본은 잠김
     private readonly NetworkVariable<bool> m_locked = new NetworkVariable<bool>(true);
 
@@ -22,6 +26,13 @@ public class JailLock : NetworkBehaviour
 
     /// <summary>자물쇠가 잠겨 있는가. 네트워크 세션 중에는 동기화된 값이라 클라이언트에서도 읽을 수 있다.</summary>
     public bool IsLocked => IsSpawned ? m_locked.Value : m_localLocked;
+
+    /// <summary>
+    /// 침입자가 자물쇠를 열려고 걸어오는 목표 지점 — 미배선이면 자물쇠 자신의 위치. (#415)
+    /// 자물쇠는 유치장(JailZone)과 같은 오브젝트에 있어 좌표가 창살 우리 <b>안</b>이 되므로,
+    /// 시민 통행이 금지된 Jail 영역 밖(문 앞)의 지점을 따로 가리켜야 침입 경로가 성립한다.
+    /// </summary>
+    public Transform ApproachPoint => m_approachPoint != null ? m_approachPoint : transform;
 
     /// <summary>잠금 상태 변경 — 서버·클라이언트 모든 피어에서 발생한다. 문 연출·본부 경보 UI가 구독.</summary>
     public event Action<bool> OnLockChanged;
