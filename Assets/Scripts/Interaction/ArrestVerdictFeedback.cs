@@ -108,15 +108,20 @@ public class ArrestVerdictFeedback : MonoBehaviour
             return;
 
         // 검거자를 특정하지 못하면(자동 판정 등 인계자 없음) 보여줄 대상이 없다 — 조용히 스킵.
-        if (result.DeliveredBy == null)
-            return;
+        // 줄다리기로 함께 끌고 왔으면 관여자 전원에게 보여준다 (#390) — 페널티도 전원에게 걸리므로
+        // 한 명만 결과를 보면 나머지는 왜 쫓기는지 알 수 없다.
+        foreach (PlayerEscorter deliverer in result.DeliveredBy)
+        {
+            if (deliverer == null)
+                continue;
 
-        ulong targetClientId = result.DeliveredBy.OwnerClientId;
+            ulong targetClientId = deliverer.OwnerClientId;
 
-        if (targetClientId == nm.LocalClientId)
-            ShowLocal(data);                 // 검거자가 호스트 자신 — 로컬 표시
-        else
-            SendTo(targetClientId, data);    // 원격 검거자에게만 전송
+            if (targetClientId == nm.LocalClientId)
+                ShowLocal(data);                 // 검거자가 호스트 자신 — 로컬 표시
+            else
+                SendTo(targetClientId, data);    // 원격 검거자에게만 전송
+        }
     }
 
     private void SendTo(ulong clientId, VerdictFeedbackData data)

@@ -76,9 +76,9 @@ public class MisdemeanorLoiterer : MonoBehaviour
         if (Round != null && Round.Phase != RoundPhase.InProgress)
         {
             // 연행 중이던 플레이어가 파괴된 참조를 쥐지 않게 먼저 놓게 한다 (이벤트 Despawn들과 동일)
-            PlayerEscorter escorter = PlayerEscorter.FindEscorterOf(m_controller);
-            if (escorter != null)
-                escorter.Release();
+            // 줄다리기로 여러 명이 걸려 있을 수 있다 — 전원에게서 이 대상의 줄만 뺀다 (#390).
+            foreach (PlayerEscorter escorter in PlayerEscorter.FindEscortersOf(m_controller))
+                escorter.ReleaseDrag(m_controller);
 
             SuddenEventUtil.DespawnOrDestroy(gameObject, playVfx: false);
             return;

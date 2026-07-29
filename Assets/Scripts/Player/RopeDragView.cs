@@ -1,10 +1,12 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// 밧줄 표현 — 플레이어 손과 묶인 NPC를 잇는 선 + 바닥 먼지. <b>순수 로컬 연출</b>이라 선을 동기화하지
-/// 않고, 각 피어가 동기화된 양 끝점(<see cref="PlayerEscorter.TetheredNpcTransform"/>)을 보고 스스로 그린다.
+/// 밧줄 표현 — 플레이어 손과 묶인 NPC들을 잇는 선 + 바닥 먼지. <b>순수 로컬 연출</b>이라 선을 동기화하지
+/// 않고, 각 피어가 동기화된 양 끝점(<see cref="PlayerEscorter.GetTetheredNpc"/>)을 보고 스스로 그린다.
 /// 전 피어에서 돈다 — 남이 끌고 가는 모습도 보여야 한다. 선 시작점은 3인칭 손 앵커
 /// (<see cref="PlayerHeldItemView.HandAnchor"/>), 없으면 몸통 높이로 대체. (#269)
+/// 밧줄 1개당 NPC 1명이라 선도 대상 수만큼 그린다 — 표시 인스턴스는 슬롯 단위로 풀링한다. (#390)
 /// </summary>
 [RequireComponent(typeof(PlayerEscorter))]
 public class RopeDragView : MonoBehaviour
@@ -33,16 +35,22 @@ public class RopeDragView : MonoBehaviour
     [Tooltip("끌리는 몸 아래에 따라다니는 먼지 파티클 프리팹 — 비우면 먼지 없이 선만 그린다")]
     [SerializeField] private GameObject m_dustPrefab;
 
+    // 밧줄 하나분의 표시 — 선·먼지와 매듭 뼈 캐시. 슬롯 단위로 재사용한다(끌 때마다 생성/파괴하지 않는다).
+    private class RopeVisual
+    {
+        public LineRenderer Line;
+        public GameObject Dust;
+
+        // 이 캐시가 가리키는 대상 — 슬롯에 다른 NPC가 들어오면 뼈를 다시 잡는다.
+        // 뼈를 못 찾은 NPC는 Anchor를 null로 캐시해 재검색을 막는다.
+        public Transform KnotSource;
+        public Transform KnotAnchor;
+    }
+
     private PlayerEscorter m_escorter;
     private PlayerHeldItemView m_heldItemView;
 
-    // 표시용 인스턴스 — 첫 끌기에 만들고 이후 껐다 켠다(끌 때마다 생성/파괴하지 않는다).
-    private LineRenderer m_rope;
-    private GameObject m_dust;
-
-    // NPC 몸통 뼈 캐시 — 대상이 바뀔 때만 다시 잡는다. 뼈를 못 찾은 NPC는 null로 캐시해 재검색을 막는다.
-    private Transform m_knotAnchorSource;
-    private Transform m_knotAnchor;
+    private readonly List<RopeVisual> m_visuals = new List<RopeVisual>();
 
     private void Awake()
     {
@@ -56,41 +64,61 @@ public class RopeDragView : MonoBehaviour
     {
         // 끌고 있는 동안만이 아니라 '묶여 있는 동안' 내내 그린다 — 놓기(E)는 끌기를 멈출 뿐
         // 줄을 푸는 게 아니다. 실제로 풀리면(밧줄 좌클릭 풀기·인계 판정·방치 탈주) 연결이 끊긴다. (#369)
-        Transform tethered = m_escorter.TetheredNpcTransform;
-        if (tethered == null)
+        int count = m_escorter.TetheredCount;
+        Vector3 handPoint = HandPoint;
+
+        for (int i = 0; i < count; i++)
         {
-            SetVisible(false);
-            return;
+            NpcController npc = m_escorter.GetTetheredNpc(i);
+
+            // 아직 참조가 안 풀리는 대상(스폰 전·파괴 직후)은 이번 프레임만 건너뛴다
+            if (npc == null)
+            {
+                HideVisual(i);
+                continue;
+            }
+
+            RopeVisual visual = EnsureVisual(i);
+            if (visual == null)
+                return; // 머티리얼이 없어 그릴 수 없다 — Build가 컴포넌트를 스스로 껐다
+
+            visual.Line.enabled = true;
+            DrawRope(visual, handPoint, KnotPoint(visual, npc.transform), npc.RopeLength);
+
+            // 먼지는 실제로 끌고 있을 때만 — 세워 둔 대상 발밑에서 먼지가 계속 일면 안 된다
+            if (visual.Dust != null)
+            {
+                if (visual.Dust.activeSelf != npc.IsRoped)
+                    visual.Dust.SetActive(npc.IsRoped);
+                visual.Dust.transform.position = npc.transform.position;
+            }
         }
 
-        SetVisible(true);
-        DrawRope(HandPoint, KnotPoint(tethered));
-
-        // 먼지는 실제로 끌고 있을 때만 — 세워 둔 대상 발밑에서 먼지가 계속 일면 안 된다
-        if (m_dust != null)
-        {
-            if (m_dust.activeSelf != m_escorter.IsDragging)
-                m_dust.SetActive(m_escorter.IsDragging);
-            m_dust.transform.position = tethered.position;
-        }
+        // 줄이 줄어들면 남는 슬롯은 꺼 둔다 — 파괴하지 않고 다음 끌기에 재사용한다
+        for (int i = count; i < m_visuals.Count; i++)
+            HideVisual(i);
     }
 
-    private void OnDisable() => SetVisible(false);
+    private void OnDisable()
+    {
+        for (int i = 0; i < m_visuals.Count; i++)
+            HideVisual(i);
+    }
 
     // NPC 쪽 매듭점 — 몸통 뼈가 있으면 그 위치(눕든 서든 몸을 따라간다), 없으면 루트+대체 높이. (#369)
-    private Vector3 KnotPoint(Transform tethered)
+    private Vector3 KnotPoint(RopeVisual visual, Transform tethered)
     {
-        if (tethered != m_knotAnchorSource)
+        if (tethered != visual.KnotSource)
         {
-            m_knotAnchorSource = tethered;
+            visual.KnotSource = tethered;
             Animator animator = tethered.GetComponentInChildren<Animator>();
-            m_knotAnchor = animator != null && animator.isHuman
+            visual.KnotAnchor = animator != null && animator.isHuman
                 ? animator.GetBoneTransform(HumanBodyBones.Chest)
                 : null;
         }
 
-        return m_knotAnchor != null
-            ? m_knotAnchor.position
+        return visual.KnotAnchor != null
+            ? visual.KnotAnchor.position
             : tethered.position + Vector3.up * m_npcKnotHeight;
     }
 
@@ -105,72 +133,86 @@ public class RopeDragView : MonoBehaviour
 
     // 두 끝점을 잇되 가운데를 아래로 늘어뜨린다. 늘어짐은 밧줄이 팽팽할수록(길이에 가까울수록) 얕아진다 —
     // 멈춰 있으면 축 처지고, 끌기 시작하면 팽팽해지는 변화가 "당기고 있다"를 보여준다.
-    private void DrawRope(Vector3 handPoint, Vector3 knotPoint)
+    private void DrawRope(RopeVisual visual, Vector3 handPoint, Vector3 knotPoint, float ropeLength)
     {
-        if (m_rope == null)
-            return;
-
+        LineRenderer line = visual.Line;
         float distance = Vector3.Distance(handPoint, knotPoint);
-        float slack = 1f - Mathf.Clamp01(distance / Mathf.Max(0.01f, m_escorter.RopeLength));
+        float slack = 1f - Mathf.Clamp01(distance / Mathf.Max(0.01f, ropeLength));
         float sag = m_maxSag * slack;
 
-        if (m_rope.positionCount != m_segments + 1)
-            m_rope.positionCount = m_segments + 1;
+        if (line.positionCount != m_segments + 1)
+            line.positionCount = m_segments + 1;
 
         for (int i = 0; i <= m_segments; i++)
         {
             float t = (float)i / m_segments;
             Vector3 point = Vector3.Lerp(handPoint, knotPoint, t);
             point.y -= sag * Mathf.Sin(t * Mathf.PI); // 양 끝 0, 가운데 최대로 처진다
-            m_rope.SetPosition(i, point);
+            line.SetPosition(i, point);
         }
     }
 
-    private void SetVisible(bool visible)
+    private void HideVisual(int index)
     {
-        if (visible && m_rope == null)
-            Build();
+        if (index >= m_visuals.Count)
+            return;
 
-        if (m_rope != null)
-            m_rope.enabled = visible;
-
-        // 먼지 켜기는 LateUpdate가 끌기 여부로 따로 판단한다 — 여기서는 끄기만 보장한다
-        if (!visible && m_dust != null && m_dust.activeSelf)
-            m_dust.SetActive(false);
+        RopeVisual visual = m_visuals[index];
+        if (visual.Line != null)
+            visual.Line.enabled = false;
+        if (visual.Dust != null && visual.Dust.activeSelf)
+            visual.Dust.SetActive(false);
     }
 
-    // 선·먼지 인스턴스를 첫 끌기 때 한 번만 만든다 — 끌지 않는 플레이어는 비용이 0이다.
-    private void Build()
+    // 슬롯의 표시 인스턴스를 필요할 때 한 번만 만든다 — 끌지 않는 플레이어는 비용이 0이다.
+    private RopeVisual EnsureVisual(int index)
+    {
+        while (m_visuals.Count <= index)
+        {
+            RopeVisual built = Build();
+            if (built == null)
+                return null;
+            m_visuals.Add(built);
+        }
+
+        return m_visuals[index];
+    }
+
+    private RopeVisual Build()
     {
         if (m_ropeMaterial == null)
         {
             enabled = false; // 머티리얼 없이는 그릴 수 없다 — 매 프레임 헛돌지 않게 스스로 꺼진다
             Debug.LogWarning($"[RopeDragView] 밧줄 선 머티리얼이 없어 표시를 끈다. {name} 프리팹에 지정할 것", this);
-            return;
+            return null;
         }
 
         GameObject ropeObject = new GameObject("RopeLine");
         ropeObject.transform.SetParent(transform, false);
 
-        m_rope = ropeObject.AddComponent<LineRenderer>();
-        m_rope.useWorldSpace = true; // 양 끝이 서로 다른 오브젝트라 월드 좌표로 그린다
-        m_rope.sharedMaterial = m_ropeMaterial;
-        m_rope.widthMultiplier = m_ropeWidth;
-        m_rope.numCapVertices = 2;
-        m_rope.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        m_rope.receiveShadows = false;
-        m_rope.enabled = false;
+        var visual = new RopeVisual();
+        visual.Line = ropeObject.AddComponent<LineRenderer>();
+        visual.Line.useWorldSpace = true; // 양 끝이 서로 다른 오브젝트라 월드 좌표로 그린다
+        visual.Line.sharedMaterial = m_ropeMaterial;
+        visual.Line.widthMultiplier = m_ropeWidth;
+        visual.Line.numCapVertices = 2;
+        visual.Line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        visual.Line.receiveShadows = false;
+        visual.Line.enabled = false;
 
         if (m_dustPrefab != null)
         {
-            m_dust = Instantiate(m_dustPrefab); // 월드에 독립 — 부모를 따라 회전하면 먼지가 같이 돌아버린다
-            m_dust.SetActive(false);
+            visual.Dust = Instantiate(m_dustPrefab); // 월드에 독립 — 부모를 따라 회전하면 먼지가 같이 돌아버린다
+            visual.Dust.SetActive(false);
         }
+
+        return visual;
     }
 
     private void OnDestroy()
     {
-        if (m_dust != null)
-            Destroy(m_dust);
+        foreach (RopeVisual visual in m_visuals)
+            if (visual.Dust != null)
+                Destroy(visual.Dust);
     }
 }

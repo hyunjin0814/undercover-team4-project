@@ -3393,6 +3393,7 @@ MonoBehaviour:
   m_capturedConfig: {fileID: 11400000, guid: ea1210064ec160f42b74c49da9fc0db3, type: 2}
   m_chaseConfig: {fileID: 11400000, guid: 9ed1e2d21e0bab04ab936f0ee96d01a4, type: 2}
   m_commonConfig: {fileID: 11400000, guid: 53e1f2f00b63a3d49adad69104609b9a, type: 2}
+  m_ropeDragConfig: {fileID: 11400000, guid: 9c639e90181e9db4ca493e0f39a823c5, type: 2}
 --- !u!54 &161675701295816944
 Rigidbody:
   m_ObjectHideFlags: 0

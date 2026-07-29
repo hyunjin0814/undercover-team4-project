@@ -7,7 +7,7 @@ using UnityEngine;
 /// </summary>
 public class NpcEscortedState : NpcStateBase
 {
-    private const float k_repathInterval = 0.2f;      // 경로 재계산 최소 간격(초) — 매 프레임 재계산 방지
+    private const float k_repathInterval = 0.2f; // 경로 재계산 최소 간격(초) — 매 프레임 재계산 방지
     private const float k_repathMoveThreshold = 0.5f; // 목표가 이만큼(m) 움직였을 때만 재계산
 
     // 근접 정지 히스테리시스(m) — 멈춘 뒤 추종 거리보다 이만큼 더 멀어져야 재추종한다.
@@ -21,7 +21,8 @@ public class NpcEscortedState : NpcStateBase
 
     private readonly NpcEscortConfig m_config;
 
-    public NpcEscortedState(NpcController owner, NpcEscortConfig config) : base(owner)
+    public NpcEscortedState(NpcController owner, NpcEscortConfig config)
+        : base(owner)
     {
         m_config = config;
     }
@@ -34,7 +35,7 @@ public class NpcEscortedState : NpcStateBase
         m_isHolding = false;
 
         // 밧줄로 끌려오는 중이면 에이전트가 꺼져 있다 — 추종 로직을 아예 돌리지 않는다.
-        // 위치는 끄는 플레이어(PlayerEscorter.ServerUpdateDrag)가 밧줄 장력으로 직접 제어한다. (#369)
+        // 위치는 밧줄 장력(NpcController.TickRopeDrag)이 직접 제어한다. (#369, #390에서 NPC로 이관)
         if (m_owner.IsRoped)
             return;
 
@@ -53,7 +54,7 @@ public class NpcEscortedState : NpcStateBase
     {
         // 밧줄 끌기 중에는 추종·거리 이탈 판정을 돌리지 않는다 — 에이전트가 꺼져 있어 SetDestination이
         // 조용히 실패하고, 밧줄은 길이로 거리를 스스로 유지하므로 이탈 개념 자체가 없다.
-        // 끌기 해제는 PlayerEscorter.TickRopeDrag가 상태를 보고 판단한다. (#369)
+        // 끌기 해제는 PlayerEscorter.TickTetherCleanup이 상태를 보고 판단한다. (#369)
         if (m_owner.IsRoped)
             return;
 
@@ -104,14 +105,18 @@ public class NpcEscortedState : NpcStateBase
         }
 
         // 뒤처지면 속도를 올려 따라잡는다
-        m_owner.Agent.speed = distance > m_config.BoostDistance
-            ? m_baseSpeed * m_config.BoostMultiplier
-            : m_baseSpeed;
+        m_owner.Agent.speed =
+            distance > m_config.BoostDistance
+                ? m_baseSpeed * m_config.BoostMultiplier
+                : m_baseSpeed;
 
         // 경로 재계산은 "주기 경과 + 목표가 충분히 움직임" 둘 다 만족할 때만 (비용 절약)
         m_repathTimer += Time.deltaTime;
-        if (m_repathTimer >= k_repathInterval &&
-            (target.position - m_lastTargetPos).sqrMagnitude >= k_repathMoveThreshold * k_repathMoveThreshold)
+        if (
+            m_repathTimer >= k_repathInterval
+            && (target.position - m_lastTargetPos).sqrMagnitude
+                >= k_repathMoveThreshold * k_repathMoveThreshold
+        )
         {
             m_repathTimer = 0f;
             m_lastTargetPos = target.position;

@@ -119,9 +119,15 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
         // HqDropoffZone의 Escorted/Roped 게이트 + 판정 즉시 Release로 물리 인계 1회당 Judge 1회라 애초에 없다.
 
         // 개인 집계는 실제 오검거 기록 — 페널티 결과와 무관하게 항상 +1 (정산 코믹 스탯용).
-        if (result.DeliveredBy != null)
+        // 밧줄이 걸린 채 인계존까지 들어갔으면 전원이 관여자다 (#390 규칙 4) — 줄다리기로 남이 밀어넣었어도
+        // 손을 떼는 수단(E 놓고 걸어가 줄 끊기 / 자기 줄 풀기)이 있었고, 실제로는 인계존까지 따라가는 동안
+        // 거리 초과로 줄이 먼저 끊기므로 "끝까지 붙어 있었다"만 남는다.
+        foreach (PlayerEscorter deliverer in result.DeliveredBy)
         {
-            ulong clientId = result.DeliveredBy.OwnerClientId;
+            if (deliverer == null)
+                continue;
+
+            ulong clientId = deliverer.OwnerClientId;
             m_perPlayerCounts.TryGetValue(clientId, out int prev);
             m_perPlayerCounts[clientId] = prev + 1;
         }
@@ -133,7 +139,18 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
         Debug.Log($"[오검거] 팀 카운트 {m_teamCountSynced.Value} — {FormatPerPlayerCounts()}");
 
         if (m_teamCountSynced.Value > k_maxWrongful)
-            LaunchSquad(result.DeliveredBy != null ? result.DeliveredBy.transform : null);
+            LaunchSquad(CollectTargets(result));
+    }
+
+    // 추격 대상 트랜스폼만 뽑아낸다 — 인계자 전원이 대상이다 (#390 규칙 5).
+    private static List<Transform> CollectTargets(ArrestResult result)
+    {
+        var targets = new List<Transform>();
+        foreach (PlayerEscorter deliverer in result.DeliveredBy)
+            if (deliverer != null)
+                targets.Add(deliverer.transform);
+
+        return targets;
     }
 
     // 원한 구역 수용(#277) — 석방 대신 전용 구역으로 보내 출동 대기시킨다.
@@ -153,17 +170,23 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
     // ---- 출동 (#278) ----
 
     // 구역 전원을 추격대로 출동시킨다. 팀 카운트는 이 순간 리셋 — 이후 오검거는 새 게이지로 쌓인다 (#276 확정).
-    private void LaunchSquad(Transform initialTarget)
+    // 대상이 여럿이면(줄다리기로 함께 인계, #390) 추격 NPC마다 <b>자기와 가장 가까운</b> 대상을 문다 —
+    // 전원이 한 사람에게 몰리면 나머지는 벌을 안 받고, 한 명은 감당 못 할 수를 맞는다.
+    private void LaunchSquad(List<Transform> targets)
     {
         m_teamCountSynced.Value = 0;
         PruneDead(m_detained);
+
+        // 아래에서 네 번 도는 목록이라 여기서 한 번만 정규화한다 — null 목록·죽은 항목 둘 다.
+        targets ??= new List<Transform>();
+        targets.RemoveAll(t => t == null);
 
         // 폴백 ① — 구역이 비어 추격대를 꾸릴 수 없다(리셋 타이밍 등 예외 상황). 기존 텔레포트 집행 (#101)
         if (m_detained.Count == 0)
         {
             Debug.LogWarning("[오검거] 원한 구역이 비어 있음 — 텔레포트 집행 폴백", this);
-            if (initialTarget != null)
-                HangAsync(initialTarget).Forget();
+            foreach (Transform target in targets)
+                HangAsync(target).Forget();
             return;
         }
 
@@ -172,16 +195,41 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
         {
             m_activeNpcs.Add(npc);
             npc.OnPenaltyCaught += HandlePenaltyCaught;
-            npc.StartPenaltyChase(initialTarget); // null이면 사냥 모드로 시작해 범위에 드는 플레이어를 문다
+            // null이면 사냥 모드로 시작해 범위에 드는 플레이어를 문다
+            npc.StartPenaltyChase(NearestTarget(npc.transform.position, targets));
         }
         m_detained.Clear();
 
-        // 초기 타겟 본인에게 알림(잠깐 표시 후 자동 소멸). 추격에 시간 제한은 없다(팀 결정) —
+        // 대상 본인들에게 알림(잠깐 표시 후 자동 소멸). 추격에 시간 제한은 없다(팀 결정) —
         // 못 잡으면 사냥 모드로 계속 배회하며 노리므로, 페널티는 잡히거나 격퇴로 미뤄질 뿐 사라지지 않는다.
-        ShowWarning(initialTarget, k_warningSeconds);
+        foreach (Transform target in targets)
+            ShowWarning(target, k_warningSeconds);
 
-        string targetName = initialTarget != null ? initialTarget.name : "(없음 — 사냥 모드)";
-        Debug.Log($"[오검거] 추격대 출동 — {launched}명, 초기 타겟 {targetName}");
+        string targetNames = targets.Count > 0
+            ? string.Join(", ", targets.ConvertAll(t => t.name))
+            : "(없음 — 사냥 모드)";
+        Debug.Log($"[오검거] 추격대 출동 — {launched}명, 초기 타겟 {targetNames}");
+    }
+
+    // 출동 지점에서 가장 가까운 대상 — 대상이 없으면 null(사냥 모드).
+    private static Transform NearestTarget(Vector3 from, List<Transform> targets)
+    {
+        if (targets == null || targets.Count == 0)
+            return null;
+
+        Transform nearest = targets[0];
+        float best = (nearest.position - from).sqrMagnitude;
+        for (int i = 1; i < targets.Count; i++)
+        {
+            float distance = (targets[i].position - from).sqrMagnitude;
+            if (distance >= best)
+                continue;
+
+            best = distance;
+            nearest = targets[i];
+        }
+
+        return nearest;
     }
 
     /// <summary>

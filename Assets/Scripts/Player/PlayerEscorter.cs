@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using Unity.Netcode;
 using UnityEngine;
@@ -56,9 +57,6 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
         }
     }
 
-    // 밧줄을 들고 있는가 — 새 끌기의 자원 게이트(#269). 로드아웃이 없으면(테스트 구성) 통과.
-    private bool HasRope => Loadout == null || Loadout.HasRope;
-
     private float CaptureRange => Interactor != null ? Interactor.Range : k_fallbackRange;
 
     // 거리 기준점 — 조준 레이캐스트·윤곽선 게이트와 동일한 AimOrigin(카메라).
@@ -66,15 +64,15 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
     private Vector3 AimOriginPosition =>
         Interactor != null ? Interactor.AimOrigin.position : transform.position;
 
-    // 밧줄 끌기 상태(DraggingNpc·IsDragging·TetheredNpc·DraggedNpcTransform·RopeLength)는 PlayerEscorter.RopeDrag.cs에 있다. (#269)
-
-    /// <summary>밧줄로 끌기 중 — 새 묶기/풀기를 막는 '한 번에 1명' 게이트. 연행이 밧줄로 이관되며 끌기 하나로 수렴했다. (#269/#369)</summary>
-    public bool IsBusy => IsDragging;
+    // 밧줄 연결 목록·용량 게이트(TetheredCount·IsTetheredTo·IsDraggingNpc·IsAtRopeCapacity)는
+    // PlayerEscorter.RopeDrag.cs에, 장력 계산·추종 상태·밧줄 길이는 NpcController(끌리는 쪽)에 있다.
+    // 예전의 '한 번에 1명' 게이트(IsBusy)는 자원 게이트 IsAtRopeCapacity가 물려받았다.
 
     /// <summary>
-    /// 해당 NPC를 밧줄로 끌고 있는 플레이어를 찾는다 — 없으면 null. 서버(또는 오프라인)에서만 유효.
+    /// 해당 NPC를 밧줄에 묶고 있는 플레이어를 찾는다 — 없으면 null. 서버(또는 오프라인)에서만 유효.
     /// 인계 판정(ArrestJudge)이 이 결과로 끌기를 물리적으로 풀기 때문에, 빼면 인계자가 "알 수 없음"이 되고
     /// 끌기가 안 풀린 채(에이전트 꺼진 채) 상태 전이가 일어나 NavMeshAgent 예외가 난다. (#269)
+    /// 여러 명이 걸려 있으면 그중 하나다 — 전원이 필요하면 <see cref="FindEscortersOf"/>.
     /// </summary>
     public static PlayerEscorter FindEscorterOf(NpcController npc)
     {
@@ -83,10 +81,29 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
 
         PlayerEscorter[] escorters = FindObjectsByType<PlayerEscorter>(FindObjectsSortMode.None);
         foreach (PlayerEscorter escorter in escorters)
-            if (escorter.DraggingNpc == npc)
+            if (escorter.IsTetheredTo(npc))
                 return escorter;
 
         return null;
+    }
+
+    /// <summary>
+    /// 해당 NPC에 밧줄을 걸고 있는 플레이어를 <b>전부</b> 찾는다 — 아무도 없으면 빈 목록. 서버(또는 오프라인) 전용.
+    /// 줄다리기로 여러 명이 한 대상에 걸릴 수 있어, 인계 판정·오검거 페널티처럼 "관여한 사람 전원"을
+    /// 알아야 하는 쪽이 이걸 쓴다.
+    /// </summary>
+    public static List<PlayerEscorter> FindEscortersOf(NpcController npc)
+    {
+        var found = new List<PlayerEscorter>();
+        if (npc == null)
+            return found;
+
+        PlayerEscorter[] escorters = FindObjectsByType<PlayerEscorter>(FindObjectsSortMode.None);
+        foreach (PlayerEscorter escorter in escorters)
+            if (escorter.IsTetheredTo(npc))
+                found.Add(escorter);
+
+        return found;
     }
 
     // 서버 채널링 생명주기(CTS 소유·재진입 가드)는 ServerChannel에 위임 (#109)
@@ -113,17 +130,21 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
         CancelCaptureRpc();
     }
 
-    /// <summary>연행 놓기 — 오너가 호출.</summary>
-    public void RequestRelease()
+    /// <summary>끌기 놓기 — 오너가 호출(E). 조준한 대상 하나만 놓는다, 나머지는 계속 끌린다. (#390)</summary>
+    public void RequestRelease(NpcController target)
     {
+        if (target == null)
+            return;
         if (!IsSpawned)
         {
-            Release();
+            ReleaseDrag(target);
             return;
         }
         if (!IsOwner)
             return;
-        ReleaseRpc();
+        if (!IsTargetNetworkReady(target))
+            return;
+        ReleaseRpc(new NetworkObjectReference(target.NetworkObject));
     }
 
     /// <summary>도주 NPC 근접 제압 홀드 시작 — 오너가 호출(E 누름). 3초 홀드를 채워야 잡힌다. (#332)</summary>
@@ -196,7 +217,16 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
     private void CancelSubdueRpc() => ServerCancelSubdue();
 
     [Rpc(SendTo.Server)]
-    private void ReleaseRpc() => Release();
+    private void ReleaseRpc(NetworkObjectReference targetRef)
+    {
+        if (
+            targetRef.TryGet(out NetworkObject targetObj)
+            && targetObj.TryGetComponent(out NpcController target)
+        )
+        {
+            ReleaseDrag(target);
+        }
+    }
 
     // 밧줄 끌기 요청 RPC(RopeDragRequestRpc)는 PlayerEscorter.RopeDrag.cs에 있다. (#269)
 
@@ -253,12 +283,8 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
     {
         if (m_channel.IsActive)
             return; // 체포/해제/제압 채널링 중복 방지 (한 채널 공유)
-        if (IsBusy)
-            return; // 연행/끌기 중엔 제압 불가
-        if (TetheredNpc != null)
-            return; // 이미 밧줄로 묶어 둔 대상이 있으면 새로 확보 불가 — 놓아둔(끌기 중 아님) 대상도 포함, 한 번에 1명 (#369)
-        if (!HasRope)
-            return; // 밧줄 없으면 도주 제압(=체포)도 불가 (#369)
+        if (IsAtRopeCapacity)
+            return; // 소지한 밧줄을 전부 쓰고 있으면 새로 확보 불가 — 밧줄 없음(0개)도 여기서 걸린다 (#369 → #390)
         if (target.CurrentState != NpcState.Run)
             return; // 도주 중일 때만 — 저항은 타격 연타, 배회는 수갑 채널링이 정식 경로
         if (!IsInRange(target))
@@ -315,22 +341,29 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
     // 묶기 채널링의 역방향 — 밧줄을 든 좌클릭으로 체포되어 멈춘 NPC를 풀어 배회로 돌려보낸다.
     // 묶기와 같은 m_channel·게이지·사거리 판정을 재사용한다(대상 상태가 갈라 주므로 채널 하나면 충분).
 
-    /// <summary>밧줄 풀기 진입 — 체포된 대상만, 중복·연행중·사거리 검증 후 채널링 시작. 서버(또는 오프라인) 실행. (#369)</summary>
+    /// <summary>밧줄 풀기 진입 — 중복·사거리 검증 후 채널링 시작. 서버(또는 오프라인) 실행. (#369/#390)
+    /// 두 갈래다: 놓아둔 체포(Captured)는 <b>누구나</b> 풀어 배회로 돌려보낼 수 있고(오검거 구제·방해 수단),
+    /// 끌리는 중(Escorted)이면 <b>자기 줄만</b> 뺄 수 있다 — 줄다리기에서 손을 떼는 수단이다.
+    /// 남이 끌고 있는 줄까지 풀 수 있게 하면 탈취 차단의 우회로가 된다 — 뺏을 필요도 없이 다 풀어버린다.
+    /// 다른 대상을 끌고 있어도 풀기는 가능하다.</summary>
     private void ServerBeginUnrope(NpcController target)
     {
         if (m_channel.IsActive)
             return; // 묶기/풀기 채널링 중복 방지 (한 채널 공유)
-        if (IsBusy)
-            return; // 연행/끌기 중엔 풀기 불가 — 이미 다른 대상을 잡고 있다
-        if (!NpcStateRules.CanRelease(target.CurrentState))
-            return; // 체포(Captured)만 — 클라 조기검증(Rope.Use)과 단일 기준 (#184/#369)
-        if (!HasRope)
+        if (Loadout != null && !Loadout.HasRope)
             return; // 밧줄을 들고 있어야 풀 수 있다
+        if (!CanUnrope(target))
+            return; // 클라 조기검증(Rope.Use)과 단일 기준 (#184/#369)
         if (!IsInRange(target))
             return; // 사거리 밖이면 시작조차 안 함
 
         ServerUnropeChannelAsync(target).Forget();
     }
+
+    /// <summary>이 대상에 밧줄 풀기를 걸 수 있는가 — 서버 가드와 클라 조기검증(Rope)이 함께 쓰는 단일 기준.</summary>
+    public bool CanUnrope(NpcController target) =>
+        target != null
+        && (NpcStateRules.CanRelease(target.CurrentState) || IsTetheredTo(target));
 
     private async UniTaskVoid ServerUnropeChannelAsync(NpcController target)
     {
@@ -358,8 +391,22 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
         }
 
         // 채널링 도중 상태가 바뀌었을 수 있다 — 완료 시점에 재확인(예: 그새 다른 플레이어가 끌기 재개).
-        if (!NpcStateRules.CanRelease(target.CurrentState))
+        if (!CanUnrope(target))
             return;
+
+        // 내 줄이 걸려 있으면 그것부터 뺀다 — 줄다리기 중이면 여기서 끝이다(남은 참가자가 계속 끈다).
+        // 마지막 한 명이었으면 대상이 커스터디에서 풀려 아래 배회 복귀로 이어진다. (#390 규칙 8)
+        if (IsTetheredTo(target))
+        {
+            ReleaseDrag(target);
+            RemoveTether(target);
+
+            if (FindEscorterOf(target) != null)
+            {
+                NotifyOwner($"내 밧줄만 풀었다 — 다른 참가자가 계속 확보 중: {target.name}");
+                return;
+            }
+        }
 
         // 밧줄은 소모되지 않아 대상에 남은 게 없다 — 회수할 자원 없이 배회로 돌려보내기만 한다 (#369).
         NotifyOwner($"밧줄 풀기 완료 — 배회 복귀: {target.name}");
@@ -393,19 +440,8 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
 
     // ---- 서버 내부 연행 상태 조작 ----
 
-    /// <summary>놓기(E) — 밧줄로 끌던 NPC를 그 자리에 체포 상태로 세운다(줄은 유지). 서버(또는 오프라인) 실행. (#269/#369)
-    /// 좌클릭 수갑 연행이 밧줄로 이관되면서 연행 놓기는 밧줄 끌기 놓기(ReleaseDrag) 하나로 수렴했다.
-    /// ArrestJudge가 인계 판정 직후 서버 권위로 호출하기도 한다(끌기 물리 해제).</summary>
-    public void Release()
-    {
-        if (IsSpawned && !IsServer)
-            return; // 서버 권위 방어 — 클라 직접 호출은 무시 (요청은 RequestRelease 경유)
-
-        if (DraggingNpc != null)
-            ReleaseDrag();
-    }
-
-    // 밧줄 끌기 서버 로직(ServerBeginRopeDrag·SetDragging·ServerUpdateDrag·ReleaseDrag·TickRopeDrag)은
+    // 놓기는 대상 단위(ReleaseDrag(npc))다 — ArrestJudge는 판정된 그 NPC를, E 놓기는 조준 대상을 넘긴다.
+    // 밧줄 끌기 서버 로직(ServerBeginRopeDrag·AddTether·ReleaseDrag·TickTetherCleanup)은
     // PlayerEscorter.RopeDrag.cs로 분리돼 있다 (partial). (#269)
 
     private void Update()
@@ -414,22 +450,16 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
         if (IsSpawned && !IsServer)
             return;
 
-        // 대상이 파괴되면(라운드 종료 시 NPC가 씬과 함께 destroy) 아래 끌기 가드가 Unity 가짜 null에 걸려
-        // 건너뛴다 — 참조는 사라졌는데 동기화 플래그만 남으면 원격 오너의 IsBusy가 영구 true가 되어
-        // E 상호작용이 다음 라운드까지 죽는다(PlayerInteractor가 매 입력을 '놓기'로 소비). 참조가 비면 플래그도 내린다. (#356)
-        if (IsSpawned && IsServer && DraggingNpc == null && m_isDraggingSynced.Value)
-            SetDragging(null);
-        // 밧줄 연결(TetheredNpc)의 같은 정리는 TickRopeDrag가 매 프레임 한다 — 대상 파괴로 참조가
-        // 가짜 null이 되는 경우까지 거기서 함께 걸러진다.
-
-        // 밧줄 끌기 매 프레임 처리 — 서버 로직은 partial(RopeDrag)로 위임. (#269)
-        TickRopeDrag();
+        // 밧줄 연결 매 프레임 정리 — 장력 자체는 끌리는 NpcController가 자기 Update에서 돈다.
+        // 대상이 파괴되는 경로(라운드 종료 시 NPC가 씬과 함께 destroy)도 여기서 함께 걸러진다 — 목록에서
+        // 빠지면 동기화 목록도 같이 정리되므로, 참조와 플래그가 어긋난 채 남는 일이 없다. (#356)
+        TickTetherCleanup();
     }
 
     public override void OnNetworkDespawn()
     {
         ServerCancelCapture();
-        ReleaseDrag();
+        ReleaseAllDrags();
     }
 
     public override void OnDestroy()

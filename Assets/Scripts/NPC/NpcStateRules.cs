@@ -74,6 +74,13 @@ public static class NpcStateRules
         && state != NpcState.Chasing
         && state != NpcState.PenaltyEscorting;
 
+    /// <summary>이미 남이 끌고 있는 대상에 밧줄을 <b>덧걸</b> 수 있는가 — 줄다리기 합류. (#390)
+    /// 팀 결정은 "합류는 허용, 탈취는 차단"이다. 합류는 기존 끌기를 끊지 않고 참가자만 하나 늘린다.
+    /// 그래서 <see cref="CanArrest"/>의 <see cref="NpcState.Escorted"/> 제외를 <b>건드리지 않고</b>
+    /// 규칙을 따로 판다 — 그쪽을 열면 "새로 묶기" 경로가 통째로 열려 탈취가 딸려온다.
+    /// 같은 이유로 놓아둔 체포(Captured)는 뺀다: 남의 소유로 서 있는 대상이라 그게 곧 탈취다.</summary>
+    public static bool CanJoinDrag(NpcState state) => state == NpcState.Escorted;
+
     /// <summary>밧줄 좌클릭으로 풀어 석방할 수 있는 상태인가 — 체포되어 멈춘 대상(Captured)만. (#290 → #369)
     /// 밧줄은 소모형이 아니라 상태만으로 가른다(수갑 시절의 자원 유무 조건 없음). 제압만으로 잡힌 Captured도 대상.</summary>
     public static bool CanRelease(NpcState state) => state == NpcState.Captured;

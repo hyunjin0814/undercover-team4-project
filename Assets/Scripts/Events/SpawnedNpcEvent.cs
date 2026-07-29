@@ -276,9 +276,9 @@ public class SpawnedNpcEvent : ISuddenEvent
 
         // 연행 중인 채로 정리되면(라운드 종료 등) 연행 참조가 파괴된 NPC를 가리킨 채 남아 그 플레이어가
         // 영영 연행 중이 된다 — 파괴 전에 놓게 한다. 판정 경로에서는 ArrestJudge가 이미 놓았으므로 null이다.
-        PlayerEscorter escorter = PlayerEscorter.FindEscorterOf(m_npc);
-        if (escorter != null)
-            escorter.Release();
+        // 줄다리기로 여러 명이 걸려 있을 수 있다 — 전원에게서 이 대상의 줄만 뺀다 (#390).
+        foreach (PlayerEscorter escorter in PlayerEscorter.FindEscortersOf(m_npc))
+            escorter.ReleaseDrag(m_npc);
 
         SuddenEventUtil.DespawnOrDestroy(m_npc.gameObject, playVfx);
 

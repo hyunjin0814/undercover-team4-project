@@ -80,11 +80,9 @@ public class PlayerItemUser : MonoBehaviour
             return;
         }
 
-        // 밧줄로 끌기 중엔 손이 묶여 다른 아이템을 쓸 수 없다 (#269)
-        if (m_escorter != null && m_escorter.IsDragging)
-        {
-            return;
-        }
+        // 끌기 중 아이템 사용 차단은 없다 (#390). 끌면서 두 번째 밧줄을 쓸 수 있어야 하는데, 그 예외를
+        // 밧줄에만 두면 GDD 8-2의 "손이 묶인다"가 반쪽이 되어 팀 결정으로 통째로 걷었다.
+        // 다중 끌기의 대가는 슬롯 경쟁(밧줄로 3칸을 채우면 들 것이 없다)과 무게 페널티(#398)가 진다.
 
         if (m_equippedItem == null)
         {

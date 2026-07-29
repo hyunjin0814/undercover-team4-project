@@ -321,10 +321,12 @@ public class PlayerLoadout : NetworkBehaviour
 
     // ---- 버리기 (오너 요청 → 서버 실행) ----
 
-    // 지금 NPC를 묶어 둔 밧줄인가 — 이 상태로 버리면 묶인 대상이 주인 없이 남는다. IsTethered는
-    // 서버·오너 양쪽에서 유효해(동기화 참조) 조기검증과 서버 판정이 같은 기준을 쓴다. (#369)
+    // 버리면 묶인 대상이 주인 없이 남는 밧줄인가 — 개수로 판정한다 (#390).
+    // 여분(안 묶은) 밧줄이 있으면 버릴 수 있다: 밧줄끼리 구별이 없으므로 "어느 것을 버리느냐"는 무의미하고,
+    // 사용 중인 줄 수가 소지 수와 같을 때만(=여분 0) 막으면 된다.
+    // TetheredCount는 서버·오너 양쪽에서 유효해(동기화 목록) 조기검증과 서버 판정이 같은 기준을 쓴다. (#369)
     private bool IsTetheredRope(ItemBase item) =>
-        item is Rope && m_escorter != null && m_escorter.IsTethered;
+        item is Rope && m_escorter != null && m_escorter.TetheredCount >= RopeCount;
 
     // 현재 장착 아이템을 버린다 (버리기 입력 핸들러).
     private void RequestDropEquipped()
@@ -437,21 +439,30 @@ public class PlayerLoadout : NetworkBehaviour
     // ---- 밧줄 자원 게이트 (#269) ----
     // 수갑 소모·반환(#229: HasHandcuffs/ConsumeHandcuffsTo/TryRecoverHandcuffs)은 밧줄이 소모형이 아니게 되며 제거됐다. (#369)
 
-    /// <summary>이 플레이어가 밧줄을 보유 중인가 — 끌기 자원 게이트. 부착된 자식 기준. (#269)</summary>
-    public bool HasRope => FindHeldRope() != null;
+    /// <summary>이 플레이어가 밧줄을 보유 중인가 — 풀기 등 "한 개라도 있으면 되는" 게이트. (#269)</summary>
+    public bool HasRope => RopeCount > 0;
 
-    private Rope FindHeldRope()
+    /// <summary>
+    /// 보유 밧줄 개수 — 동시에 묶을 수 있는 인원의 상한이다 (밧줄 1개당 NPC 1명, #390).
+    /// 부착된 자식 기준이라 서버·오너 양쪽에서 같은 값이 나온다(부착은 NGO가 복제한다).
+    /// 밧줄끼리는 구별하지 않는다 — 어느 줄이 어느 대상에 걸렸는지는 추적하지 않고 개수만 센다.
+    /// </summary>
+    public int RopeCount
     {
-        Transform parent = ItemParent;
-        for (int i = 0; i < parent.childCount; i++)
+        get
         {
-            if (parent.GetChild(i).TryGetComponent(out Rope rope))
+            Transform parent = ItemParent;
+            int count = 0;
+            for (int i = 0; i < parent.childCount; i++)
             {
-                return rope;
+                if (parent.GetChild(i).GetComponent<Rope>() != null)
+                {
+                    count++;
+                }
             }
-        }
 
-        return null;
+            return count;
+        }
     }
 
     // ---- 서버 → 오너: 보유 목록 동기화 ----
