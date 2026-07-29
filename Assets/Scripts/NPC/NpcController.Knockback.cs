@@ -8,6 +8,12 @@ public partial class NpcController
     /// <summary>폭발 등으로 날아가는 중인가 — 이 동안 FSM·NavMesh는 멈춘다. 서버(또는 오프라인)에서만 유효.</summary>
     public bool IsKnockedBack => m_knockbackActive;
 
+    /// <summary>넉백 비행 중이거나 착지에 실패해 복구 대기 중인가 — 이 동안 NavMeshAgent가 꺼져 있다. (#423)
+    /// 밖에서 FSM을 전이시키면(밧줄 체포 등) 직전 상태 Exit·다음 상태 Enter가 꺼진 에이전트에
+    /// isStopped를 써 에러가 난다. 새로 신병을 확보하려는 쪽은 이걸 먼저 봐야 한다.
+    /// 서버(또는 오프라인) 전용 — 동기화하지 않으므로 원격 클라에서는 항상 false다.</summary>
+    public bool IsAgentDetached => m_knockbackActive || m_knockbackStranded;
+
     /// <summary>
     /// 외력으로 날려보낸다 — 폭발 넉백(<see cref="BombDevice"/>) 등. 세기는 m/s 단위 초기 속도로 준다.
     ///
@@ -96,7 +102,8 @@ public partial class NpcController
         if (!timedOut && m_knockbackVelocity.y > 0f)
             return; // 아직 상승 중 — 착지 판정은 내려올 때부터
 
-        if (NavMesh.SamplePosition(transform.position, out NavMeshHit ground, m_commonConfig.KnockbackLandSampleDistance, NavMesh.AllAreas))
+        if (NavMesh.SamplePosition(transform.position, out NavMeshHit ground, m_commonConfig.KnockbackLandSampleDistance, NavMesh.AllAreas)
+            && !IsStrandedIsland(ground.position))
         {
             if (!timedOut && transform.position.y > ground.position.y + 0.05f)
                 return; // 아직 공중
@@ -178,12 +185,39 @@ public partial class NpcController
             return;
         }
 
-        // 이미 발사 시점에 전이해 뒀다 — 여기 호출은 그 사이 상태가 바뀐 경우를 위한 보정이다.
-        // (같은 상태면 StateMachine이 무시하므로 상태별 타이머가 착지 시점에 리셋되지도 않는다)
+        ApplyKnockbackLandingState();
+    }
+
+    // 발사 시점에 정해 둔 상태로 마저 전이한다 — 착지·복구가 공유한다.
+    // 이미 발사 시점에 한 번 전이해 뒀으므로, 이 호출은 그 사이 상태가 바뀐 경우를 위한 보정이다.
+    // (같은 상태면 StateMachine이 무시하므로 상태별 타이머가 착지 시점에 리셋되지도 않는다)
+    //
+    // 단, 비행·복구 대기 중에 **다른 시스템이 신병을 가져갔으면 그 결정을 존중한다** — 그대로
+    // 덮어쓰면 방금 성사된 밧줄 체포(Escorted)가 조용히 Stunned로 되돌아간다. 판정은 CanArrest의
+    // 제외 목록을 재사용한다 — '확보·타 시스템 소유' 집합이 정확히 같기 때문이다. (#423 리뷰)
+    private void ApplyKnockbackLandingState()
+    {
+        if (!NpcStateRules.CanArrest(m_stateMachine.CurrentState))
+            return;
+
         m_stateMachine.ChangeState(m_knockbackLandingState);
     }
 
     // ---- NavMesh 밖 착지 복구 (#423) ----
+
+    // 옥상 조각으로 인정할 최소 상승폭(m) — 발사 지점보다 이만큼 넘게 높으면 지면이 아니라고 본다.
+    // 계단·경사로 올라간 정도는 통과시켜야 하므로 여유를 둔다.
+    private const float k_strandedIslandRise = 2f;
+
+    // 이 지점이 '지면과 끊긴 옥상 조각'인가 — 착지·복구 양쪽이 공유하는 판정.
+    //
+    // 이 맵은 NavMesh를 렌더 메시 기준으로 굽기 때문에 건물 옥상·차양에도 NavMesh가 깔려 있는데,
+    // 그 조각들은 지면과 이어져 있지 않다(지면에서 경로를 계산하면 전부 PathPartial). 거기 착지하거나
+    // 복귀시키면 에러는 안 나지만 내려올 길이 없어 영영 갇힌다 — 이 이슈가 고치려던 것과 결과가 같다.
+    // 실측: 유치장 위 옥상(y 8.74)은 착지 탐색 4m에도, 복구 탐색 25m에도 8m 아래 지면보다 먼저 잡힌다.
+    //
+    // 걸러진 대상은 계속 낙하하다 비행 시간이 다 되면 발사 지점으로 회수된다(아래 EndKnockback 폴백).
+    private bool IsStrandedIsland(Vector3 point) => point.y > m_knockbackLaunch.y + k_strandedIslandRise;
 
     // 착지 실패 — 에이전트를 도로 끄고 복구 대기로 들어간다.
     // 끄지 않으면 넉백 게이트가 풀린 직후 상태 클래스가 NavMesh 밖 에이전트를 건드린다.
@@ -214,8 +248,8 @@ public partial class NpcController
 
         m_knockbackStranded = false;
 
-        // 발사 시점에 정해 둔 상태로 마저 넘긴다 — 정상 착지했을 때와 같은 처리다.
-        m_stateMachine.ChangeState(m_knockbackLandingState);
+        // 정상 착지와 같은 처리 — 그 사이 신병이 넘어갔으면 건드리지 않는다.
+        ApplyKnockbackLandingState();
     }
 
     // 기준점 주변 NavMesh로 에이전트를 되돌린다 — 붙었으면 true. 실패하면 에이전트를 도로 꺼 둔다.
@@ -225,6 +259,9 @@ public partial class NpcController
     {
         if (!NavMesh.SamplePosition(origin, out NavMeshHit hit, m_commonConfig.KnockbackRecoverySampleDistance, m_agent.areaMask))
             return false;
+
+        if (IsStrandedIsland(hit.position))
+            return false; // 다음 후보(발사 지점)로 넘긴다 — 거긴 날아오기 전 서 있던 자리라 지면이 보장된다
 
         m_agent.enabled = true;
         if (m_agent.Warp(hit.position) && m_agent.isOnNavMesh)

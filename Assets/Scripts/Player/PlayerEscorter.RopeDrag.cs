@@ -147,6 +147,12 @@ public partial class PlayerEscorter
         if (!CanBeginRopeDrag(target))
             return;
 
+        // 넉백으로 날아가는 중이거나 NavMesh 밖에 떨어져 복구를 기다리는 대상은 묶지 않는다 (#423).
+        // 그 동안 에이전트가 꺼져 있어, 여기서 Escorted로 전이시키면 상태 Exit/Enter가 꺼진
+        // 에이전트에 isStopped를 써 에러가 난다. 비행은 1초 남짓이라 다시 누르면 된다.
+        if (target.IsAgentDetached)
+            return;
+
         // 남이 끌고 있는 대상에는 밧줄을 덧건다 — 줄다리기 합류. 기존 끌기는 끊지 않는다(탈취 차단).
         // 이미 커스터디라 반응 판정·기절 지름길이 필요 없어 채널링만 태우고 바로 붙인다.
         if (NpcStateRules.CanJoinDrag(target.CurrentState))
@@ -181,6 +187,8 @@ public partial class PlayerEscorter
             return;
         if (!IsInRange(target))
             return;
+        if (target.IsAgentDetached)
+            return; // 비행·복구 대기 중 — ServerBeginRopeDrag와 같은 이유 (#423)
 
         // 이미 내 줄에 묶여 있는(E로 놓아둔) 대상은 용량 게이트를 타지 않는다 — 새 밧줄을 쓰지 않으므로.
         // 태우면 밧줄을 꽉 채워 놓아둔 순간 아무도 다시 못 끌게 된다.
@@ -246,6 +254,8 @@ public partial class PlayerEscorter
         // 그 사이 밧줄을 버려 용량이 준 경우, 합류하려던 대상을 그새 놓아버린 경우 등).
         if (target == null || IsAtRopeCapacity)
             return;
+        if (target.IsAgentDetached)
+            return; // 채널링 도중 폭발에 날아갔다 (#423)
         bool stateOk = joining
             ? NpcStateRules.CanJoinDrag(target.CurrentState)
             : NpcStateRules.CanArrest(target.CurrentState);
