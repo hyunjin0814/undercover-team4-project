@@ -35,6 +35,10 @@ public partial class NpcController : NetworkBehaviour
     private bool m_knockbackActive;
     private NpcState m_knockbackLandingState; // 착지 후 돌아갈 상태 — 검거 중이었으면 Captured, 그 외엔 Stunned
 
+    // 착지 지점을 NavMesh에 붙이지 못해 복구를 기다리는 중 — 유예 시간이 지나면 스스로 되돌아온다 (#423)
+    private bool m_knockbackStranded;
+    private float m_knockbackStrandedElapsed;
+
     // 라운드 종료 시 정지(freeze) 플래그 — 서버(또는 오프라인)에서만 의미. 켜지면 FSM/이동을 멈춘다. (라운드 종료 freeze)
     private bool m_frozen;
 
@@ -211,6 +215,14 @@ public partial class NpcController : NetworkBehaviour
         if (m_knockbackActive)
         {
             TickKnockback();
+            return;
+        }
+
+        // 착지에 실패해 NavMesh 밖에 남은 동안에도 FSM을 돌리지 않는다 — 에이전트를 꺼 둔 채라
+        // 상태 클래스가 건드리면 넉백 비행 중과 똑같은 에러가 난다. 복구되면 게이트가 풀린다 (#423)
+        if (m_knockbackStranded)
+        {
+            TickKnockbackRecovery();
             return;
         }
 

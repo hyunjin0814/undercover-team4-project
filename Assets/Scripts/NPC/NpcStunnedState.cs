@@ -27,9 +27,13 @@ public class NpcStunnedState : NpcStateBase
     {
         m_timer = 0f;
         m_standingUp = false;
-        m_owner.Agent.isStopped = true;
+        // isStopped도 NavMesh 위에 있어야 부를 수 있다 — 넉백으로 NavMesh 밖에 떨어진 채
+        // 이 상태로 들어오면 여기서 에러가 났다 (#423)
         if (m_owner.Agent.isOnNavMesh)
+        {
+            m_owner.Agent.isStopped = true;
             m_owner.Agent.ResetPath();
+        }
     }
 
     public override void Tick()

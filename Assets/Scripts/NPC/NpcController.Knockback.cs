@@ -50,6 +50,7 @@ public partial class NpcController
             m_stateMachine.ChangeState(m_knockbackLandingState);
 
         m_knockbackActive = true;
+        m_knockbackStranded = false; // 복구 대기 중에 다시 맞았다 — 새 비행이 우선이다 (#423)
         m_knockbackVelocity = velocity;
         m_knockbackLaunch = transform.position;
         m_knockbackElapsed = 0f;
@@ -168,11 +169,12 @@ public partial class NpcController
         m_agent.enabled = true;
         m_agent.Warp(landing); // 에이전트를 NavMesh 위 착지점에 다시 붙인다
 
-        // Warp가 실패했으면(착지점이 NavMesh 밖) 상태 전이를 시키지 않는다 —
-        // 상태 클래스들이 곧바로 에이전트를 건드려 에러가 난다. 다음 프레임 이후 스스로 복구되진 않으므로 남긴다.
+        // 착지점을 NavMesh에 붙이지 못했다(건물 위 등) — 복구 대기로 넘긴다 (#423).
+        // 예전에는 경고만 남기고 포기해서, 에이전트가 켜진 채 NavMesh 밖에 남았다 —
+        // FSM이 곧바로 재개되어 상태 클래스가 매 프레임 isStopped/SetDestination을 부르며 에러를 쏟았다.
         if (!m_agent.isOnNavMesh)
         {
-            Debug.LogWarning("NpcController: 넉백 착지 지점을 NavMesh에 붙이지 못했다", this);
+            BeginKnockbackStranded();
             return;
         }
 
@@ -181,4 +183,54 @@ public partial class NpcController
         m_stateMachine.ChangeState(m_knockbackLandingState);
     }
 
+    // ---- NavMesh 밖 착지 복구 (#423) ----
+
+    // 착지 실패 — 에이전트를 도로 끄고 복구 대기로 들어간다.
+    // 끄지 않으면 넉백 게이트가 풀린 직후 상태 클래스가 NavMesh 밖 에이전트를 건드린다.
+    private void BeginKnockbackStranded()
+    {
+        m_agent.enabled = false;
+        m_knockbackStranded = true;
+        m_knockbackStrandedElapsed = 0f;
+
+        Debug.LogWarning(
+            $"NpcController: 넉백 착지 지점을 NavMesh에 붙이지 못했다 — {m_commonConfig.KnockbackStrandedRecoverySeconds}초 뒤 복귀시킨다: {name}",
+            this);
+    }
+
+    // 복구 대기 1프레임 — 유예 시간이 지나면 NavMesh 위로 되돌린다. FSM 대신 Update가 부른다.
+    private void TickKnockbackRecovery()
+    {
+        m_knockbackStrandedElapsed += Time.deltaTime;
+        if (m_knockbackStrandedElapsed < m_commonConfig.KnockbackStrandedRecoverySeconds)
+            return;
+
+        // 떨어진 자리 주변(건물 위라면 그 아래 지상)을 먼저 보고, 없으면 날아오기 전 자리로 되돌린다.
+        if (!TryRecoverToNavMesh(transform.position) && !TryRecoverToNavMesh(m_knockbackLaunch))
+        {
+            m_knockbackStrandedElapsed = 0f; // 둘 다 실패 — 유예 시간만큼 쉬었다 다시 시도한다
+            return;
+        }
+
+        m_knockbackStranded = false;
+
+        // 발사 시점에 정해 둔 상태로 마저 넘긴다 — 정상 착지했을 때와 같은 처리다.
+        m_stateMachine.ChangeState(m_knockbackLandingState);
+    }
+
+    // 기준점 주변 NavMesh로 에이전트를 되돌린다 — 붙었으면 true. 실패하면 에이전트를 도로 꺼 둔다.
+    // 탐색 반경은 착지 판정(KnockbackLandSampleDistance)보다 넓다 — 건물 위에서 지상까지 닿아야 한다.
+    // 영역 마스크는 에이전트 것을 그대로 쓴다 — AllAreas로 찾으면 통행이 금지된 영역으로 되돌아갈 수 있다.
+    private bool TryRecoverToNavMesh(Vector3 origin)
+    {
+        if (!NavMesh.SamplePosition(origin, out NavMeshHit hit, m_commonConfig.KnockbackRecoverySampleDistance, m_agent.areaMask))
+            return false;
+
+        m_agent.enabled = true;
+        if (m_agent.Warp(hit.position) && m_agent.isOnNavMesh)
+            return true;
+
+        m_agent.enabled = false; // 다음 시도를 위해 원래대로 꺼 둔다
+        return false;
+    }
 }

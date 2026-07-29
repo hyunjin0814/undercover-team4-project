@@ -21,6 +21,10 @@ public class NpcCommonConfig : ScriptableObject
     [SerializeField] private float m_knockbackLandSampleDistance = 4f;
     [Tooltip("날아가는 도중 벽으로 칠 콜라이더 — 여기에 걸리면 수평 이동이 멈춘다. NPC 자신의 레이어는 런타임에 자동으로 빠진다")]
     [SerializeField] private LayerMask m_knockbackObstacleMask = 1; // Default(환경)만 — 캐릭터 오판 방지 (#339)
+    [Tooltip("착지에 실패해 NavMesh 밖에 남았을 때, 이 시간(초)이 지나면 강제로 NavMesh 위로 되돌린다 (#423)")]
+    [SerializeField] private float m_knockbackStrandedRecoverySeconds = 2f;
+    [Tooltip("강제 복귀 시 NavMesh 탐색 거리(m) — 건물 위에서 지상까지 닿아야 하므로 착지 탐색보다 넓게 잡는다")]
+    [SerializeField] private float m_knockbackRecoverySampleDistance = 25f;
 
     [Header("체력 — #366")]
     [Tooltip("NPC 최대 체력 — 0이 되면 기절(Stunned)한다. 저항 제압 게이지(구 SubdueGaugeMax)를 대체한 값")]
@@ -34,6 +38,8 @@ public class NpcCommonConfig : ScriptableObject
     public float KnockbackMaxFlightSeconds => m_knockbackMaxFlightSeconds;
     public float KnockbackLandSampleDistance => m_knockbackLandSampleDistance;
     public LayerMask KnockbackObstacleMask => m_knockbackObstacleMask;
+    public float KnockbackStrandedRecoverySeconds => m_knockbackStrandedRecoverySeconds;
+    public float KnockbackRecoverySampleDistance => m_knockbackRecoverySampleDistance;
 
     /// <summary>NPC 최대 체력 — HUD가 비율 계산에, NpcController가 초기화·회복에 읽는다. (#366)</summary>
     public int MaxHp => m_maxHp;
