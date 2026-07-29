@@ -34,6 +34,7 @@ public class RopeDragView : MonoBehaviour
     [SerializeField] private GameObject m_dustPrefab;
 
     private PlayerEscorter m_escorter;
+    private PlayerCarrier m_carrier; // 기능 정지 동료 운반 — 같은 밧줄이라 같은 선을 그린다 (#365)
     private PlayerHeldItemView m_heldItemView;
 
     // 표시용 인스턴스 — 첫 끌기에 만들고 이후 껐다 켠다(끌 때마다 생성/파괴하지 않는다).
@@ -47,6 +48,7 @@ public class RopeDragView : MonoBehaviour
     private void Awake()
     {
         m_escorter = GetComponent<PlayerEscorter>();
+        m_carrier = GetComponent<PlayerCarrier>();
         m_heldItemView = GetComponent<PlayerHeldItemView>(); // 없는 구성(테스트 등)이면 null
     }
 
@@ -56,7 +58,13 @@ public class RopeDragView : MonoBehaviour
     {
         // 끌고 있는 동안만이 아니라 '묶여 있는 동안' 내내 그린다 — 놓기(E)는 끌기를 멈출 뿐
         // 줄을 푸는 게 아니다. 실제로 풀리면(밧줄 좌클릭 풀기·인계 판정·방치 탈주) 연결이 끊긴다. (#369)
-        Transform tethered = m_escorter.TetheredNpcTransform;
+        // 동료 운반(#365)도 같은 줄이다 — 둘은 동시에 성립하지 않으므로 있는 쪽을 그린다.
+        // 운반에는 '묶어만 둔' 상태가 없어(내려놓으면 줄이 풀린다) 끌고 있는 동안만 이어진다.
+        bool carryingPlayer = m_carrier != null && m_carrier.IsCarrying;
+        Transform tethered = carryingPlayer
+            ? m_carrier.CarriedTransform
+            : m_escorter.TetheredNpcTransform;
+
         if (tethered == null)
         {
             SetVisible(false);
@@ -69,8 +77,9 @@ public class RopeDragView : MonoBehaviour
         // 먼지는 실제로 끌고 있을 때만 — 세워 둔 대상 발밑에서 먼지가 계속 일면 안 된다
         if (m_dust != null)
         {
-            if (m_dust.activeSelf != m_escorter.IsDragging)
-                m_dust.SetActive(m_escorter.IsDragging);
+            bool dragging = carryingPlayer || m_escorter.IsDragging;
+            if (m_dust.activeSelf != dragging)
+                m_dust.SetActive(dragging);
             m_dust.transform.position = tethered.position;
         }
     }

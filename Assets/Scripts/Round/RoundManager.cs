@@ -463,13 +463,14 @@ public class RoundManager : CommonManagerBase
     // 게임오버가 영영 안 뜬다. (IsOutOfAction이 온라인=동기화값/서버=실참조, 오프라인=실참조를 알아서 처리한다)
     private static bool AreAllPlayersOutOfAction()
     {
-        PlayerIncapacitation[] players = FindObjectsByType<PlayerIncapacitation>(FindObjectsSortMode.None);
-        if (players.Length == 0)
+        // 씬 조회(FindObjectsByType) 대신 정적 레지스트리 — 인스턴스가 스스로 등록·해제한다 (#365)
+        System.Collections.Generic.IReadOnlyList<PlayerIncapacitation> players = PlayerIncapacitation.All;
+        if (players.Count == 0)
             return false;
 
-        foreach (PlayerIncapacitation player in players)
+        for (int i = 0; i < players.Count; i++)
         {
-            if (!player.IsOutOfAction)
+            if (!players[i].IsOutOfAction)
                 return false;
         }
         return true;

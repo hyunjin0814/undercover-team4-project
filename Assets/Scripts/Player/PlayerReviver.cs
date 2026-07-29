@@ -190,11 +190,14 @@ public class PlayerReviver : ChanneledInteractionBehaviour
         NotifyOwner($"구조 채널링 시작: {target.name} ({m_reviveSeconds}초)");
         NotifyChannelGaugeStart(m_reviveSeconds);
 
-        // keepAlive 생략 — 단일 Delay로 대기하고, 완료 시점에만 거리·중복복구를 검사한다 (기존 동작 유지)
+        // 대상이 구조 대상이 아니게 되는 순간 즉시 끊는다 (#364) — 구조 제한시간이 채널링 도중 끝나
+        // Die로 떨어졌는데 게이지만 끝까지 차오르면, 다 채운 뒤에 실패를 통보받는 꼴이 된다.
+        // 거리 검사는 종전대로 완료 시점에만 한다 — 여기 넣으면 채널링 중 한 발짝 어긋나도 즉시 실패다.
         ServerChannel.Result result;
         try
         {
-            result = await m_channel.RunAsync(m_reviveSeconds);
+            result = await m_channel.RunAsync(
+                m_reviveSeconds, () => target != null && targetIncap.IsDowned);
         }
         finally
         {
@@ -209,8 +212,12 @@ public class PlayerReviver : ChanneledInteractionBehaviour
                 return;
 
             case ServerChannel.Result.OutOfRange:
-                // PlayerReviver는 keepAlive를 넘기지 않아 이 사유는 발생하지 않는다 — 완료 시점 검사가 담당.
-                break;
+                // 여기서는 '거리 이탈'이 아니라 대상이 구조 대상에서 벗어난 것이다 (keepAlive, #364).
+                NotifyOwner(
+                    target != null && targetIncap.IsDead
+                        ? $"구조 중단 — 제한시간 초과로 기능 정지됨: {target.name} (본부 이송 필요)"
+                        : "구조 중단 — 대상이 구조 대상이 아니게 됨");
+                return;
 
             case ServerChannel.Result.Completed:
                 break;

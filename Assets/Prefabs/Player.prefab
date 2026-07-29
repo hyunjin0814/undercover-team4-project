@@ -2836,6 +2836,7 @@ GameObject:
   - component: {fileID: 3605863908184502176}
   - component: {fileID: 3601868820283084074}
   - component: {fileID: 5887233641706128439}
+  - component: {fileID: 8634843281634365864}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -3042,6 +3043,11 @@ MonoBehaviour:
   m_crouchSpeed: 2.5
   m_gravity: -9.81
   m_knockbackDamping: 4
+  m_dragFollowDistance: 1.6
+  m_dragSmoothTime: 0.14
+  m_dragTurnSharpness: 6
+  m_dragSwayAngle: 7
+  m_dragSwayFrequency: 1.6
   playerCamera: {fileID: 7952644528617391114}
   m_mouseSensitivity: 1
   m_lookSmoothing: 20
@@ -3101,8 +3107,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerData
   ShowTopMostFoldoutHeaderGroup: 1
-  m_maxHp: 100
-  m_reviveHp: 50
+  m_maxHp: 20
+  m_reviveHp: 10
 --- !u!114 &7365381909932747572
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3291,6 +3297,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerIncapacitation
   ShowTopMostFoldoutHeaderGroup: 1
   m_reviveHitbox: {fileID: 6891439341619729457}
+  m_dieAfterDownSeconds: 60
 --- !u!114 &-6997859010805551940
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3513,6 +3520,20 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3e00d2b1d9a0c854b97aac62808ac808, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ShopStandPresenter
+--- !u!114 &8634843281634365864
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5466483465133727208}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7ce57a8cacb75ad4dab7ae3fc7fc6d38, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerCarrier
+  ShowTopMostFoldoutHeaderGroup: 1
+  m_breakDistance: 8
 --- !u!1 &5536001738967602051
 GameObject:
   m_ObjectHideFlags: 0

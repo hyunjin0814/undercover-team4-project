@@ -12,6 +12,7 @@ public class PlayerReviveHud : NetworkBehaviour
     private PlayerInputHandler m_inputHandler;
     private PlayerReviver m_reviver;
     private PlayerIncapacitation m_incapacitation;
+    private PlayerCarrier m_carrier; // 운반 프롬프트 (#365)
 
     public override void OnNetworkSpawn()
     {
@@ -24,6 +25,7 @@ public class PlayerReviveHud : NetworkBehaviour
         m_inputHandler = GetComponent<PlayerInputHandler>();
         m_reviver = GetComponent<PlayerReviver>();
         m_incapacitation = GetComponent<PlayerIncapacitation>();
+        m_carrier = GetComponent<PlayerCarrier>();
     }
 
     private void OnGUI()
@@ -53,6 +55,13 @@ public class PlayerReviveHud : NetworkBehaviour
             return;
         }
 
+        // 동료를 운반 중 — 목적지와 내려놓기 안내 (#365)
+        if (m_carrier != null && m_carrier.IsCarrying)
+        {
+            DrawCenterLabel("운반 중 — 본부 부활 장치를 겨냥해 [E]로 안치 (그 외 [E]는 내려놓기)");
+            return;
+        }
+
         // 다운된 아군을 조준 중이면 구조 키 프롬프트
         if (m_reviver != null && m_reviver.CurrentReviveTarget != null)
         {
@@ -60,10 +69,10 @@ public class PlayerReviveHud : NetworkBehaviour
             return;
         }
 
-        // 기능 정지된 아군을 조준 중 — 구조로는 못 살린다는 안내. 운반 프롬프트는 #365에서 이 자리에 붙는다.
+        // 기능 정지된 아군을 조준 중 — 구조가 아니라 운반이 답이다 (#364/#365)
         if (m_reviver != null && m_reviver.CurrentDeadTarget != null)
         {
-            DrawCenterLabel("기능 정지 — 구조 불가, 본부로 이송해야 한다");
+            DrawCenterLabel("기능 정지 — 구조 불가. 밧줄을 들고 좌클릭해 본부로 이송");
         }
     }
 

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using Unity.Netcode;
 using UnityEngine;
@@ -112,6 +113,18 @@ public class PlayerIncapacitation : NetworkBehaviour
     // Time.time을 그대로 동기화하면 피어마다 기점이 달라 남은 시간이 어긋난다.
     private double CurrentTime =>
         IsSpawned && NetworkManager != null ? NetworkManager.ServerTime.Time : Time.timeAsDouble;
+
+    // 살아 있는 인스턴스 목록 — 매 프레임 플레이어를 훑어야 하는 쪽(본부 부활 구역 #365)이
+    // FindObjectsByType으로 씬 전체를 뒤지지 않게 한다. 그쪽은 상시 도는 검사라 조회 비용이 그대로 상시 비용이 된다.
+    // 활성/비활성 시점에 스스로 등록·해제하므로 스폰 여부·오프라인 테스트와 무관하게 정확하다.
+    private static readonly List<PlayerIncapacitation> s_instances = new();
+
+    /// <summary>현재 씬에 존재하는 모든 플레이어의 무력화 컴포넌트. 매 프레임 순회해도 되는 무할당 목록. (#365)</summary>
+    public static IReadOnlyList<PlayerIncapacitation> All => s_instances;
+
+    private void OnEnable() => s_instances.Add(this);
+
+    private void OnDisable() => s_instances.Remove(this);
 
     /// <summary>무력화 상태가 바뀔 때 발행 — 애니메이션·UI 훅용. 원인만 바뀌면 울리지 않는다.</summary>
     public event Action<bool> OnIncapacitatedChanged;

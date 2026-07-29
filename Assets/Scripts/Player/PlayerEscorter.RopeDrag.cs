@@ -178,6 +178,8 @@ public partial class PlayerEscorter
             return false;
         if (IsBusy)
             return false; // 한 번에 1명
+        if (IsCarryingPlayer)
+            return false; // 동료를 끌고 있으면 그 줄이 쓰이는 중이다 (#365)
         if (!HasRope)
             return false;
         if (TetheredNpc != null && TetheredNpc != target)

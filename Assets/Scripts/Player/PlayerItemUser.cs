@@ -11,6 +11,7 @@ public class PlayerItemUser : MonoBehaviour
     private PlayerInteractor m_interactor;
     private PlayerIncapacitation m_incapacitation; // 다운(무력화) 중 아이템 사용 차단용 (#105)
     private PlayerEscorter m_escorter; // 밧줄 끌기 중 아이템 사용 잠금용 (#269)
+    private PlayerCarrier m_carrier; // 동료 운반 중 아이템 사용 잠금용 (#365)
 
     /// <summary>현재 장착 중인 아이템. 없으면 null. (#45 — PlayerHandView가 초기 표시에 사용)</summary>
     // 파괴된 아이템은 null로 내보낸다 — 장착 중 디스폰(라운드 종료 회수, #370) 후 장착 해제가 도착하기까지
@@ -29,6 +30,7 @@ public class PlayerItemUser : MonoBehaviour
         m_interactor = GetComponent<PlayerInteractor>();
         m_incapacitation = GetComponent<PlayerIncapacitation>();
         m_escorter = GetComponent<PlayerEscorter>();
+        m_carrier = GetComponent<PlayerCarrier>();
     }
 
     private void OnEnable()
@@ -80,8 +82,12 @@ public class PlayerItemUser : MonoBehaviour
             return;
         }
 
-        // 밧줄로 끌기 중엔 손이 묶여 다른 아이템을 쓸 수 없다 (#269)
+        // 밧줄로 끌기 중엔 손이 묶여 다른 아이템을 쓸 수 없다 (#269) — 동료 운반도 같은 줄이다 (#365)
         if (m_escorter != null && m_escorter.IsDragging)
+        {
+            return;
+        }
+        if (m_carrier != null && m_carrier.IsCarrying)
         {
             return;
         }

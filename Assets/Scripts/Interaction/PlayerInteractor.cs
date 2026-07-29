@@ -38,6 +38,7 @@ public class PlayerInteractor : NetworkBehaviour
     private PlayerInputHandler m_inputHandler;
     private PlayerEscorter m_escorter;
     private PlayerIncapacitation m_incapacitation;
+    private PlayerCarrier m_carrier; // 운반 중 E의 "내려놓기" 선점 판정용 (#365)
 
     public override void OnNetworkSpawn()
     {
@@ -46,6 +47,7 @@ public class PlayerInteractor : NetworkBehaviour
         m_escorter = GetComponent<PlayerEscorter>();
         // 행동불능 중 상호작용 차단용 — 이동/아이템은 각자 게이팅하지만 E 상호작용은 공백이었다 (#101)
         m_incapacitation = GetComponent<PlayerIncapacitation>();
+        m_carrier = GetComponent<PlayerCarrier>(); // 없는 구성(테스트 등)이면 null (#365)
         if (m_camera == null) m_camera = Camera.main;
 
         if (!IsOwner)
@@ -154,6 +156,23 @@ public class PlayerInteractor : NetworkBehaviour
             // 서버 Release()가 끌기/연행 중 무엇이었는지 보고 알맞은 놓기로 분기한다.
             Debug.Log("E 입력 — 놓기 요청 (연행/밧줄 끌기)");
             m_escorter.RequestRelease();
+            return;
+        }
+
+        // 동료를 운반 중이면 E는 내려놓기가 최우선 — 밧줄 놓기와 같은 이유로 이번 입력을 소비한다 (#365).
+        // 단 몸을 받는 대상(부활 장치)을 겨냥했다면 그쪽이 앞선다 — 아니면 장치 앞에서 E를 눌러도
+        // 그 자리에 툭 내려놓게 된다. 선점을 여는 대상은 ICarriedBodyReceiver로 한정한다(문·콘솔은 종전대로).
+        if (m_carrier != null && m_carrier.IsCarrying)
+        {
+            if (CurrentInteractable is ICarriedBodyReceiver receiver
+                && receiver.CanInteract(gameObject))
+            {
+                receiver.Interact(gameObject);
+                return;
+            }
+
+            Debug.Log("E 입력 — 내려놓기 요청 (운반)");
+            m_carrier.RequestDrop();
             return;
         }
 

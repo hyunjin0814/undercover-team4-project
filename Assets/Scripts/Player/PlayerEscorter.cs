@@ -59,6 +59,20 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
     // 밧줄을 들고 있는가 — 새 끌기의 자원 게이트(#269). 로드아웃이 없으면(테스트 구성) 통과.
     private bool HasRope => Loadout == null || Loadout.HasRope;
 
+    // 기능 정지된 동료를 끄는 중인가 — 같은 밧줄을 쓰므로 NPC 확보와 동시에 성립할 수 없다 (#365).
+    // 없는 구성(테스트 등)이면 false.
+    private PlayerCarrier m_carrier;
+
+    private bool IsCarryingPlayer
+    {
+        get
+        {
+            if (m_carrier == null)
+                m_carrier = GetComponent<PlayerCarrier>();
+            return m_carrier != null && m_carrier.IsCarrying;
+        }
+    }
+
     private float CaptureRange => Interactor != null ? Interactor.Range : k_fallbackRange;
 
     // 거리 기준점 — 조준 레이캐스트·윤곽선 게이트와 동일한 AimOrigin(카메라).
@@ -257,6 +271,8 @@ public partial class PlayerEscorter : ChanneledInteractionBehaviour
             return; // 연행/끌기 중엔 제압 불가
         if (TetheredNpc != null)
             return; // 이미 밧줄로 묶어 둔 대상이 있으면 새로 확보 불가 — 놓아둔(끌기 중 아님) 대상도 포함, 한 번에 1명 (#369)
+        if (IsCarryingPlayer)
+            return; // 동료를 끌고 있으면 그 줄이 쓰이는 중이다 (#365)
         if (!HasRope)
             return; // 밧줄 없으면 도주 제압(=체포)도 불가 (#369)
         if (target.CurrentState != NpcState.Run)
