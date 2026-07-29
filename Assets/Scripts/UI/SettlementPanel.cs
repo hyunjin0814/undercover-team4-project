@@ -160,7 +160,7 @@ public class SettlementPanel : PanelBase
             RoundEndReason.ManualEnd => "수사 종료 — 목표 금액 달성",
             RoundEndReason.QuotaMet => "제한시간 종료 — 목표 금액 달성",
             RoundEndReason.TimeOver => "제한시간 초과 — 목표 금액 미달",
-            RoundEndReason.AllPlayersDown => "플레이어 전원 다운",
+            RoundEndReason.AllPlayersDown => "플레이어 전원 행동불능", // 다운·기능 정지(Die) 혼재 (#364)
             _ => string.Empty,
         };
     }

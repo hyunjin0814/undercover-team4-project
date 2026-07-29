@@ -223,8 +223,11 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
 
         if (movement != null)
             movement.ServerTeleport(pos, rot); // 오너 권한 경로 — 호스트·원격 클라 모두 이동
+        // 폴백 경로(구역이 비어 추격대 없이 집행)에서는 여기서 무력화가 처음 걸린다.
+        // 같은 원인이면 무동작이지만 <b>다른 원인은 덮어쓴다</b> — 기능 정지(Die)만은 덮이지 않게
+        // Incapacitate 쪽에서 막는다(#364). 안 막으면 30초 뒤 아래 Recover()가 Die까지 풀어 공짜 부활이 된다.
         if (incap != null)
-            incap.Incapacitate(IncapacitationCause.Penalty); // 이미 무력화면 무동작(중복 트리거 무시) — 폴백 경로에선 여기서 진입
+            incap.Incapacitate(IncapacitationCause.Penalty);
 
         Debug.Log($"[오검거] 광장 매달기 — {target.name} → {pos}, {k_hangSeconds}초");
 

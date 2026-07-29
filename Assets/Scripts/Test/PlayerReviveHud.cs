@@ -35,12 +35,21 @@ public class PlayerReviveHud : NetworkBehaviour
             && settlement.IsOpened)
             return;
 
-        // 내가 다운된 경우 — 구조 대기 메시지.
+        // 내가 다운된 경우 — 구조 대기 메시지 + Die까지 남은 시간.
         // IsIncapacitated가 아니라 IsDowned를 본다 (#252): 기절·오검거 매달기도 무력화지만 스스로
         // 풀리므로 구조를 기다리라는 안내가 거짓이 된다. 아무도 오지 않는데 기다리게 만든다.
         if (m_incapacitation != null && m_incapacitation.IsDowned)
         {
-            DrawCenterLabel("다운됨 — 동료의 구조를 기다리는 중...");
+            // 남은 시간을 함께 보여준다 (#364) — 안 보이면 기다리다 갑자기 기능 정지로 떨어진다
+            int remaining = Mathf.CeilToInt(m_incapacitation.RemainingUntilDie);
+            DrawCenterLabel($"다운됨 — 동료의 구조를 기다리는 중... (기능 정지까지 {remaining}초)");
+            return;
+        }
+
+        // 내가 기능 정지(Die)된 경우 — 구조는 끝났고 본부 이송(#365)만 남았다는 안내 (#364)
+        if (m_incapacitation != null && m_incapacitation.IsDead)
+        {
+            DrawCenterLabel("기능 정지 — 동료가 본부로 이송해야 복구된다");
             return;
         }
 
@@ -48,6 +57,13 @@ public class PlayerReviveHud : NetworkBehaviour
         if (m_reviver != null && m_reviver.CurrentReviveTarget != null)
         {
             DrawCenterLabel($"[E]키를 홀드하여 구조");
+            return;
+        }
+
+        // 기능 정지된 아군을 조준 중 — 구조로는 못 살린다는 안내. 운반 프롬프트는 #365에서 이 자리에 붙는다.
+        if (m_reviver != null && m_reviver.CurrentDeadTarget != null)
+        {
+            DrawCenterLabel("기능 정지 — 구조 불가, 본부로 이송해야 한다");
         }
     }
 
