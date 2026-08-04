@@ -101,6 +101,17 @@ public static class NpcStateRules
     public static bool IsFollowingUnroped(NpcController npc) =>
         npc != null && npc.CurrentState == NpcState.Escorted && !npc.IsRoped;
 
+    /// <summary>멈춰 선 반출 수감자인가 — E로 <b>밧줄 없는 추종</b>을 재개할 수 있는 대상. (#517)
+    /// 반출된 대상은 거리가 벌어지면 <see cref="NpcEscortedState"/>가 Captured로 되돌려 세우는데,
+    /// 상태만 보면 방금 제압한 신병과 구분되지 않아 E가 밧줄 끌기로 샜다 — 반출 흐름으로 되돌릴 입력이
+    /// 없어지는 것이 #517의 증상이다. 그래서 상태 대신 <see cref="NpcController.IsJailExtracted"/>를
+    /// 함께 본다(<see cref="CanRopeBind"/>·<see cref="IsFollowingUnroped"/>와 같은 이유로 NpcController를 받는다).
+    ///
+    /// 밧줄이 걸린 대상은 여기 오지 않는다 — 묶이는 순간 표식이 꺼져(NpcController.StartRopeDrag)
+    /// E가 다시 밧줄 재개로 간다. 두 분기가 겹치지 않는 근거가 그것이다.</summary>
+    public static bool CanResumeUnropedEscort(NpcController npc) =>
+        npc != null && npc.CurrentState == NpcState.Captured && npc.IsJailExtracted;
+
     /// <summary>이미 남이 끌고 있는 대상에 밧줄을 <b>덧걸</b> 수 있는가 — 줄다리기 합류. (#390)
     /// 팀 결정은 "합류는 허용, 탈취는 차단"이다. 합류는 기존 끌기를 끊지 않고 참가자만 하나 늘린다.
     /// 그래서 <see cref="CanArrest"/>의 <see cref="NpcState.Escorted"/> 제외를 <b>건드리지 않고</b>

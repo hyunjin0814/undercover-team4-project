@@ -415,6 +415,10 @@ public class JailIntake : MonoBehaviour
         // 탈옥(JailbreakEvent)이 ClearDelivered를 부르는 것은 대상이 실제로 달아나 도시에서 다시
         // 잡아야 하는 진짜 재검거이기 때문이다 (#358) — 플레이어가 스스로 꺼낸 것과는 다르다.
 
+        // 반출 표식 — 거리 이탈로 멈춰도(Captured) 남아, E가 밧줄이 아니라 추종 재개로 가게 한다 (#517).
+        // 끄는 것은 NpcController가 한다: 재착석·도주 등 커스터디 이탈과 밧줄에 묶이는 순간.
+        npc.SetJailExtracted(true);
+
         // 앉은 자세를 전이보다 먼저 푼다 — 뒤에 두면 일어서는 순간이 한두 프레임 앉은 채로 보인다 (#462)
         npc.SetSeated(false);
         npc.StartEscort(follower);

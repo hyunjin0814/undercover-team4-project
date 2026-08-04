@@ -79,16 +79,14 @@ public partial class NpcController
             m_tetheredSynced.Value = m_tetherCount > 0;
     }
 
-    /// <summary>커스터디를 벗어나면 묶임 표시를 통째로 내린다 — 서버(또는 오프라인) FSM 전이가 부른다. (#513)
+    /// <summary>묶임 표시를 통째로 내린다 — 커스터디를 벗어나는 FSM 전이가 부른다. 서버(또는 오프라인). (#513)
     ///
     /// <see cref="PlayerEscorter"/>의 매 프레임 정리가 <b>같은 조건</b>으로 줄을 걷어내므로 평소엔 중복이지만,
     /// 끌던 플레이어가 접속을 끊으면 그 정리가 아예 돌지 않아 표시가 영영 남는다 — 그러면 배회로
     /// 돌아간 몸이 누운 모션으로 걸어 다닌다. 여기서 먼저 내려 두면 표현이 전이와 같은 프레임에 맞는다.
     /// <see cref="RemoveTether"/>는 0에서 더 내려가지 않으므로 한 박자 뒤에 오는 정리와 겹쳐도 안전하다.</summary>
-    private void ClearTethersOnCustodyExit(NpcState state)
+    private void ClearTethers()
     {
-        if (state == NpcState.Escorted || state == NpcState.Captured)
-            return;
         if (m_tetherCount == 0)
             return;
 
@@ -149,6 +147,9 @@ public partial class NpcController
         // 일어나던 중이었으면 되돌린다 — 방치 만료로 일어나는 도중에 달려와 E를 누른 재포획이 이 경로다.
         // 예약된 후속 동작(도주 등)도 함께 버려진다. (#513)
         CancelStandUp();
+
+        // 줄이 걸리는 순간 반출 흐름은 끝난다 — 이제 밧줄 신병이라 E는 놓기/재개로 갈린다 (#517)
+        SetJailExtracted(false);
 
         SetRoped(true);
         SyncDraggerCount();

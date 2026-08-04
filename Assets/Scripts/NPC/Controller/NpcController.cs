@@ -245,8 +245,13 @@ public partial class NpcController : NetworkBehaviour
     // 서버(또는 오프라인)의 FSM 전이를 밖으로 전파한다
     private void HandleFsmStateChanged(NpcState state)
     {
-        // 커스터디를 벗어나면 묶임 표시부터 내린다 — 표현(누운 자세)이 전이와 같은 프레임에 맞아야 한다 (#513)
-        ClearTethersOnCustodyExit(state);
+        // 커스터디를 벗어나면 신병에 매달린 표식부터 내린다 — 전이와 같은 프레임에 맞아야 한다.
+        // 묶임(#513)은 표현(누운 자세)이, 반출(#517)은 E 분기가 이 값을 본다.
+        if (state != NpcState.Escorted && state != NpcState.Captured)
+        {
+            ClearTethers();
+            SetJailExtracted(false);
+        }
 
         if (!IsSpawned)
         {

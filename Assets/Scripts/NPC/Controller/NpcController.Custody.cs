@@ -63,6 +63,38 @@ public partial class NpcController
     /// 실제 해석은 <see cref="JailArea"/>가 한다 (#492에서 사본 통합).</summary>
     public static int JailAreaMask => JailArea.Mask;
 
+    // ---- 반출 표식 (#517) ----
+
+    private bool m_jailExtracted;
+
+    // 동기화 플래그 — 서버만 기록한다(착석 m_seatedSynced와 같은 관례).
+    // 클라도 읽어야 한다: E 조준 피드백(NpcSubdueInteractable.CanInteract)이 이 값으로 분기를 고른다.
+    private readonly NetworkVariable<bool> m_jailExtractedSynced = new(false);
+
+    /// <summary>
+    /// 유치장에서 반출돼(#492) 밧줄 없이 데려가는 중인 수감자인가 — 거리 이탈로 멈춰 서도(Captured) 유지된다.
+    /// 전 피어에서 유효. (#517)
+    ///
+    /// <b>왜 표식이 필요한가</b> — 멈추면 상태가 Captured가 되는데, 그것만으로는 "반출된 수감자"와
+    /// "방금 제압한 신병"을 구분할 수 없다. 구분이 없으면 E가 밧줄 끌기로 새서 반출 흐름으로 되돌릴
+    /// 입력이 사라진다. <see cref="IsDelivered"/>로는 못 가른다 — 게이트 판정을 통과해 끌려가는 중인
+    /// 대상도 그 값이 참이다.
+    /// </summary>
+    public bool IsJailExtracted =>
+        IsSpawned && !IsServer ? m_jailExtractedSynced.Value : m_jailExtracted;
+
+    /// <summary>반출 표식 지정 — 켜는 곳은 <see cref="JailIntake"/>의 반출 하나뿐이다. 서버(또는 오프라인). (#517)
+    /// 끄는 곳은 셋이다: 커스터디 이탈(재착석·도주·석방), 밧줄에 묶임, 그리고 여기 직접 호출.</summary>
+    public void SetJailExtracted(bool value)
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        m_jailExtracted = value;
+        if (IsSpawned && IsServer)
+            m_jailExtractedSynced.Value = value;
+    }
+
     // ---- 착석 (#462) ----
 
     private bool m_seated;

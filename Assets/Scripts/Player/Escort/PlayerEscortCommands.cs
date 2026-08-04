@@ -170,6 +170,24 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         JailReleaseRpc(new NetworkObjectReference(target.NetworkObject));
     }
 
+    /// <summary>멈춘 수감자 추종 재개 요청 — 오너가 호출(거리 이탈로 멈춘 반출 수감자에 E).
+    /// 정지(<see cref="RequestEscortHalt"/>)의 역방향이다 — 밧줄을 쓰지 않으므로 용량 게이트를 타지 않는다. (#517)</summary>
+    public void RequestEscortResume(NpcController target)
+    {
+        if (target == null)
+            return;
+        if (!IsSpawned)
+        {
+            ServerEscortResume(target);
+            return;
+        }
+        if (!IsOwner)
+            return;
+        if (!IsTargetNetworkReady(target))
+            return;
+        EscortResumeRpc(new NetworkObjectReference(target.NetworkObject));
+    }
+
     /// <summary>따라오는 수감자 정지 요청 — 오너가 호출(반출된 수감자에 E). 밧줄과 무관한 추종을 끊는다. (#492)</summary>
     public void RequestEscortHalt(NpcController target)
     {
@@ -247,6 +265,18 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         )
         {
             Escorter.ReleaseDrag(target);
+        }
+    }
+
+    [Rpc(SendTo.Server)]
+    private void EscortResumeRpc(NetworkObjectReference targetRef)
+    {
+        if (
+            targetRef.TryGet(out NetworkObject targetObj)
+            && targetObj.TryGetComponent(out NpcController target)
+        )
+        {
+            ServerEscortResume(target);
         }
     }
 
@@ -565,6 +595,29 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         }
 
         intake.ServerExtract(target, transform);
+    }
+
+    // 추종 재개 실행 — 거리 이탈로 멈춘 반출 수감자를 다시 따라오게 한다. 서버(또는 오프라인). (#517)
+    //
+    // 밧줄을 걸지 않는다: 반출(JailIntake.ServerExtract)과 같은 방식으로 StartEscort만 부르면
+    // NpcEscortedState의 추종·속도 부스트·거리 이탈이 그대로 동작한다. 따라서 밧줄 소지·용량과 무관하다.
+    //
+    // 소유권을 묻지 않는다 — 정지(ServerEscortHalt)와 같은 취급이다. 남이 꺼낸 수감자를 대신
+    // 데려가는 것은 신병을 뺏는 행위가 아니라 이미 정산에서 빠진 대상을 도로 넣어 주는 협동이다.
+    private void ServerEscortResume(NpcController target)
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        // 상태 + 반출 표식 — 방금 제압한 신병(같은 Captured)이 이리로 새면 밧줄 없이 끌려간다
+        if (!NpcStateRules.CanResumeUnropedEscort(target))
+            return;
+
+        if (!IsInRange(target))
+            return;
+
+        target.StartEscort(transform);
+        NotifyOwner($"수감자 추종 재개: {target.name}");
     }
 
     // 추종 정지 실행 — 밧줄 없이 따라오는 수감자를 그 자리에 세운다(Captured). 서버(또는 오프라인).
