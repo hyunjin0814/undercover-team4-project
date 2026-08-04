@@ -244,6 +244,23 @@ public class JailZone : NetworkBehaviour
     }
 
     /// <summary>
+    /// 이 수감자의 기록된 현상금 — 없으면 false. 서버(또는 오프라인) 전용. (#517)
+    ///
+    /// 반출(<see cref="JailIntake.ServerExtract"/>)이 <see cref="ReleaseInmate"/> <b>직전에</b> 읽는다.
+    /// 반출은 정산에서 대상을 빼면서 판정 결과까지 잃는데, 유치장 안에서 다시 세우면 게이트를 거치지
+    /// 않고 그 자리에서 재착석해야 한다 — 그때 같은 값으로 다시 계상하려고 꺼내 둔다.
+    /// </summary>
+    public bool TryGetBounty(NpcController npc, out int bounty)
+    {
+        bounty = 0;
+        if (npc == null || !m_records.TryGetValue(npc, out InmateRecord record))
+            return false;
+
+        bounty = record.Bounty;
+        return true;
+    }
+
+    /// <summary>
     /// 수용 해제 — 범인 탈출 이벤트(별도 이슈)가 호출할 접합점. 카운트에서 뺀다.
     /// 상태 전이(탈출 후 도주 등)는 호출자가 NpcController로 따로 처리한다.
     /// </summary>

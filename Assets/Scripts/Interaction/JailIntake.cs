@@ -17,6 +17,8 @@ using UnityEngine;
 ///                   <b>플레이어도 유치장 안에 있으면</b> 가장 가까운 빈 좌석을 배정하고 계상한다.
 ///                   좌석까지 걸어가 앉는 것은 NpcJailedState가 한다.
 ///                   사람이 안에 있어야 하는 이유는 TrySeat 주석 — 문 밖에서 밀어 넣는 것을 막는다.
+///                   반출한 대상도 이 자격을 그대로 들고 나오므로(<see cref="ServerExtract"/>) 같은 규칙으로
+///                   다시 앉는다 — 안에서 세우면 재착석, 밖으로 데려가면 게이트에서 재판정이다 (#517).
 ///
 /// <b>판정 장소는 유치장 문턱이 아니라 문 앞 게이트다.</b> 처음에는 Jail 영역 진입을 트리거로 썼는데,
 /// 유치장 <b>안</b>에서 오검거가 확정되면 그 시민이 신병에서 빠지는 순간 Jail 통행을 잃고, 자기가
@@ -262,9 +264,17 @@ public class JailIntake : MonoBehaviour
             return;
         }
 
-        // 오검거는 WrongfulArrestPenalty가 Detained로 가져간다 — 앉힐 대상이 아니다
+        // 오검거는 WrongfulArrestPenalty가 Detained로 가져간다 — 앉힐 대상이 아니다.
         if (result.Value.Verdict != ArrestVerdict.WrongfulArrest)
+        {
             m_pendingSeat[npc] = result.Value.Reward;
+            return;
+        }
+
+        // 판정이 오검거로 뒤집혔으면 옛 자격을 걷어낸다 (#517) — 반출한 대상은 자격을 들고 나오므로
+        // (ServerExtract) 지우지 않으면 R2가 옛 기록을 보고 앉힌다. 페널티 전이(Detained)가 곧
+        // 같은 정리를 하지만, 근거가 바뀌는 지점에서 바로 지우는 편이 순서에 기대지 않는다.
+        m_pendingSeat.Remove(npc);
     }
 
     // R2 — 수감 대상이 유치장 안에서 멈추면(플레이어가 E로 놓으면) 좌석을 배정하고 계상한다.
@@ -399,10 +409,20 @@ public class JailIntake : MonoBehaviour
         if (npc.CurrentState != NpcState.Jailed)
             return;
 
-        m_jailZone.ReleaseInmate(npc); // 좌석 반납 + 정산·진행도에서 제외
+        // 수감 자격은 <b>남겨 둔다</b> — 판정 결과(현상금)를 정산 기록에서 꺼내 되살린다. (#517)
+        // 유치장 안에서 다시 세우면(E 정지·밧줄 풀기) 그 자리에서 재착석해야 하는데, 지우면 앉힐 근거가
+        // 없어져 반출 대상이 안에 선 채로 남았다 — 게이트를 다시 통과하기 전에는 방법이 없었다.
+        // 재착석 조건은 R2 그대로다(Captured + Jail 영역 안 + 사람이 안에 있음).
+        //
+        // 옛 기록으로 앉는 사고는 판정 쪽에서 막는다: 밖으로 데려가 재판정을 받았는데 오검거로
+        // 뒤집히면 TryJudgeOnEntry가 그 자리에서 기록을 지운다.
+        // 읽기는 ReleaseInmate <b>앞</b>이어야 한다 — 저쪽이 정산 레코드를 지운다.
+        if (m_jailZone.TryGetBounty(npc, out int bounty))
+            m_pendingSeat[npc] = bounty;
+        else
+            m_pendingSeat.Remove(npc);
 
-        // 수감 대상 기록도 지운다 — 남겨두면 재판정 결과가 오검거로 바뀌어도 R2가 옛 기록을 보고 앉힌다
-        m_pendingSeat.Remove(npc);
+        m_jailZone.ReleaseInmate(npc); // 좌석 반납 + 정산·진행도에서 제외
 
         // 통과 기록은 건드릴 것이 없다 — 판정 장소가 문 앞 게이트로 나가면서(#492) 유치장 안에서의
         // 재판정 경로가 사라졌다. 반출한 대상을 다시 앉히려면 게이트를 다시 통과해야 하고,
