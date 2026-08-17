@@ -13,15 +13,13 @@ using UnityEngine;
 /// </summary>
 public sealed class MontageBakeRig : System.IDisposable
 {
-    private const float k_featureSoftness = 0.08f; // 이목구비 컷오프 경계 폭 — 계단을 살짝 뭉개 톱니를 막는다
-
     /// <summary>바디를 어떻게 찍을지 — 레이어마다 바디의 역할이 다르다.</summary>
     private enum EBodyState
     {
         Original, // 프리팹 그대로 — 조명 렌더에서 이목구비를 뽑을 때
-        Flat,     // 평면 흰색 — 살 실루엣
+        Flat, // 평면 흰색 — 살 실루엣
         Occluder, // 평면 검정 — 프롭을 찍을 때 가림(depth)만 남긴다
-        Custom,   // 바깥에서 지정한 머티리얼 — 아틀라스 스왑 비교용 (#619)
+        Custom, // 바깥에서 지정한 머티리얼 — 아틀라스 스왑 비교용 (#619)
     }
 
     private readonly GameObject m_root;
@@ -74,11 +72,15 @@ public sealed class MontageBakeRig : System.IDisposable
         m_bodyRenderers = m_subject.GetComponentsInChildren<Renderer>(true);
         m_originalMaterials = new Material[m_bodyRenderers.Length][];
         for (int i = 0; i < m_bodyRenderers.Length; i++)
-            m_originalMaterials[i] = m_bodyRenderers[i] != null ? m_bodyRenderers[i].sharedMaterials : null;
+            m_originalMaterials[i] =
+                m_bodyRenderers[i] != null ? m_bodyRenderers[i].sharedMaterials : null;
 
         if (flatMaterial != null)
         {
-            m_occluderMaterial = new Material(flatMaterial) { hideFlags = HideFlags.HideAndDontSave };
+            m_occluderMaterial = new Material(flatMaterial)
+            {
+                hideFlags = HideFlags.HideAndDontSave,
+            };
             // 셰이더에 따라 색 프로퍼티 이름이 갈린다 (URP는 _BaseColor, 레거시 Unlit은 _Color)
             if (m_occluderMaterial.HasProperty("_BaseColor"))
                 m_occluderMaterial.SetColor("_BaseColor", Color.black);
@@ -99,21 +101,15 @@ public sealed class MontageBakeRig : System.IDisposable
         SkinnedMeshRenderer[] bodies = m_subject.GetComponentsInChildren<SkinnedMeshRenderer>(true);
         if (index < 0 || index >= bodies.Length)
         {
-            Debug.LogError($"MontageBakeRig: 바디 인덱스 {index}가 범위를 벗어났다 (바디 {bodies.Length}종)");
+            Debug.LogError(
+                $"MontageBakeRig: 바디 인덱스 {index}가 범위를 벗어났다 (바디 {bodies.Length}종)"
+            );
             return false;
         }
 
         for (int i = 0; i < bodies.Length; i++)
             bodies[i].gameObject.SetActive(i == index);
         return true;
-    }
-
-    /// <summary>이목구비 — 조명 렌더에서 주변 피부보다 어두운 픽셀만 남긴다.</summary>
-    public Color[] RenderFace(float threshold)
-    {
-        SetBodyState(EBodyState.Original);
-        m_light.enabled = true;
-        return ExtractFeatures(RenderPixels(), threshold);
     }
 
     /// <summary>살 — 평면 실루엣. 피부색 곱셈 틴트가 원본 살색·명암에 눌리면 안 되므로 순백으로 찍는다.</summary>
@@ -161,11 +157,17 @@ public sealed class MontageBakeRig : System.IDisposable
     /// 바디를 검정으로 남기는 것과 같은 원리라, 결과에는 그 프롭에 가려지지 않고 <b>밖으로 나온 부분만</b>
     /// 남는다 — 모자 밖으로 삐져나오는 머리가 있는지 재는 데 쓴다 (#619).
     /// </summary>
-    public Color[] RenderProp(GameObject propPrefab, Color color, bool silhouette, GameObject occluderPrefab = null)
+    public Color[] RenderProp(
+        GameObject propPrefab,
+        Color color,
+        bool silhouette,
+        GameObject occluderPrefab = null
+    )
     {
         BeginPropPass();
 
-        GameObject occluder = occluderPrefab != null ? InstantiateProp(occluderPrefab, m_occluderMaterial) : null;
+        GameObject occluder =
+            occluderPrefab != null ? InstantiateProp(occluderPrefab, m_occluderMaterial) : null;
 
         Color[] lit = null;
         if (!silhouette)
@@ -211,7 +213,9 @@ public sealed class MontageBakeRig : System.IDisposable
 
         if (state != EBodyState.Original && m_flatMaterial == null)
         {
-            Debug.LogError("MontageBakeRig: 평면 머티리얼이 없으면 실루엣을 오려낼 수 없다 — 흰색 URP/Unlit 머티리얼을 지정할 것");
+            Debug.LogError(
+                "MontageBakeRig: 평면 머티리얼이 없으면 실루엣을 오려낼 수 없다 — 흰색 URP/Unlit 머티리얼을 지정할 것"
+            );
             return;
         }
 
@@ -224,7 +228,10 @@ public sealed class MontageBakeRig : System.IDisposable
             if (state == EBodyState.Original)
                 renderer.sharedMaterials = m_originalMaterials[i];
             else
-                ApplyMaterial(renderer, state == EBodyState.Flat ? m_flatMaterial : m_occluderMaterial);
+                ApplyMaterial(
+                    renderer,
+                    state == EBodyState.Flat ? m_flatMaterial : m_occluderMaterial
+                );
         }
         m_bodyState = state;
     }
@@ -292,7 +299,9 @@ public sealed class MontageBakeRig : System.IDisposable
     {
         var go = new GameObject("~BakeLight");
         go.transform.SetParent(m_root.transform, false);
-        go.transform.rotation = Quaternion.LookRotation(-m_subject.transform.forward + Vector3.down * 0.35f);
+        go.transform.rotation = Quaternion.LookRotation(
+            -m_subject.transform.forward + Vector3.down * 0.35f
+        );
 
         Light light = go.AddComponent<Light>();
         light.type = LightType.Directional;
@@ -307,7 +316,10 @@ public sealed class MontageBakeRig : System.IDisposable
     /// </summary>
     private Color[] RenderPixels()
     {
-        var rt = new RenderTexture(m_resolution, m_resolution, 24, RenderTextureFormat.ARGB32) { antiAliasing = 1 };
+        var rt = new RenderTexture(m_resolution, m_resolution, 24, RenderTextureFormat.ARGB32)
+        {
+            antiAliasing = 1,
+        };
         Texture2D onWhite = Capture(rt, Color.white);
         Texture2D onBlack = Capture(rt, Color.black);
 
@@ -317,10 +329,22 @@ public sealed class MontageBakeRig : System.IDisposable
 
         for (int i = 0; i < pixels.Length; i++)
         {
-            float alpha = 1f - ((white[i].r - black[i].r) + (white[i].g - black[i].g) + (white[i].b - black[i].b)) / 3f;
-            pixels[i] = alpha <= 0.004f
-                ? Color.clear
-                : new Color(black[i].r / alpha, black[i].g / alpha, black[i].b / alpha, Mathf.Clamp01(alpha));
+            float alpha =
+                1f
+                - (
+                    (white[i].r - black[i].r)
+                    + (white[i].g - black[i].g)
+                    + (white[i].b - black[i].b)
+                ) / 3f;
+            pixels[i] =
+                alpha <= 0.004f
+                    ? Color.clear
+                    : new Color(
+                        black[i].r / alpha,
+                        black[i].g / alpha,
+                        black[i].b / alpha,
+                        Mathf.Clamp01(alpha)
+                    );
         }
 
         Object.DestroyImmediate(onWhite);
@@ -346,42 +370,8 @@ public sealed class MontageBakeRig : System.IDisposable
         return texture;
     }
 
-    /// <summary>
-    /// 조명 렌더에서 이목구비만 남긴다 — 얼굴 밝기의 중앙값을 피부로 보고, 그보다 문턱만큼 어두운
-    /// 픽셀의 알파만 남긴다. 눈·눈썹·입은 피부보다 훨씬 어두워 살아남고 완만한 명암은 걸러진다.
-    /// </summary>
-    private static Color[] ExtractFeatures(Color[] pixels, float threshold)
-    {
-        var luminances = new List<float>(pixels.Length);
-        foreach (Color pixel in pixels)
-        {
-            if (pixel.a > 0.5f)
-                luminances.Add(Luminance(pixel));
-        }
-
-        if (luminances.Count == 0)
-            return pixels;
-
-        luminances.Sort();
-        float skin = luminances[luminances.Count / 2];
-        if (skin <= 0.001f)
-            return pixels;
-
-        var result = new Color[pixels.Length];
-        for (int i = 0; i < pixels.Length; i++)
-        {
-            // 문턱 바로 위에서 불투명해지게 좁은 경계를 쓴다 — 위쪽 끝을 완전 검정(1)으로 잡으면
-            // 눈·입의 어두움이 0.5~0.8이라 늘 반투명하게 나오고, 문턱은 농도만 흔드는 노브가 된다
-            float darkness = (skin - Luminance(pixels[i])) / skin;
-            float alpha = pixels[i].a * Mathf.InverseLerp(threshold, threshold + k_featureSoftness, darkness);
-            result[i] = alpha <= 0.004f
-                ? Color.clear
-                : new Color(pixels[i].r, pixels[i].g, pixels[i].b, alpha);
-        }
-        return result;
-    }
-
-    private static float Luminance(Color color) => 0.2126f * color.r + 0.7152f * color.g + 0.0722f * color.b;
+    private static float Luminance(Color color) =>
+        0.2126f * color.r + 0.7152f * color.g + 0.0722f * color.b;
 
     /// <summary>
     /// 흰색 렌더(mask)에서 <b>바디에 가려지지 않은</b> 부분만 오려낸다 — 바디는 검정으로 찍혀 오므로
@@ -400,9 +390,10 @@ public sealed class MontageBakeRig : System.IDisposable
                 continue;
             }
 
-            result[i] = color != null
-                ? new Color(color[i].r, color[i].g, color[i].b, alpha)
-                : new Color(1f, 1f, 1f, alpha);
+            result[i] =
+                color != null
+                    ? new Color(color[i].r, color[i].g, color[i].b, alpha)
+                    : new Color(1f, 1f, 1f, alpha);
         }
         return result;
     }

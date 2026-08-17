@@ -8,14 +8,19 @@ using Random = UnityEngine.Random;
 // 외형 특징 축별 옵션 정의 (ScriptableObject).
 // 각 옵션은 무전으로 말로 전달 가능한 표시 이름과 시각 리소스(색/머티리얼/프롭)를 가진다.
 // 몽타주 텍스트도 여기서 생성. — 본부 수배 리스트 UI의 원본.
-[CreateAssetMenu(fileName = "AppearanceDatabase", menuName = "Scriptable Objects/AppearanceDatabase")]
+[CreateAssetMenu(
+    fileName = "AppearanceDatabase",
+    menuName = "Scriptable Objects/AppearanceDatabase"
+)]
 public class AppearanceDatabase : ScriptableObject
 {
     /// <summary>축 하나의 옵션 — 표시 이름 + 시각 리소스.</summary>
     [Serializable]
     public class AppearanceOption
     {
-        [Tooltip("몽타주·무전으로 전달하는 표시 이름 — NpcTable의 Npc.Appearance.* (예: 빨강, 없음)")]
+        [Tooltip(
+            "몽타주·무전으로 전달하는 표시 이름 — NpcTable의 Npc.Appearance.* (예: 빨강, 없음)"
+        )]
         public LocalizedString DisplayName;
 
         [Tooltip("프롭 렌더러에 틴트되는 색 (프롭 없는 옵션에서는 무시)")]
@@ -72,13 +77,19 @@ public class AppearanceDatabase : ScriptableObject
             return null;
         }
 
-        [Tooltip("SciFi 카탈로그 전용 값 — Generic 경로엔 프롭이 없어 표현 불가하므로 Generic 랜덤 배정에서 제외한다 (예: 머리 '가림', 후드/헬멧, 특수 피부색). 몽타주 텍스트·SciFi 카탈로그에는 그대로 쓰인다")]
+        [Tooltip(
+            "SciFi 카탈로그 전용 값 — Generic 경로엔 프롭이 없어 표현 불가하므로 Generic 랜덤 배정에서 제외한다 (예: 머리 '가림', 후드/헬멧, 특수 피부색). 몽타주 텍스트·SciFi 카탈로그에는 그대로 쓰인다"
+        )]
         public bool SciFiOnly;
 
-        [Tooltip("몽타주 포트레이트에서 이 값을 그리는 레이어 그림 (#607). 프롭이 있는 값은 Tools/몽타주 레이어 굽기로 자동 생성된다. 색 축(머리색·피부색)은 그림 없이 다른 레이어를 Color로 칠하므로 비운다. '없음/대머리'도 비운다 — 안 그리는 것이 곧 그 값이다")]
+        [Tooltip(
+            "몽타주 포트레이트에서 이 값을 그리는 레이어 그림 (#607). 프롭이 있는 값은 Tools/몽타주 레이어 굽기로 자동 생성된다. 색 축(머리색·피부색)은 그림 없이 다른 레이어를 Color로 칠하므로 비운다. '없음/대머리'도 비운다 — 안 그리는 것이 곧 그 값이다"
+        )]
         public Sprite MontageLayer;
 
-        [Tooltip("몽타주에서 이 값을 통째로 뺀다 — 그림도 안 꽂고 이 축이 공개 축 후보에서도 빠진다. 화면에는 그대로 착용한다.\n켜면 글로도 못 말하게 되는 것이 대가다. 그래서 정면 그림이 희미한 것만으로는 켜지 않는다 — 구분은 글이 하고, 희미한 정면 투영은 사실이라 그림이 거짓말을 하는 게 아니다. 머리 축에서 이 이유로 아무 값도 켜지 않았다 (#619, docs §13-7).\n켤 자리는 화면에서 무엇이 보이는지를 그림·글 어느 쪽으로도 옳게 말할 수 없는 값이다")]
+        [Tooltip(
+            "몽타주에서 이 값을 통째로 뺀다 — 그림도 안 꽂고 이 축이 공개 축 후보에서도 빠진다. 화면에는 그대로 착용한다.\n켜면 글로도 못 말하게 되는 것이 대가다. 그래서 정면 그림이 희미한 것만으로는 켜지 않는다 — 구분은 글이 하고, 희미한 정면 투영은 사실이라 그림이 거짓말을 하는 게 아니다. 머리 축에서 이 이유로 아무 값도 켜지 않았다 (#619, docs §13-7).\n켤 자리는 화면에서 무엇이 보이는지를 그림·글 어느 쪽으로도 옳게 말할 수 없는 값이다"
+        )]
         public bool ExcludeFromMontage;
     }
 
@@ -95,8 +106,8 @@ public class AppearanceDatabase : ScriptableObject
         [Tooltip(
             "이 축이 '없음'(0번 값 — 대머리·수염 없음 등)으로 뽑힐 확률. 0이면 다른 값들과 같이 1/n로만 나온다.\n"
                 + "어휘를 늘리면 '없음'이 묻히는 것이 문제다 — 수염이 7값이 되면서 시민의 86%가 수염을 달았다.\n"
-                + "몽타주 난이도와는 무관하다(우연 부합은 CreateNonMatchingProfile이 이미 없앤다). 화면에 어떤 도시가\n"
-                + "보이는지를 정하는 값이다.\n"
+                + "화면에 어떤 도시가 보이는지를 정하는 값이다. #669부터는 몽타주 난이도와도 무관하지 않다 —\n"
+                + "우연 부합을 더 이상 막지 않으므로, 흔한 값일수록 그 값이 조건일 때 부합 인원이 늘어난다.\n"
                 + "색 축(머리색·피부색)은 '없음'이 0번이 아니므로 이 값을 쓰지 않는다."
         )]
         [Range(0f, 1f)]
@@ -106,42 +117,55 @@ public class AppearanceDatabase : ScriptableObject
     private const string k_table = "NpcTable";
 
     [Header("특징 축 (AppearanceAxis 순서와 일치)")]
-    [SerializeField] private AxisDefinition m_hairStyle;
-    [SerializeField] private AxisDefinition m_hairColor;
-    [SerializeField] private AxisDefinition m_skinColor;
-    [SerializeField] private AxisDefinition m_facialHair;
-    [SerializeField] private AxisDefinition m_headwear;   // 기존 m_accessory에서 개명
-    [SerializeField] private AxisDefinition m_eyewear;
+    [SerializeField]
+    private AxisDefinition m_hairStyle;
+
+    [SerializeField]
+    private AxisDefinition m_hairColor;
+
+    [SerializeField]
+    private AxisDefinition m_skinColor;
+
+    [SerializeField]
+    private AxisDefinition m_facialHair;
+
+    [SerializeField]
+    private AxisDefinition m_headwear; // 기존 m_accessory에서 개명
+
+    [SerializeField]
+    private AxisDefinition m_eyewear;
 
     [Header("몽타주 포트레이트 (#607) — 축에 속하지 않는 공용 레이어")]
-    [Tooltip("맨 아래에 깔리는 두상 실루엣. 피부색이 공개 축이면 이 그림이 그 색으로 칠해진다 — 그래서 명암·질감 없는 순백이어야 색이 제대로 나온다")]
-    [SerializeField] private Sprite m_montageBase;
+    [Tooltip(
+        "맨 아래에 깔리는 두상 실루엣. 피부색이 공개 축이면 이 그림이 그 색으로 칠해진다 — 그래서 명암·질감 없는 순백이어야 색이 제대로 나온다"
+    )]
+    [SerializeField]
+    private Sprite m_montageBase;
 
-    [Tooltip("살 실루엣 위에 얹는 이목구비(눈·눈썹·입). 피부색과 무관하므로 칠하지 않는다 — 살 레이어를 통짜로 칠할 수 있는 것이 이걸 분리한 이유다")]
-    [SerializeField] private Sprite m_montageFace;
+    [Tooltip(
+        "머리 스타일은 미공개인데 머리색만 공개일 때 칠할 '형태 미상' 머리. 스타일을 말하지 않으면서 색을 얹을 자리를 만든다"
+    )]
+    [SerializeField]
+    private Sprite m_montageUnknownHair;
 
-    [Tooltip("머리 스타일은 미공개인데 머리색만 공개일 때 칠할 '형태 미상' 머리. 스타일을 말하지 않으면서 색을 얹을 자리를 만든다")]
-    [SerializeField] private Sprite m_montageUnknownHair;
-
-    /// <summary>포트레이트 바닥 레이어 — 피부색을 칠하는 대상.</summary>
+    /// <summary>포트레이트 바닥 레이어 — 피부색을 칠하는 대상. 이목구비 레이어는 없다(#669) —
+    /// 사람 얼굴로 안 보이는 마네킹이 곧 "여기는 조건이 아니다(무관)"를 말하는 장치다.</summary>
     public Sprite MontageBase => m_montageBase;
-
-    /// <summary>살 위에 얹는 이목구비 레이어 — 틴트하지 않는다.</summary>
-    public Sprite MontageFace => m_montageFace;
 
     /// <summary>머리 스타일 미공개용 머리 레이어 — 머리색만 공개된 몽타주에서 색을 얹는 자리.</summary>
     public Sprite MontageUnknownHair => m_montageUnknownHair;
 
-    public AxisDefinition GetAxis(AppearanceAxis axis) => axis switch
-    {
-        AppearanceAxis.HairStyle => m_hairStyle,
-        AppearanceAxis.HairColor => m_hairColor,
-        AppearanceAxis.SkinColor => m_skinColor,
-        AppearanceAxis.FacialHair => m_facialHair,
-        AppearanceAxis.Headwear => m_headwear,
-        AppearanceAxis.Eyewear => m_eyewear,
-        _ => null
-    };
+    public AxisDefinition GetAxis(AppearanceAxis axis) =>
+        axis switch
+        {
+            AppearanceAxis.HairStyle => m_hairStyle,
+            AppearanceAxis.HairColor => m_hairColor,
+            AppearanceAxis.SkinColor => m_skinColor,
+            AppearanceAxis.FacialHair => m_facialHair,
+            AppearanceAxis.Headwear => m_headwear,
+            AppearanceAxis.Eyewear => m_eyewear,
+            _ => null,
+        };
 
     public int GetOptionCount(AppearanceAxis axis)
     {
@@ -152,9 +176,6 @@ public class AppearanceDatabase : ScriptableObject
     /// <summary>축 이름을 지금 언어로 읽는다 — 규약 키 <c>Npc.Axis.&lt;AppearanceAxis&gt;</c>. (#497)</summary>
     public static string GetAxisName(AppearanceAxis axis) =>
         LocalizedStrings.Get(k_table, "Npc.Axis." + axis);
-
-    /// <summary>공개되지 않은 축의 값 자리에 넣는 말 — "미상".</summary>
-    public static string UnknownValueName => LocalizedStrings.Get(k_table, "Npc.Appearance.Unknown");
 
     /// <summary>옵션의 표시 이름을 지금 언어로 읽는다. 배선이 빠진 옵션은 물음표로 둔다.</summary>
     public static string GetOptionName(AppearanceOption option) =>
@@ -267,11 +288,14 @@ public class AppearanceDatabase : ScriptableObject
     }
 
     /// <summary>
-    /// 공개 축들의 특징을 글 방식 몽타주 텍스트로 만든다 (GDD 10-3).
+    /// 수배 조건에 걸린 축들의 특징을 글로 만든다 (GDD 10-3). (#669)
     /// 예: "머리색: 빨강 / 수염: 콧수염" — 무전 구두 전달이 핵심 재미라 이산 값 이름만 나열한다.
     ///
+    /// <b>조건이 아닌 축은 아예 나열하지 않는다.</b> 그림이 이미 마네킹·반투명 틴트로 '무관'을
+    /// 말하고 있어(§7), 글에서 축마다 "무관"을 반복하는 것은 조건만 담백하게 읽는 데 잡음이다.
+    ///
     /// <b>문장은 만든 쪽의 언어로 나온다 — 그래서 표시하는 피어에서 조립한다.</b>
-    /// 수배 항목은 완성 문장이 아니라 프로필 인덱스 + 공개 축(<see cref="RevealedAxisSet"/>)만 실어 보내고,
+    /// 수배 항목은 완성 문장이 아니라 프로필 인덱스 + 조건 축(<see cref="RevealedAxisSet"/>)만 실어 보내고,
     /// 본부 화면이 이 메서드로 각자 자기 언어로 조립한다 (#497 — 호스트·클라 언어가 갈려도 각자 언어로 보인다).
     /// </summary>
     public string BuildMontageText(in AppearanceProfile profile, RevealedAxisSet revealedAxes)
@@ -280,21 +304,20 @@ public class AppearanceDatabase : ScriptableObject
         for (int i = 0; i < AppearanceProfile.k_axisCount; i++)
         {
             var axis = (AppearanceAxis)i;
-            if (!IsMontageAxis(axis))
+            if (!revealedAxes.Contains(axis) || !IsMontageAxis(axis))
                 continue;
 
             if (builder.Length > 0)
                 builder.Append(" / ");
 
-            AppearanceOption option = revealedAxes.Contains(axis) ? GetOption(axis, profile.GetIndex(axis)) : null;
-            builder.Append(GetAxisName(axis)).Append(": ").Append(option != null ? GetOptionName(option) : UnknownValueName);
+            AppearanceOption option = GetOption(axis, profile.GetIndex(axis));
+            builder.Append(GetAxisName(axis)).Append(": ").Append(GetOptionName(option));
         }
         return builder.ToString();
     }
 
     /// <summary>
     /// 몽타주가 말할 수 있는 축인가 — 값이 하나도 그려지지 않으면 축째로 뺀 것이다(피부색, docs §13-17).
-    /// '미상'은 "이 축을 모른다"는 정보인데 영영 공개될 일 없는 축에 붙으면 잡음이라, 문장에서도 뺀다.
     /// </summary>
     public bool IsMontageAxis(AppearanceAxis axis)
     {

@@ -13,7 +13,8 @@ public static class NetworkProtocol
     /// DefaultNetworkPrefabs 목록 변경, 씬 추가/순서 변경.
     /// 마케팅 버전(bundleVersion)은 이런 변경에 따라 오르지 않으므로 별도로 둔다.
     /// </summary>
-    public const int k_protocolVersion = 1;
+    // 1 → 2 (#669): WantedEntry.Name(FixedString64Bytes) 필드 제거 — 수배 항목 직렬화가 바뀌었다.
+    public const int k_protocolVersion = 2;
 
     /// <summary>세션 프로퍼티로 심고 비교하는 값.</summary>
     public static string VersionString => $"{Application.version}#{k_protocolVersion}";

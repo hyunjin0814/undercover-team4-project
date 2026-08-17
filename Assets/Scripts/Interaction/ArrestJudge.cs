@@ -25,6 +25,10 @@ public class ArrestJudge : CommonManagerBase
 
     private RoundManager Round => App.Game.Round;
 
+    // 조건 부합 조회 대상 — 정답이 개체가 아니라 수배 조건이 됐다 (#669). 판정은 여기 열린 항목과
+    // 대조한다. static이던 TryResolveVerdict가 인스턴스 메서드가 된 것도 이 접근 때문이다.
+    private WantedListManager WantedList => App.Game.WantedList;
+
     // 진범·위조범 보상은 여기서 정하지 않는다 (#395) — NPC마다 다른 현상금을 CriminalAssigner가
     // 라운드 시작에 뽑아 CitizenIdentity.Bounty에 확정해 두고, 판정은 그 값을 읽기만 한다.
     // 판정 시점에 뽑으면 재판정(#358)·탈옥 후 재검거(#231)로 금액을 리롤할 수 있게 된다.
@@ -76,8 +80,10 @@ public class ArrestJudge : CommonManagerBase
     /// </param>
     public ArrestResult? Judge(NpcController npc, PlayerEscorter presser = null)
     {
-        if (npc == null) return null;
-        if (npc.IsSpawned && !npc.IsServer) return null;
+        if (npc == null)
+            return null;
+        if (npc.IsSpawned && !npc.IsServer)
+            return null;
 
         // 라운드 진행 중에만 판정한다. 준비 중(Preparing)에는 먼저 입장한 플레이어가 남들이 로딩하는
         // 사이에 검거해 진행도를 벌어둘 수 있고, 종료 후(Ended)에는 정산이 이미 스냅샷된 뒤다.
@@ -89,7 +95,15 @@ public class ArrestJudge : CommonManagerBase
         // 첫 인계 여부를 표식 세우기 전에 잡아 둔다 — 할당량·오검거 카운트가 재판정으로 부풀지 않게 (#358).
         bool firstDelivery = !npc.Custody.IsDelivered;
 
-        if (!TryResolveVerdict(npc, out ArrestVerdict verdict, out int reward, out CitizenProfile profile))
+        if (
+            !TryResolveVerdict(
+                npc,
+                out ArrestVerdict verdict,
+                out int reward,
+                out CitizenProfile profile,
+                out ulong matchedWantedId
+            )
+        )
             return null;
 
         // 판정 완료로 표시 — 방치 도주 타이머(#230)를 멈춘다. 재판정 자체는 허용하므로(#358)
@@ -110,7 +124,15 @@ public class ArrestJudge : CommonManagerBase
         if (presser != null && !deliverers.Contains(presser))
             deliverers.Add(presser);
 
-        var result = new ArrestResult(npc, verdict, profile, reward, deliverers, firstDelivery);
+        var result = new ArrestResult(
+            npc,
+            verdict,
+            profile,
+            reward,
+            deliverers,
+            firstDelivery,
+            matchedWantedId
+        );
 
         LogVerdict(result);
 
@@ -196,7 +218,15 @@ public class ArrestJudge : CommonManagerBase
         // 표식은 판별보다 <b>먼저</b> 읽는다 — 아래 계상 가드와 결과의 IsFirstDelivery가 같은 값을 봐야 한다.
         bool firstDelivery = !npc.Custody.IsDelivered;
 
-        if (!TryResolveVerdict(npc, out ArrestVerdict verdict, out int reward, out CitizenProfile profile))
+        if (
+            !TryResolveVerdict(
+                npc,
+                out ArrestVerdict verdict,
+                out int reward,
+                out CitizenProfile profile,
+                out ulong matchedWantedId
+            )
+        )
             return null;
 
         // 이미 계상된 시체는 다시 계상하지 않는다 — 원장에 두 번 오르면 현상금이 겹친다. 되돌리는
@@ -217,7 +247,15 @@ public class ArrestJudge : CommonManagerBase
         if (presser != null && !deliverers.Contains(presser))
             deliverers.Add(presser);
 
-        var result = new ArrestResult(npc, verdict, profile, reward, deliverers, firstDelivery);
+        var result = new ArrestResult(
+            npc,
+            verdict,
+            profile,
+            reward,
+            deliverers,
+            firstDelivery,
+            matchedWantedId
+        );
 
         // 오검거 집계는 산 신병과 같은 기준·같은 대상이고, <b>인계마다</b> 오른다 (#358 — 저쪽
         // HandleArrestJudged가 IsFirstDelivery로 막지 않는 것과 같은 이유).
@@ -241,16 +279,23 @@ public class ArrestJudge : CommonManagerBase
     /// 판별까지 복사하면 진범/위조범/난동꾼 우선순위가 여러 곳으로 갈린다.
     /// </summary>
     /// <returns>판정할 수 있으면 참 — 경범죄 마커도 신원도 없으면 거짓.</returns>
-    private static bool TryResolveVerdict(
+    ///
+    /// <b>정답이 개체에서 조건으로 바뀌었다 (#669).</b> 예전에는 그 NPC 하나만 정답이었는데(IsCriminal),
+    /// 이제는 열려 있는 수배 조건에 이 NPC의 외형이 부합하면 누구든 진범 판정이 난다 — WantedList
+    /// 조회가 필요해 static을 벗었다. CitizenIdentity.IsCriminal은 "이 NPC가 조건의 기준(출제자)인가"로
+    /// 뜻이 좁아졌고 판정에서는 더 이상 읽지 않는다.
+    private bool TryResolveVerdict(
         NpcController npc,
         out ArrestVerdict verdict,
         out int reward,
-        out CitizenProfile profile
+        out CitizenProfile profile,
+        out ulong matchedWantedId
     )
     {
         verdict = ArrestVerdict.WrongfulArrest;
         reward = k_wrongfulReward;
         profile = null;
+        matchedWantedId = 0;
 
         // 경범죄 이벤트 NPC(난동꾼)는 신원 대조 이전에 마커로 식별한다 (#106).
         MisdemeanorOffender misdemeanor = npc.GetComponent<MisdemeanorOffender>();
@@ -259,7 +304,10 @@ public class ArrestJudge : CommonManagerBase
         // 경범죄 마커도 신원도 없으면 판정할 수 없다.
         if (misdemeanor == null && identity == null)
         {
-            Debug.LogWarning($"ArrestJudge: 신원(CitizenIdentity) 없음 — 판정 불가: {npc.name}", npc);
+            Debug.LogWarning(
+                $"ArrestJudge: 신원(CitizenIdentity) 없음 — 판정 불가: {npc.name}",
+                npc
+            );
             return false;
         }
 
@@ -274,11 +322,17 @@ public class ArrestJudge : CommonManagerBase
             verdict = ArrestVerdict.Misdemeanor;
             reward = misdemeanor.Reward;
         }
-        else if (identity.IsCriminal)
+        else if (
+            WantedList != null
+            && WantedList.TryMatchOpen(identity.Appearance, out WantedEntry hit)
+        )
         {
-            // 진범 우선 — 진범이면서 위조범인 NPC도 현상수배범으로 판정한다 (위조 판정에 가려지지 않음, #320).
+            // 조건 부합 — 열려 있는 수배 조건에 이 외형이 맞으면 개체와 무관하게 진범 판정 (#669).
+            // 보상은 이 NPC의 CitizenIdentity.Bounty가 아니라 부합한 수배 항목의 현상금이다 —
+            // 기준 NPC가 아닌 다른 부합자를 잡으면 identity.Bounty는 대부분 0이다.
             verdict = ArrestVerdict.WantedCriminal;
-            reward = ResolveBounty(identity, npc);
+            reward = hit.Bounty;
+            matchedWantedId = hit.NpcId;
         }
         else if (identity.IsForger)
         {
@@ -295,7 +349,10 @@ public class ArrestJudge : CommonManagerBase
     private static int ResolveBounty(CitizenIdentity identity, NpcController npc)
     {
         if (identity.Bounty <= 0)
-            Debug.LogWarning($"ArrestJudge: {npc.name}에 현상금이 배정되지 않아 0원으로 판정한다 — CriminalAssigner 배정을 타지 않은 NPC인지 확인할 것", npc);
+            Debug.LogWarning(
+                $"ArrestJudge: {npc.name}에 현상금이 배정되지 않아 0원으로 판정한다 — CriminalAssigner 배정을 타지 않은 NPC인지 확인할 것",
+                npc
+            );
 
         return identity.Bounty;
     }
@@ -307,11 +364,12 @@ public class ArrestJudge : CommonManagerBase
         {
             ArrestVerdict.WantedCriminal => "현상수배범 검거",
             ArrestVerdict.Misdemeanor => "경범죄 처리",
-            _ => "오검거"
+            _ => "오검거",
         };
-        string deliverer = result.DeliveredBy.Count > 0
-            ? string.Join(", ", result.DeliveredBy.ConvertAll(e => e.name))
-            : "알 수 없음";
+        string deliverer =
+            result.DeliveredBy.Count > 0
+                ? string.Join(", ", result.DeliveredBy.ConvertAll(e => e.name))
+                : "알 수 없음";
         Debug.Log($"[검거 판정] {tag}: {citizenName} (인계: {deliverer}) — 보상 {result.Reward}원");
     }
 }
@@ -334,8 +392,20 @@ public readonly struct ArrestResult
     // 1회만 세어야 하는 후처리가 이 값으로 재판정을 걸러 낸다. 탈옥(ClearDelivered) 후 재검거는 다시 true. (#358)
     public readonly bool IsFirstDelivery;
 
-    public ArrestResult(NpcController npc, ArrestVerdict verdict, CitizenProfile profile,
-        int reward, List<PlayerEscorter> deliveredBy, bool isFirstDelivery)
+    /// <summary>부합한 수배 항목의 NpcId — 진범(WantedCriminal) 판정일 때만 유효하다. (#669)
+    /// <see cref="Npc"/>(잡힌 개체) 자신의 NetworkObjectId가 아니라 <b>닫아야 할 수배 항목</b>의 키다 —
+    /// 조건 기반에서는 잡힌 개체와 조건의 기준 개체가 다를 수 있어 WantedListManager가 이 값으로 항목을 찾는다.</summary>
+    public readonly ulong MatchedWantedId;
+
+    public ArrestResult(
+        NpcController npc,
+        ArrestVerdict verdict,
+        CitizenProfile profile,
+        int reward,
+        List<PlayerEscorter> deliveredBy,
+        bool isFirstDelivery,
+        ulong matchedWantedId
+    )
     {
         Npc = npc;
         Verdict = verdict;
@@ -343,5 +413,6 @@ public readonly struct ArrestResult
         Reward = reward;
         DeliveredBy = deliveredBy ?? new List<PlayerEscorter>();
         IsFirstDelivery = isFirstDelivery;
+        MatchedWantedId = matchedWantedId;
     }
 }

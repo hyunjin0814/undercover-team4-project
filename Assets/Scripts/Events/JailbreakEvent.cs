@@ -41,36 +41,53 @@ using UnityEngine;
 public class JailbreakEvent : MonoBehaviour, ISuddenEvent
 {
     [Header("침입자 프리팹 (NpcController)")]
-    [SerializeField] private NpcController m_intruderPrefab;
+    [SerializeField]
+    private NpcController m_intruderPrefab;
 
     [Header("유치장 / 자물쇠 (비우면 자동 탐색)")]
-    [SerializeField] private JailZone m_jailZone;
-    [SerializeField] private JailLock m_jailLock;
+    [SerializeField]
+    private JailZone m_jailZone;
+
+    [SerializeField]
+    private JailLock m_jailLock;
 
     [Header("자물쇠 해제")]
     [Tooltip("자물쇠에 도달한 뒤 해제까지 걸리는 시간(초) — 경보를 듣고 달려와 막을 수 있는 구간")]
-    [SerializeField] private float m_unlockSeconds = 10f;
+    [SerializeField]
+    private float m_unlockSeconds = 10f;
 
     [Header("스폰 위치 보정")]
     [Tooltip("고른 스폰 포인트를 중심으로 이 반경(m) 안에 흩어 배치한다 (NpcSpawner와 같은 방식)")]
-    [SerializeField] private float m_spawnRadius = 5f;
+    [SerializeField]
+    private float m_spawnRadius = 5f;
+
     [Tooltip("스폰 후보 지점에서 이 거리(m) 안에 NavMesh가 없으면 그 지점은 버린다")]
-    [SerializeField] private float m_navSampleMaxDistance = 4f;
+    [SerializeField]
+    private float m_navSampleMaxDistance = 4f;
+
     [Tooltip("유효한 스폰 지점을 찾는 최대 시도 횟수")]
-    [SerializeField] private int m_maxSpawnAttempts = 8;
+    [SerializeField]
+    private int m_maxSpawnAttempts = 8;
 
     [Header("경범죄 수익")]
-    [Tooltip("침입자를 제압·연행해 인계했을 때의 수익 하한 — 스폰 시점에 [하한, 상한]에서 100원 단위로 뽑아 마커에 박는다 (#395)")]
+    [Tooltip(
+        "침입자를 제압·연행해 인계했을 때의 수익 하한 — 스폰 시점에 [하한, 상한]에서 100원 단위로 뽑아 마커에 박는다 (#395)"
+    )]
     [Min(0)]
-    [SerializeField] private int m_intruderRewardMin = 500;
+    [SerializeField]
+    private int m_intruderRewardMin = 500;
 
     [Tooltip("침입자 수익 상한. 하한보다 작으면 하한이 쓰인다")]
     [Min(0)]
-    [SerializeField] private int m_intruderRewardMax = 4000;
+    [SerializeField]
+    private int m_intruderRewardMax = 4000;
 
     [Header("잔류 전환")]
-    [Tooltip("제압되지 않은 채 이 시간(초)이 지나면 침입을 포기하고 배회 시민으로 잔류한다 — 마커가 남아 언제든 잡으면 경범죄 수익 (#310)")]
-    [SerializeField] private float m_maxLifetimeSeconds = 90f;
+    [Tooltip(
+        "제압되지 않은 채 이 시간(초)이 지나면 침입을 포기하고 배회 시민으로 잔류한다 — 마커가 남아 언제든 잡으면 경범죄 수익 (#310)"
+    )]
+    [SerializeField]
+    private float m_maxLifetimeSeconds = 90f;
 
     // 매니저는 캐싱하지 않고 App 경유로 매번 읽는다 (아키텍처 규칙 R1/R8).
     // 침입자 스폰 지점은 일반 NPC와 같아야 하므로 NpcSpawner의 것을 빌려 쓴다.
@@ -81,8 +98,8 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
     private SuddenEventManager SuddenEvents => App.Game.SuddenEvent;
 
     private NpcController m_intruder;
-    private bool m_pendingStart;  // 스폰 다음 프레임에 침입을 시작하기 위한 플래그(초기화 순서 보장)
-    private bool m_hasStarted;    // 침입을 실제로 시작했는지 — 배회 복귀(이탈) 판정에 쓴다
+    private bool m_pendingStart; // 스폰 다음 프레임에 침입을 시작하기 위한 플래그(초기화 순서 보장)
+    private bool m_hasStarted; // 침입을 실제로 시작했는지 — 배회 복귀(이탈) 판정에 쓴다
     private bool m_releaseQueued; // 잔류 전환 확정 — 다음 틱에 이벤트가 손을 뗀다 (상태 전이 체인 안 처리 회피, #310)
     private bool m_unlockAnnounced; // 해제 착수를 알렸는가 — '유치장이 비면 접는다'를 경보 전으로만 한정한다
     private int m_spawnFrame;
@@ -111,7 +128,10 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         if (m_jailZone == null)
             m_jailZone = FindFirstObjectByType<JailZone>();
         if (m_jailLock == null)
-            m_jailLock = m_jailZone != null ? m_jailZone.GetComponent<JailLock>() : FindFirstObjectByType<JailLock>();
+            m_jailLock =
+                m_jailZone != null
+                    ? m_jailZone.GetComponent<JailLock>()
+                    : FindFirstObjectByType<JailLock>();
     }
 
     // 매니저 구독은 Start에서 — 모든 매니저의 Awake(=App 등록)가 끝난 뒤가 보장된다 (아키텍처 규칙 R6).
@@ -120,7 +140,10 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         if (Judge != null)
             Judge.OnArrestJudged += HandleArrestJudged;
         else
-            Debug.LogWarning("JailbreakEvent: ArrestJudge를 찾지 못해 검거된 침입자를 놓아주지 못한다", this);
+            Debug.LogWarning(
+                "JailbreakEvent: ArrestJudge를 찾지 못해 검거된 침입자를 놓아주지 못한다",
+                this
+            );
     }
 
     private void OnDestroy()
@@ -169,8 +192,10 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         // 침입자는 CriminalAssigner를 타지 않아 IsCriminal이 false다. 이 마커가 없으면 침입을 막은 플레이어가
         // 오검거 페널티를 먹는다 — 대응에 성공한 쪽이 손해 보는 판정을 막는 것이 이 한 줄의 역할이다. (#261)
         // 수익은 스폰 시점에 확정한다 (#395) — 판정 시점에 뽑으면 재검거로 금액을 리롤할 수 있다
-        m_intruder.gameObject.AddComponent<MisdemeanorOffender>().Reward =
-            BountyRoll.Roll(m_intruderRewardMin, m_intruderRewardMax);
+        m_intruder.gameObject.AddComponent<MisdemeanorOffender>().Reward = BountyRoll.Roll(
+            m_intruderRewardMin,
+            m_intruderRewardMax
+        );
 
         if (SuddenEventUtil.IsNetworkSessionActive)
             m_intruder.GetComponent<NetworkObject>().Spawn();
@@ -230,10 +255,12 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         // 벗어나면 채널링이 조용히 취소되고(NpcIntrudeState 주석), 배회 복귀를 HandleStateChanged가
         // 잔류로 받는다. 침입자는 도심에 남아 잡으면 경범죄 수익이 그대로 난다 (#310).
         // Intruding 한정이라 이미 제압·연행된 침입자를 뿌리치게 만들지 않는다.
-        if (!m_unlockAnnounced
+        if (
+            !m_unlockAnnounced
             && m_intruder.CurrentState == NpcState.Intruding
             && m_jailZone != null
-            && m_jailZone.InmateCount <= 0)
+            && m_jailZone.InmateCount <= 0
+        )
         {
             Debug.Log("[돌발이벤트] 범인 탈출 — 유치장이 비어 침입 포기");
             m_intruder.Reaction.StartFlee(null);
@@ -282,8 +309,16 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
             if (point == null)
                 continue;
 
-            if (SuddenEventUtil.TryFindSpawnPositionNear(
-                    point.position, 0f, m_spawnRadius, m_navSampleMaxDistance, m_maxSpawnAttempts, out result))
+            if (
+                SuddenEventUtil.TryFindSpawnPositionNear(
+                    point.position,
+                    0f,
+                    m_spawnRadius,
+                    m_navSampleMaxDistance,
+                    m_maxSpawnAttempts,
+                    out result
+                )
+            )
                 return true;
         }
 
@@ -426,17 +461,19 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
 
     private void ReleaseInmate(NpcController inmate, int slot)
     {
+        // 진범(WantedCriminal) 판정이었는지 먼저 읽는다 — 아래 ReleaseInmate가 원장에서 지운다.
+        // CitizenIdentity.IsCriminal이 아니라 유치장 원장을 보는 이유는 조건 부합 판정(#669) 때문이다 —
+        // 잡힌 개체가 조건의 기준이 아닐 수 있어 그 값과 실제 판정 결과가 다르다.
+        bool wasCriminal = m_jailZone.IsRecordedCriminal(inmate);
+
         m_jailZone.ReleaseInmate(inmate);
 
         // 재검거의 핵심 — 판정 완료 표식을 지운다 (#230). 재판정을 여는 것 자체는 유치장이 방문 단위로
         // 하지만(#492), 이 표식이 남으면 IsFirstDelivery가 false라 할당량·수배 후처리가 다시 세지 않는다.
         inmate.Custody.ClearDelivered();
 
-        // 진범만 할당량·수배 후처리를 되돌린다. 경범죄(난동꾼)는 할당량·수배 대상이 아니므로 건드리지 않는다
-        // (난동꾼은 CitizenIdentity.IsCriminal 대조를 타지 않는다 — MisdemeanorOffender).
-        // 신원은 서버 전용 값이라 서버(또는 오프라인)에서만 도는 이 경로에서 안전하게 읽는다.
-        CitizenIdentity identity = inmate.GetComponent<CitizenIdentity>();
-        if (identity != null && identity.IsCriminal)
+        // 진범만 할당량·수배 후처리를 되돌린다. 경범죄(난동꾼)는 할당량·수배 대상이 아니므로 건드리지 않는다.
+        if (wasCriminal)
         {
             if (Round != null)
                 Round.ReportCriminalEscaped();

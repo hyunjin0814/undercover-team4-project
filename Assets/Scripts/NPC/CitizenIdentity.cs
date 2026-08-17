@@ -38,9 +38,9 @@ public class CitizenIdentity : NetworkBehaviour
         Profile != null && Profile.CitizenType == OfficialRecords.CitizenType.Android;
 
     /// <summary>
-    /// 실제 범인 여부 — 진범 판정(#41)의 정답 기준. 서버 전용 (클라이언트에서는 항상 false).
-    /// 곧 공개 플래그이기도 하다 (#102): 라운드 시작에 확정된 예비 용의자는 false로 대기하다가
-    /// 제보 전화 승격 시 켜진다. 대기 중에 잡으면 오검거로 판정된다 (GDD 7-3과 일치).
+    /// 이 NPC가 수배 조건의 기준(출제자)인가 — 정답 자체는 아니다. 서버 전용 (클라이언트에서는 항상 false).
+    /// 판정은 조건 부합만 본다(#669, <c>WantedListManager.TryMatchOpen</c>) — 이 값은 몽타주 발행
+    /// 게이트이자(#127), 제보 전화 승격(#102)으로 false→true가 되는 공개 플래그로만 쓰인다.
     /// </summary>
     public bool IsCriminal { get; private set; }
 
@@ -99,7 +99,13 @@ public class CitizenIdentity : NetworkBehaviour
     private void RebuildProfile(CitizenData data)
     {
         CitizenProfile profile = ScriptableObject.CreateInstance<CitizenProfile>();
-        profile.Initialize(data.Name.ToString(), data.Type, data.Faction, data.SymbolIndex, m_officialRecords);
+        profile.Initialize(
+            data.Name.ToString(),
+            data.Type,
+            data.Faction,
+            data.SymbolIndex,
+            m_officialRecords
+        );
         profile.m_nameView = data.NameView.ToString(); // 위조된 표시 이름 반영 — 정상 시민은 정본과 동일 (#223)
         Profile = profile;
     }
@@ -137,7 +143,6 @@ public class CitizenIdentity : NetworkBehaviour
         if (assigner != null)
             assigner.AssignLateSpawned(this);
     }
-
 
     /// <summary>
     /// 프로필과 범인 여부를 배정한다. 서버(또는 오프라인)의 CriminalAssigner 전용.

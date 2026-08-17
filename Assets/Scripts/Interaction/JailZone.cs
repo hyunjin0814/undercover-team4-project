@@ -28,25 +28,31 @@ public class JailZone : NetworkBehaviour
             + "순간이동으로 배치되므로 걸어갈 경로는 필요 없지만, 배회·도주가 이 자리에서 이어지려면 "
             + "NavMesh 위여야 한다"
     )]
-    [SerializeField] private Transform[] m_inmatePoints;
+    [SerializeField]
+    private Transform[] m_inmatePoints;
 
     [Header("플레이어 입장 지점 (비우면 감옥 자신의 위치)")]
-    [Tooltip("문에 E를 눌러 들어온 플레이어가 서는 자리 — 감옥 방 안. 배치 지점과 겹치지 않게 둘 것")]
-    [SerializeField] private Transform m_playerEntryPoint;
+    [Tooltip(
+        "문에 E를 눌러 들어온 플레이어가 서는 자리 — 감옥 방 안. 배치 지점과 겹치지 않게 둘 것"
+    )]
+    [SerializeField]
+    private Transform m_playerEntryPoint;
 
     [Header("퇴장 지점 (비우면 감옥 자신의 위치)")]
     [Tooltip(
         "감옥에서 나오는 플레이어·반출 대상이 서는 도시 쪽 자리 — 감옥 문 바깥 NavMesh 위에 둘 것. "
             + "탈옥으로 방출된 수감자도 여기로 나온다 (#231)"
     )]
-    [SerializeField] private Transform m_exitPoint;
+    [SerializeField]
+    private Transform m_exitPoint;
 
     [Header("감옥 방 범위 (비우면 자식에서 자동 탐색)")]
     [Tooltip(
         "'이 좌표가 감옥 안인가'를 답하는 부피 — 문 E가 들어가기/나오기를 가르는 유일한 기준이다. "
             + "방 전체를 덮되 도시 쪽과 겹치지 않게 둘 것. Is Trigger를 켜 둘 것(끄면 플레이어를 막는다)"
     )]
-    [SerializeField] private BoxCollider m_roomVolume;
+    [SerializeField]
+    private BoxCollider m_roomVolume;
 
     // 서버 권위 수용 인원 — 서버만 쓰고 모든 클라이언트가 읽는다 (#56)
     private readonly NetworkVariable<int> m_inmateCount = new NetworkVariable<int>(0);
@@ -65,7 +71,8 @@ public class JailZone : NetworkBehaviour
     // 잔류 정리(MisdemeanorLoiterer)로 NPC가 파괴돼도 살아 있는 참조 없이 합산할 수 있어, 파괴 타이밍과
     // 정산 읽는 프레임의 경합으로 돌발이벤트 수감자가 누락되던 문제를 없앤다. 탈옥 방출 시 함께 제거되므로
     // 유치장에 남아 있는 대상만 계상된다("끝까지 데리고 있어야 보상"). 서버(또는 오프라인) 전용. (#358/#340)
-    private readonly Dictionary<NpcController, InmateRecord> m_records = new Dictionary<NpcController, InmateRecord>();
+    private readonly Dictionary<NpcController, InmateRecord> m_records =
+        new Dictionary<NpcController, InmateRecord>();
 
     // 정산에 필요한 값만 담은 불변 레코드 — 수감 시점 스냅샷이라 NpcController 참조 없이 합산할 수 있다. (#358)
     private readonly struct InmateRecord
@@ -104,7 +111,8 @@ public class JailZone : NetworkBehaviour
     public Transform ExitPoint => m_exitPoint != null ? m_exitPoint : transform;
 
     /// <summary>문에 E를 눌러 들어온 플레이어가 서는 감옥 안 지점 — 미배선이면 감옥 자신의 위치. (#537)</summary>
-    public Transform PlayerEntryPoint => m_playerEntryPoint != null ? m_playerEntryPoint : transform;
+    public Transform PlayerEntryPoint =>
+        m_playerEntryPoint != null ? m_playerEntryPoint : transform;
 
     /// <summary>
     /// 퇴장 지점 둘레의 <paramref name="index"/>번째 자리 — <b>여럿이 한 번에 나올 때 겹치지 않게</b> 벌린다. (#537)
@@ -125,7 +133,7 @@ public class JailZone : NetworkBehaviour
             return exit.position;
 
         // 1,2 / 3,4 / ... 로 좌우 번갈아. 한 쌍이 찰 때마다 한 줄씩 앞으로(도시 쪽으로) 나간다.
-        int row = (index + 1) / 2;          // 1,1,2,2,3,3...
+        int row = (index + 1) / 2; // 1,1,2,2,3,3...
         float side = (index % 2 == 1) ? -1f : 1f;
 
         return exit.position
@@ -149,7 +157,8 @@ public class JailZone : NetworkBehaviour
         if (m_roomVolume == null)
             return false;
 
-        Vector3 local = m_roomVolume.transform.InverseTransformPoint(position) - m_roomVolume.center;
+        Vector3 local =
+            m_roomVolume.transform.InverseTransformPoint(position) - m_roomVolume.center;
         Vector3 half = m_roomVolume.size * 0.5f;
 
         return Mathf.Abs(local.x) <= half.x
@@ -199,12 +208,21 @@ public class JailZone : NetworkBehaviour
     {
         Vector3 point = RandomPointInRoom();
 
-        if (UnityEngine.AI.NavMesh.SamplePosition(
-                point, out UnityEngine.AI.NavMeshHit hit, k_restSnapRadius, UnityEngine.AI.NavMesh.AllAreas))
+        if (
+            UnityEngine.AI.NavMesh.SamplePosition(
+                point,
+                out UnityEngine.AI.NavMeshHit hit,
+                k_restSnapRadius,
+                UnityEngine.AI.NavMesh.AllAreas
+            )
+        )
             return hit.position;
 
         // 방에 NavMesh가 안 깔린 구성 — 파묻히는 것보다는 부피 밑면 그대로가 낫다(위로 떠도 떨어진다).
-        Debug.LogWarning($"JailZone: 감옥 방 바닥을 NavMesh에서 찾지 못했다 — 시체가 바닥에 파묻힐 수 있다: {point:F2}", this);
+        Debug.LogWarning(
+            $"JailZone: 감옥 방 바닥을 NavMesh에서 찾지 못했다 — 시체가 바닥에 파묻힐 수 있다: {point:F2}",
+            this
+        );
         return point;
     }
 
@@ -239,15 +257,23 @@ public class JailZone : NetworkBehaviour
     private void Awake()
     {
         // 점유 배열은 배치 지점 수와 1:1 — 지점은 씬 배치라 런타임에 늘지 않으므로 여기서 한 번만 잡는다 (#462)
-        m_placementOccupants = new NpcController[m_inmatePoints != null ? m_inmatePoints.Length : 0];
+        m_placementOccupants = new NpcController[
+            m_inmatePoints != null ? m_inmatePoints.Length : 0
+        ];
 
         if (m_roomVolume == null)
             m_roomVolume = GetComponentInChildren<BoxCollider>();
 
         if (m_roomVolume == null)
-            Debug.LogWarning("JailZone: 감옥 방 범위(BoxCollider)가 없다 — 문 E가 나오기를 판단하지 못한다", this);
+            Debug.LogWarning(
+                "JailZone: 감옥 방 범위(BoxCollider)가 없다 — 문 E가 나오기를 판단하지 못한다",
+                this
+            );
         else if (!m_roomVolume.isTrigger)
-            Debug.LogWarning($"JailZone: 방 범위({m_roomVolume.name})의 Is Trigger가 꺼져 있다 — 플레이어가 막힌다", this);
+            Debug.LogWarning(
+                $"JailZone: 방 범위({m_roomVolume.name})의 Is Trigger가 꺼져 있다 — 플레이어가 막힌다",
+                this
+            );
     }
 
     public override void OnNetworkSpawn()
@@ -349,10 +375,13 @@ public class JailZone : NetworkBehaviour
     /// 판정 순간 바로 세므로 할당량 종료(#340)가 카운트를 앞질러 마지막 검거가 정산에서 누락되지 않는다.
     /// 탈옥해 풀려난 대상은 ReleaseInmate로 이 카운트에서 빠지므로 "끝까지 데리고 있어야 보상"은 유지된다.
     /// <paramref name="bounty"/>는 이 수감자가 라운드 종료 정산(#340)에 기여할 보상액이다(CustodyRouter가 판정 보상을 넘긴다).
+    /// <paramref name="isCriminal"/>은 이 판정이 진범(WantedCriminal)이었는지 — 판정 결과를 그대로 받는다.
+    /// 조건 부합 판정(#669) 이후로 CitizenIdentity.IsCriminal과 더 이상 같지 않다(잡힌 개체가 조건의
+    /// 기준이 아닐 수 있다) — 그래서 여기서 다시 계산하지 않고 판정 쪽 값을 그대로 박제한다.
     /// <paramref name="deliverers"/>는 이 수감자를 넣은 인계자들의 clientId — 개인 자금(#484)의 귀속 근거다.
     /// 문 앞 판정 시점에 JailIntake가 확정해 넘긴다(#537 — 착석이라는 별도 시점이 없어졌다). 아무도 없으면 빈 배열.
     /// </summary>
-    public void Admit(NpcController npc, int bounty, ulong[] deliverers)
+    public void Admit(NpcController npc, int bounty, bool isCriminal, ulong[] deliverers)
     {
         if (npc == null)
             return;
@@ -364,8 +393,7 @@ public class JailZone : NetworkBehaviour
         if (!m_inmates.Add(npc))
             return; // 이미 수용됨 — 중복 통보 무시
 
-        // 진범 여부를 수감 시점에 판정해 박제한다 — 정산 때 살아 있는 NPC를 다시 안 봐도 되게 (#358).
-        m_records[npc] = new InmateRecord(bounty, IsCriminalInmate(npc), deliverers ?? Array.Empty<ulong>()); // 방출을 거친 재수용 시 최신 값으로 갱신
+        m_records[npc] = new InmateRecord(bounty, isCriminal, deliverers ?? Array.Empty<ulong>()); // 방출을 거친 재수용 시 최신 값으로 갱신
         SetInmateCount(m_inmates.Count);
         RefreshBountyTotal();
         Debug.Log($"[유치장] 수용: {npc.name} — 현재 {InmateCount}명, 누적 현상금 {BountyTotal}원");
@@ -427,8 +455,10 @@ public class JailZone : NetworkBehaviour
     /// 함께 끌려 나오므로(#597) 그 경로만 <see cref="ReleaseDeceased"/>로 계상을 취소한다.
     /// </summary>
     /// <param name="bounty">이 시체가 정산에 기여할 보상액 — <c>ArrestJudge</c>가 확정해 넘긴다.</param>
+    /// <param name="isCriminal">이 판정이 진범(WantedCriminal)이었는지 — 조건 부합 판정(#669) 이후로
+    /// CitizenIdentity.IsCriminal과 다를 수 있어 여기서 다시 계산하지 않고 판정 쪽 값을 그대로 받는다.</param>
     /// <param name="deliverers">공을 나눠 가질 clientId — 시체를 끌고 와 넣은 사람들. 없으면 빈 배열.</param>
-    public void RecordDeceased(NpcController npc, int bounty, ulong[] deliverers)
+    public void RecordDeceased(NpcController npc, int bounty, bool isCriminal, ulong[] deliverers)
     {
         if (npc == null)
             return;
@@ -439,7 +469,7 @@ public class JailZone : NetworkBehaviour
         if (m_records.ContainsKey(npc))
             return; // 이미 계상됨 — 산 채로 수감됐다가 죽는 경로는 없지만(수감 중엔 피해가 안 들어간다) 멱등으로 둔다
 
-        m_records[npc] = new InmateRecord(bounty, IsCriminalInmate(npc), deliverers ?? Array.Empty<ulong>());
+        m_records[npc] = new InmateRecord(bounty, isCriminal, deliverers ?? Array.Empty<ulong>());
         RefreshBountyTotal(); // 라운드 진행도(RoundManager.CurrentFund)가 곧 이 값이다
         Debug.Log($"[유치장] 사망 계상: {npc.name} — 현상금 {bounty}원, 누적 {BountyTotal}원");
 
@@ -475,7 +505,9 @@ public class JailZone : NetworkBehaviour
             return false;
 
         RefreshBountyTotal();
-        Debug.Log($"[유치장] 사망 계상 취소: {npc.name} — 감옥 밖으로 나갔다, 누적 현상금 {BountyTotal}원");
+        Debug.Log(
+            $"[유치장] 사망 계상 취소: {npc.name} — 감옥 밖으로 나갔다, 누적 현상금 {BountyTotal}원"
+        );
         return true;
     }
 
@@ -485,21 +517,34 @@ public class JailZone : NetworkBehaviour
     public event Action<NpcController> OnDeceasedRecorded;
 
     /// <summary>
-    /// 이 수감자의 기록된 현상금 — 없으면 false. 서버(또는 오프라인) 전용. (#517)
+    /// 이 수감자의 기록된 현상금·진범 여부 — 없으면 false. 서버(또는 오프라인) 전용. (#517)
     ///
     /// 반출(<see cref="JailIntake.ServerExtract"/>)이 <see cref="ReleaseInmate"/> <b>직전에</b> 읽는다.
     /// 반출은 정산에서 대상을 빼면서 판정 결과까지 잃는데, 감옥 안에서 다시 세우면(추종 정지) 문 앞
     /// 재판정을 거치지 않고 그 자리에서 다시 수감돼야 한다 — 그때 같은 값으로 계상하려고 꺼내 둔다. (#517/#537)
     /// </summary>
-    public bool TryGetBounty(NpcController npc, out int bounty)
+    public bool TryGetRecord(NpcController npc, out int bounty, out bool isCriminal)
     {
         bounty = 0;
+        isCriminal = false;
         if (npc == null || !m_records.TryGetValue(npc, out InmateRecord record))
             return false;
 
         bounty = record.Bounty;
+        isCriminal = record.IsCriminal;
         return true;
     }
+
+    /// <summary>
+    /// 이 수감자가 진범(WantedCriminal)으로 계상됐는지 — 없으면 false. 서버(또는 오프라인) 전용. (#669)
+    ///
+    /// <see cref="JailbreakEvent"/>가 <see cref="ReleaseInmate"/> <b>직전에</b> 읽는다 — 저쪽이 원장을
+    /// 지우므로, 탈옥 후 할당량 되돌리기·수배 재등재 여부를 여기서 먼저 확정해야 한다.
+    /// <see cref="CitizenIdentity.IsCriminal"/>을 쓰지 않는 이유도 같다 — 조건 부합 판정에서는 잡힌
+    /// 개체가 조건의 기준이 아닐 수 있어 그 값과 실제 판정 결과가 다르다.
+    /// </summary>
+    public bool IsRecordedCriminal(NpcController npc) =>
+        npc != null && m_records.TryGetValue(npc, out InmateRecord record) && record.IsCriminal;
 
     /// <summary>
     /// 수용 해제 — 범인 탈출 이벤트(별도 이슈)가 호출할 접합점. 카운트에서 뺀다.
@@ -522,12 +567,15 @@ public class JailZone : NetworkBehaviour
         ReleasePlacement(npc); // 서 있던 자리를 비운다 — 다음 수감자가 그 자리를 쓸 수 있게 (#462/#537)
         SetInmateCount(m_inmates.Count);
         RefreshBountyTotal();
-        Debug.Log($"[유치장] 수용 해제: {npc.name} — 현재 {InmateCount}명, 누적 현상금 {BountyTotal}원");
+        Debug.Log(
+            $"[유치장] 수용 해제: {npc.name} — 현재 {InmateCount}명, 누적 현상금 {BountyTotal}원"
+        );
     }
 
     /// <summary>
     /// 정산 원장을 진범/경범죄로 나눈 인원과 보상액 합 — 라운드 종료 정산(#340)이 읽는다.
-    /// 진범 여부는 수감(또는 사망 계상) 시점의 <see cref="CitizenIdentity.IsCriminal"/>로 박제된 값이다.
+    /// 진범 여부는 판정(ArrestJudge)이 확정해 <see cref="Admit"/>/<see cref="RecordDeceased"/>에
+    /// 넘긴 값을 그대로 박제한 것이다(#669 — 조건 부합 판정 이후로 CitizenIdentity.IsCriminal과 다르다).
     /// 서버(또는 오프라인) 전용.
     ///
     /// <b>'점유 기반'이 아니라 '원장 기반'이다</b> (#571) — 죽은 대상은 유치장에 들어오지 않고
@@ -562,23 +610,18 @@ public class JailZone : NetworkBehaviour
         var credits = new Dictionary<ulong, int>();
         foreach (InmateRecord record in m_records.Values)
         {
-            if (record.Deliverers.Length == 0) continue;
+            if (record.Deliverers.Length == 0)
+                continue;
 
             int per = record.Bounty / record.Deliverers.Length;
-            if (per <= 0) continue;
-            
-            foreach (ulong clientId in record.Deliverers) 
+            if (per <= 0)
+                continue;
+
+            foreach (ulong clientId in record.Deliverers)
                 credits[clientId] = credits.TryGetValue(clientId, out int sum) ? sum + per : per;
         }
 
         return credits;
-    }
-
-    // 수감 시점의 진범 여부 — 기존 정산 분류와 동일 기준(CitizenIdentity.IsCriminal, 그 외는 경범죄). (#358)
-    private static bool IsCriminalInmate(NpcController npc)
-    {
-        CitizenIdentity identity = npc.GetComponent<CitizenIdentity>();
-        return identity != null && identity.IsCriminal;
     }
 
     // 레코드가 바뀔 때마다 합을 다시 낸다 — 수감자 수가 많지 않아 매번 합산해도 부담이 없고,

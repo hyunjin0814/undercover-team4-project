@@ -30,7 +30,8 @@ using UnityEngine;
 public class JailIntake : MonoBehaviour
 {
     [Header("감옥 (비우면 같은 오브젝트·부모에서 자동 탐색)")]
-    [SerializeField] private JailZone m_jailZone;
+    [SerializeField]
+    private JailZone m_jailZone;
 
     [Tooltip(
         "판정 버튼이 신병으로 인정하는 거리(m) — 손이 빈 사람이 눌렀을 때만 쓴다. 이 안의 확보 상태"
@@ -38,7 +39,8 @@ public class JailIntake : MonoBehaviour
             + "않은 대상은 빠진다. 줄을 쥐고 있으면 밧줄에 걸린 대상만 판정한다(#637). "
             + "밧줄 길이(1.6m)보다 넉넉히 둘 것"
     )]
-    [SerializeField] private float m_admitReach = 4f;
+    [SerializeField]
+    private float m_admitReach = 4f;
 
     // 판정 대상을 모으는 임시 버퍼 — E 입력마다 새로 할당하지 않게 재사용한다. 서버(또는 오프라인) 전용.
     private readonly List<NpcController> m_admitBuffer = new List<NpcController>();
@@ -56,7 +58,10 @@ public class JailIntake : MonoBehaviour
             m_jailZone = GetComponentInParent<JailZone>();
 
         if (m_jailZone == null)
-            Debug.LogWarning("JailIntake: 감옥(JailZone)을 찾지 못했다 — 수용이 동작하지 않는다", this);
+            Debug.LogWarning(
+                "JailIntake: 감옥(JailZone)을 찾지 못했다 — 수용이 동작하지 않는다",
+                this
+            );
     }
 
     // 판정·배치는 서버 권위 — NetworkBehaviour가 아니므로 직접 게이트한다 (CustodyRouter와 같은 패턴)
@@ -182,8 +187,9 @@ public class JailIntake : MonoBehaviour
             // 그래서 줄부터 걷고(기상 모션이 여기서 예약된다) 곧바로 옮긴다. 둘 사이에 프레임 경계가
             // 없으므로 화면에 그려지는 것은 <b>감옥 안에서 일어나는 모습</b> 하나뿐이다.
             int bounty = result.Value.Reward;
+            bool isCriminal = result.Value.Verdict == ArrestVerdict.WantedCriminal;
             PlayerEscorter.ReleaseAllTethersOn(npc, null);
-            ServerPlaceInJail(npc, bounty, deliverers);
+            ServerPlaceInJail(npc, bounty, isCriminal, deliverers);
         }
 
         m_admitBuffer.Clear();
@@ -194,11 +200,16 @@ public class JailIntake : MonoBehaviour
     /// 대상을 감옥 안 배치 지점으로 순간이동시키고 계상한다 — 서버(또는 오프라인) 전용. (#537)
     /// 밧줄은 이 앞 단계에서 이미 걷혔고(<see cref="PlayerEscorter.ReleaseAllTethersOn"/>) 몸도 서 있다.
     /// </summary>
-    private void ServerPlaceInJail(NpcController npc, int bounty, ulong[] deliverers)
+    private void ServerPlaceInJail(
+        NpcController npc,
+        int bounty,
+        bool isCriminal,
+        ulong[] deliverers
+    )
     {
         Transform spot = m_jailZone.ReservePlacement(npc);
         npc.Custody.SendToJail(spot);
-        m_jailZone.Admit(npc, bounty, deliverers);
+        m_jailZone.Admit(npc, bounty, isCriminal, deliverers);
 
         Debug.Log($"[감옥] 수감 — {npc.name}을(를) {spot.name}에 배치했다 (현상금 {bounty}원)");
     }
@@ -238,6 +249,7 @@ public class JailIntake : MonoBehaviour
 
         ulong[] deliverers = ToClientIds(result.Value.DeliveredBy);
         int bounty = result.Value.Reward;
+        bool isCriminal = result.Value.Verdict == ArrestVerdict.WantedCriminal;
 
         // 줄부터 걷는다 — 관절 밧줄이 걸린 채 옮기면 운반자의 손과 감옥 사이에 관절이 늘어난 채로
         // 남아, 물리가 그 장력으로 시체를 문 밖으로 도로 끌어낸다.
@@ -254,7 +266,7 @@ public class JailIntake : MonoBehaviour
 
         // 점유(m_inmates)가 아니라 원장(m_records)에만 올린다 — 시체는 유치장 표지판이 세는 인원도,
         // 탈옥이 풀어 줄 수감자도 아니다 (JailZone.RecordDeceased 주석).
-        m_jailZone.RecordDeceased(npc, bounty, deliverers);
+        m_jailZone.RecordDeceased(npc, bounty, isCriminal, deliverers);
 
         Debug.Log($"[감옥] 시체 수감 — {npc.name}을(를) 감옥 안에 눕혔다 (현상금 {bounty}원)");
         return true;
@@ -342,7 +354,11 @@ public class JailIntake : MonoBehaviour
     {
         NpcCustody custody = npc.Custody;
         return custody != null
-            && (custody.EscortTarget != null || custody.IsJailExtracted || custody.WasSecuredByPlayer);
+            && (
+                custody.EscortTarget != null
+                || custody.IsJailExtracted
+                || custody.WasSecuredByPlayer
+            );
     }
 
     // 인계 몫(#484)의 귀속자 — 판정이 확정한 인계자 목록(밧줄 보유자 전원 + 버튼을 누른 사람,
@@ -383,13 +399,13 @@ public class JailIntake : MonoBehaviour
         if (npc.CurrentState != NpcState.Jailed)
             return;
 
-        // 수감 자격은 <b>남겨 둔다</b> — 판정 결과(현상금)를 정산 기록에서 꺼내 되살린다. (#517)
+        // 수감 자격은 <b>남겨 둔다</b> — 판정 결과(현상금·진범 여부)를 정산 기록에서 꺼내 되살린다. (#517)
         // 감옥 안에서 다시 세우면(E 정지) 문 앞 재판정 없이 그 자리에서 다시 수감돼야 하는데,
         // 지우면 계상할 근거가 없어진다. 읽기는 ReleaseInmate <b>앞</b>이어야 한다 — 저쪽이 레코드를 지운다.
-        if (m_jailZone.TryGetBounty(npc, out int bounty))
-            m_pendingBounty[npc] = bounty;
+        if (m_jailZone.TryGetRecord(npc, out int bounty, out bool isCriminal))
+            m_pendingRecord[npc] = (bounty, isCriminal);
         else
-            m_pendingBounty.Remove(npc);
+            m_pendingRecord.Remove(npc);
 
         m_jailZone.ReleaseInmate(npc); // 배치 반납 + 정산·진행도에서 제외
 
@@ -406,8 +422,9 @@ public class JailIntake : MonoBehaviour
         Debug.Log($"[감옥] 반출 — 따라오게 한다: {npc.name}");
     }
 
-    // 반출한 대상의 현상금 보관 — 감옥 안에서 다시 세울 때 같은 값으로 계상한다. 서버(또는 오프라인) 전용. (#517)
-    private readonly Dictionary<NpcController, int> m_pendingBounty = new Dictionary<NpcController, int>();
+    // 반출한 대상의 현상금·진범 여부 보관 — 감옥 안에서 다시 세울 때 같은 값으로 계상한다. 서버(또는 오프라인) 전용. (#517/#669)
+    private readonly Dictionary<NpcController, (int Bounty, bool IsCriminal)> m_pendingRecord =
+        new Dictionary<NpcController, (int, bool)>();
 
     /// <summary>
     /// 감옥 안에서 반출을 되돌린다 — 따라오던 대상을 그 자리에 다시 수감한다. 서버(또는 오프라인) 전용. (#517/#537)
@@ -424,12 +441,12 @@ public class JailIntake : MonoBehaviour
         if (!npc.Custody.IsJailExtracted || !m_jailZone.ContainsPoint(npc.transform.position))
             return false;
 
-        // 보관해 둔 현상금이 없으면 판정 결과를 잃은 것이다 — 0원으로 넣지 않고 문 앞 재판정에 맡긴다.
-        if (!m_pendingBounty.TryGetValue(npc, out int bounty))
+        // 보관해 둔 기록이 없으면 판정 결과를 잃은 것이다 — 0원으로 넣지 않고 문 앞 재판정에 맡긴다.
+        if (!m_pendingRecord.TryGetValue(npc, out (int Bounty, bool IsCriminal) record))
             return false;
 
-        m_pendingBounty.Remove(npc);
-        ServerPlaceInJail(npc, bounty, System.Array.Empty<ulong>());
+        m_pendingRecord.Remove(npc);
+        ServerPlaceInJail(npc, record.Bounty, record.IsCriminal, System.Array.Empty<ulong>());
         return true;
     }
 
