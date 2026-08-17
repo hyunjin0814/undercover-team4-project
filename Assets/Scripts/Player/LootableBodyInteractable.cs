@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Localization;
 
 /// <summary>
 /// 기능 정지(Die)된 동료 몸의 상호작용키(E) 반응 — 약탈 창을 연다. (#487)
@@ -39,6 +40,9 @@ public class LootableBodyInteractable : MonoBehaviour, IInteractable
         PlayerLooter looter = FindLooter(interactor);
         return looter != null && looter.gameObject != gameObject;
     }
+
+    // 조준 안내 (#664). 위 CanInteract가 약탈 가능 상태와 자기 자신을 이미 걸러내므로 사유는 두지 않는다.
+    public LocalizedString PromptLabel(GameObject interactor) => InteractPrompts.Loot;
 
     public void Interact(GameObject interactor)
     {

@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Localization;
 
 public enum DoorSelectDirection
 {
@@ -19,6 +20,9 @@ public class RemoteDoorSelectButton : MonoBehaviour, IInteractable
 
     [SerializeField]
     private DoorSelectDirection m_direction = DoorSelectDirection.Next;
+
+    // 조준 안내 (#664)
+    public LocalizedString PromptLabel(GameObject interactor) => InteractPrompts.RemoteDoorSelect;
 
     public void Interact(GameObject interactor)
     {

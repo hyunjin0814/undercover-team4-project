@@ -34,7 +34,25 @@ public class NpcCustody : NetworkBehaviour
     internal NpcController Owner => m_owner;
 
     /// <summary>연행 중 따라갈 대상(체포한 플레이어). 연행 중이 아니면 null. 서버에서만 유효.</summary>
-    public Transform EscortTarget { get; private set; }
+    public Transform EscortTarget => m_escortTarget;
+
+    private Transform m_escortTarget;
+
+    // 대상의 <b>유무</b>만 동기화한다 — 참조는 실어 보낼 수도 없고, 클라가 알아야 하는 것도
+    // "누군가 끌고 있다"까지다 (<see cref="IsSecuredByAnyone"/>가 조준 안내에서 이 값을 읽는다, #664).
+    private readonly NetworkVariable<bool> m_hasEscortTargetSynced = new(false);
+
+    /// <summary>지금 누군가에게 연행되고 있는가 — 전 피어에서 유효. (#664)</summary>
+    public bool HasEscortTarget =>
+        IsSpawned && !IsServer ? m_hasEscortTargetSynced.Value : m_escortTarget != null;
+
+    // 연행 대상을 세우고 내리는 유일한 문 — 동기화 플래그가 참조와 어긋나지 않게 한 곳으로 모은다.
+    private void SetEscortTarget(Transform target)
+    {
+        m_escortTarget = target;
+        if (IsSpawned && IsServer)
+            m_hasEscortTargetSynced.Value = target != null;
+    }
 
     /// <summary>연행 시작 — 체포 성공 직후 호출. NPC가 target(플레이어)을 따라 이동한다. (#59)</summary>
     public void StartEscort(Transform target)
@@ -43,7 +61,7 @@ public class NpcCustody : NetworkBehaviour
         if (IsSpawned && !IsServer)
             return;
 
-        EscortTarget = target;
+        SetEscortTarget(target);
         m_owner.StateMachine.ChangeState(NpcState.Escorted);
     }
 
@@ -64,7 +82,7 @@ public class NpcCustody : NetworkBehaviour
     /// <see cref="StartEscort"/> 하나여야 한다.</summary>
     internal void ClearEscortTarget()
     {
-        EscortTarget = null;
+        SetEscortTarget(null);
     }
 
     // ---- 인계 판정 표식 (#230) ----
@@ -121,7 +139,7 @@ public class NpcCustody : NetworkBehaviour
         if (IsSpawned && !IsServer)
             return;
 
-        EscortTarget = null; // 판정 시점에 연행은 이미 풀렸지만, 참조가 남아 있으면 여기서 끊는다
+        SetEscortTarget(null); // 판정 시점에 연행은 이미 풀렸지만, 참조가 남아 있으면 여기서 끊는다
         SetJailExtracted(false); // 반출했다 되돌린 대상 — 다시 수감됐으므로 표식을 끈다 (#517)
         ClearRelease(); // 저지돼 다시 들어온 대상 — 인도 지점으로 다시 걸어가지 않는다 (#548)
 
@@ -270,8 +288,27 @@ public class NpcCustody : NetworkBehaviour
     ///
     /// <b>누가 확보했는지는 담지 않는다</b> — 남이 끌고 온 신병을 대신 넣어 주는 협동이 설계에 있고
     /// (팀 확정 2026-08-06), 인계 몫도 밧줄 보유자 전원에게 가므로 가로채기가 성립하지 않는다.
+    ///
+    /// 전 피어에서 유효 — 조준 안내가 서버와 같은 답을 내야 한다 (<see cref="IsSecuredByAnyone"/>, #664).
     /// </summary>
-    public bool WasSecuredByPlayer { get; private set; }
+    public bool WasSecuredByPlayer =>
+        IsSpawned && !IsServer ? m_securedByPlayerSynced.Value : m_securedByPlayer;
+
+    private bool m_securedByPlayer;
+
+    private readonly NetworkVariable<bool> m_securedByPlayerSynced = new(false);
+
+    /// <summary>
+    /// <b>누군가 확보한 대상인가</b> — 수감 버튼이 "끌고 온 신병"과 "그냥 거기 쓰러져 있던 대상"을
+    /// 가르는 문지기다. 셋 중 하나라도 있으면 누군가 손을 댄 것이다. 전 피어에서 유효. (#637/#664)
+    ///
+    /// 판정 자체는 서버가 하지만(<see cref="JailIntake"/>), 조준 안내도 같은 답을 내야 "회색인데
+    /// 눌리긴 한다"가 안 생긴다 — 그래서 보는 값 셋이 전부 클라에서 읽히게 맞춰져 있다.
+    ///
+    /// <b>누가 확보했는지는 묻지 않는다</b> — 남이 끌고 온 신병을 대신 넣어 주는 협동이 설계에 있다
+    /// (팀 확정 2026-08-06). 걸러내려는 것은 <b>아무도 손대지 않은</b> 대상이다.
+    /// </summary>
+    public bool IsSecuredByAnyone => HasEscortTarget || IsJailExtracted || WasSecuredByPlayer;
 
     /// <summary>확보 표식 지정 — 켜는 곳은 밧줄 묶임(<see cref="NpcRopeDrag"/>) 하나다. (#637)
     /// 끄는 곳은 커스터디 이탈(<see cref="NpcController"/>의 상태 훅) — 도주·배회로 돌아가면 남의 몸이다.
@@ -282,7 +319,9 @@ public class NpcCustody : NetworkBehaviour
         if (IsSpawned && !IsServer)
             return;
 
-        WasSecuredByPlayer = value;
+        m_securedByPlayer = value;
+        if (IsSpawned && IsServer)
+            m_securedByPlayerSynced.Value = value;
     }
 
     /// <summary>반출 표식 지정 — 켜는 곳은 <see cref="JailIntake"/>의 반출 하나뿐이다. 서버(또는 오프라인). (#517)
@@ -318,7 +357,7 @@ public class NpcCustody : NetworkBehaviour
         if (IsSpawned && !IsServer)
             return;
 
-        EscortTarget = null;
+        SetEscortTarget(null);
         HasReleaseDestination = true;
         ReleaseDestination = destination;
         m_owner.StateMachine.ChangeState(NpcState.Releasing);

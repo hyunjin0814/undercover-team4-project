@@ -20,22 +20,15 @@ MonoBehaviour:
     - rid: 6276845892712267875
   m_TableData:
   - m_Id: 3135767646208
-    m_Localized: Hold [E] to revive
+    m_Localized: Hold [{0}] to revive
     m_Metadata:
       m_Items: []
   - m_Id: 3135780229120
-    m_Localized: "Down \u2014 waiting for a teammate to revive you... ({0}s until
-      shutdown)"
-    m_Metadata:
-      m_Items:
-      - rid: 6276845892712267875
-  - m_Id: 3135780229121
-    m_Localized: "Carrying \u2014 aim at the HQ revival device and press [E] to place
-      (otherwise [E] drops them)"
+    m_Localized: "Down \u2014 waiting for a teammate to revive you..."
     m_Metadata:
       m_Items: []
   - m_Id: 3135780229122
-    m_Localized: "Out of action \u2014 equip a revive kit and left-click to bring
+    m_Localized: "Out of action \u2014 equip a revive kit and press [{0}] to bring
       them back"
     m_Metadata:
       m_Items: []
@@ -175,6 +168,172 @@ MonoBehaviour:
     m_Localized: "\u26A0 The inmates have escaped"
     m_Metadata:
       m_Items: []
+  - m_Id: 4406443574198272
+    m_Localized: '[{0}] {1}'
+    m_Metadata:
+      m_Items:
+      - rid: 6276845892712267875
+  - m_Id: 4406443624529920
+    m_Localized: "[{0}] {1} \u2014 {2}"
+    m_Metadata:
+      m_Items:
+      - rid: 6276845892712267875
+  - m_Id: 4406443624529921
+    m_Localized: Open door
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4406443624529922
+    m_Localized: Close door
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4406443624529923
+    m_Localized: Admit to jail
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4406443624529924
+    m_Localized: Enter jail
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4406443624529925
+    m_Localized: Leave jail
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4406443624529926
+    m_Localized: Lock up
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4406443624529927
+    m_Localized: Dispatch
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4406443624529928
+    m_Localized: Open directory
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4406443624529929
+    m_Localized: Answer call
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4406443624529930
+    m_Localized: End round
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4406443624529931
+    m_Localized: Power
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4406443624529932
+    m_Localized: Switch feed
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4406443624529933
+    m_Localized: Select door
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4406443624529934
+    m_Localized: Open remotely
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4406443624529935
+    m_Localized: View symbol
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4406443624529936
+    m_Localized: Select map
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4406443624529937
+    m_Localized: Pick up
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4406443624529938
+    m_Localized: Buy
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4406443624529939
+    m_Localized: Charge
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4406443624529941
+    m_Localized: Search body
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4406443624529942
+    m_Localized: Hand over
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4406443624529943
+    m_Localized: Locked
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4406443624529945
+    m_Localized: Escorting a suspect
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4406443624529946
+    m_Localized: No suspect secured
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4408458459119616
+    m_Localized: Open decoder
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4408458475896832
+    m_Localized: Sound siren
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4408458475896833
+    m_Localized: Untie
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4408458475896834
+    m_Localized: Drop my rope
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4408458475896835
+    m_Localized: Let go
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4408458475896836
+    m_Localized: Halt
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4408458475896837
+    m_Localized: Resume escort
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4408458475896838
+    m_Localized: Release from jail
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4408458475896839
+    m_Localized: Put down
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4418246572146688
+    m_Localized: Scan
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4418246588923904
+    m_Localized: Tie up
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4418246588923905
+    m_Localized: Join rope
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4418246588923906
+    m_Localized: Drag again
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4421525431549952
+    m_Localized: Revive
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4421525460910080
+    m_Localized: Let go of everything
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:
@@ -183,7 +342,6 @@ MonoBehaviour:
       data:
         m_Entries: 
         m_SharedEntries:
-        - id: 3135780229120
         - id: 7100000000300
         - id: 7100000000301
         - id: 7100000000303
@@ -194,3 +352,5 @@ MonoBehaviour:
         - id: 7100000000319
         - id: 95807313862656
         - id: 95878210183168
+        - id: 4406443574198272
+        - id: 4406443624529920

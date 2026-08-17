@@ -1,5 +1,6 @@
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.Localization;
 
 /// <summary>
 /// Shop 씬 '출동' 콘솔 (#326) — 호스트가 다가가 E로 게임 씬 전환을 시작한다.
@@ -13,6 +14,10 @@ public class DispatchConsole : MonoBehaviour, IInteractable
 
     // 조준 피드백 게이팅 — 클라에는 윤곽선/크로스헤어 반응이 뜨지 않는다 (누를 유도 자체가 없음).
     public bool CanInteract(GameObject interactor) => IsHost;
+
+    // 조준 안내 (#664). 클라는 위 게이팅에 걸려 윤곽선도 안내도 뜨지 않는다 — 사유를 따로 두지 않는
+    // 이유가 그것이다. "누를 유도 자체가 없음"이라는 종전 방침을 안내에도 그대로 적용한다.
+    public LocalizedString PromptLabel(GameObject interactor) => InteractPrompts.Dispatch;
 
     // PlayerInteractor는 CanInteract 확인 없이 Interact를 호출하므로(피드백 전용), 여기서도 호스트만 통과시킨다.
     public void Interact(GameObject interactor)

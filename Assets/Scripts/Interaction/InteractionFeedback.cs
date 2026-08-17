@@ -1,6 +1,7 @@
 using EPOOutline;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.Localization;
 
 /// <summary>
 /// 조준 피드백 — 오너 전용, 순수 로컬 비주얼(네트워크 동기화 없음). (#184)
@@ -23,6 +24,14 @@ public class InteractionFeedback : NetworkBehaviour
 
     private PlayerInteractor m_interactor;
     private PlayerItemUser m_itemUser;
+    private PlayerInputHandler m_input; // 조준 안내에 적을 키 표기를 읽는다 (#664)
+
+    // 겨냥한 E를 상호작용보다 먼저 가져가는 두 갈래 — 끌기·운반 (#664, HeldTargetPrompt 참고)
+    private PlayerEscorter m_escorter;
+    private PlayerCarrier m_carrier;
+
+    // 입력이 죽은 구간에서 안내를 내리는 데 쓴다 (#664, TickPrompt 참고)
+    private PlayerIncapacitation m_incapacitation;
     private Outlinable m_currentOutlinable;
 
     // 감옥 방 안 오브젝트를 담는 EPO 윤곽선 레이어 (#537).
@@ -50,6 +59,10 @@ public class InteractionFeedback : NetworkBehaviour
 
         m_interactor = GetComponent<PlayerInteractor>();
         m_itemUser = GetComponent<PlayerItemUser>(); // 없는 구성(테스트 등)이면 null
+        m_input = GetComponent<PlayerInputHandler>(); // 없는 구성(테스트 등)이면 null
+        m_escorter = GetComponent<PlayerEscorter>();
+        m_carrier = GetComponent<PlayerCarrier>();
+        m_incapacitation = GetComponent<PlayerIncapacitation>();
         m_outliner = GetComponentInChildren<Outliner>(true); // 카메라에 붙어 있다
     }
 
@@ -59,6 +72,7 @@ public class InteractionFeedback : NetworkBehaviour
 
         App.OnSceneLoaded -= HandleSceneLoaded;
         SetOutlined(null, Color.clear);
+        App.UI.InteractPrompt?.HidePrompt(); // 퇴장·씬 전환으로 사라질 때 안내가 화면에 남지 않게
     }
 
     private void HandleSceneLoaded(EScene scene) => EnsureHud();
@@ -181,6 +195,119 @@ public class InteractionFeedback : NetworkBehaviour
             App.UI.Crosshair?.SetWeaponTargeting(true);
         else
             App.UI.Crosshair?.SetInteractable(itemUsable || interactUsable);
+
+        TickPrompt(interactUsable ? interactable : null, itemUsable ? equipped : null);
+    }
+
+    /// <summary>
+    /// 조준한 대상의 키 + 동작을 띄운다 — 대상 판정은 윤곽선과 같은 값을 쓴다. (#664)
+    /// 순서는 손에 쥔 것(E) → 아이템(좌클릭) → 상호작용(E)이다. <b>윤곽선 순서와 다른 곳이 하나
+    /// 있다</b>: 놓기 안내가 아이템 문구를 이긴다. 색은 무엇을 할 수 있는지를 말하지만 놓기는
+    /// 손에 든 것을 잃는 쪽이라, 한 줄뿐인 자리에서는 잃는 쪽을 먼저 알린다(팀 결정).
+    /// </summary>
+    private void TickPrompt(IInteractable interactable, ItemBase item)
+    {
+        InteractPromptView view = App.UI.InteractPrompt;
+        if (view == null)
+            return;
+
+        // 입력이 죽은 구간에서는 안내도 내린다. 무력화 중엔 E도 좌클릭도 각자 가드에 막히고
+        // (PlayerInteractor·PlayerItemUser), 입력 정지 중엔 액션 자체가 꺼져 있다.
+        // 이 자리를 열어 두면 이 이슈가 없애려던 "떠 있는데 눌러도 반응 없음"이 그대로 남는다.
+        if (m_incapacitation != null && m_incapacitation.IsIncapacitated
+            || m_input != null && m_input.IsSuspended)
+        {
+            view.HidePrompt();
+            return;
+        }
+
+        string key = m_input != null ? m_input.InteractBinding : string.Empty;
+
+        // ① 손에 쥔 것을 겨눈 E — 막힐 일이 없는 갈래라 사유도 없다.
+        //    아이템 문구보다 앞이다: 밧줄로 묶을 수 있는 대상(기절·시체)은 CanInteract가 false라
+        //    바로 그 자리에서 E가 '전부 놓기'로 나간다. 아이템 문구에 가리면 끌던 대상을
+        //    놓치는 것을 화면 어디에서도 예고하지 못한다.
+        LocalizedString held = HeldTargetPrompt();
+        if (held != null)
+        {
+            view.ShowPrompt(key, held, null);
+            return;
+        }
+
+        // ② 아이템 경로 — 키가 좌클릭이라 표기도 그쪽에서 읽는다. 막힘 사유는 두지 않는다
+        //    (쓸 수 없으면 CanTarget이 false라 안내째 사라진다).
+        if (item != null)
+        {
+            LocalizedString itemAction = item.TargetPromptLabel(m_interactor.CurrentTarget);
+            if (itemAction != null)
+            {
+                view.ShowPrompt(
+                    m_input != null ? m_input.UseItemBinding : string.Empty, itemAction, null);
+            }
+            else
+            {
+                // 문구를 안 정한 아이템 — E 안내로 흘려보내지 않는다. 윤곽선이 이미 아이템 색이라
+                // 색은 좌클릭을, 글자는 E를 가리키는 어긋남이 생긴다.
+                view.HidePrompt();
+            }
+
+            return;
+        }
+
+        // ③ 상호작용 대상
+        LocalizedString action = interactable?.PromptLabel(gameObject);
+        if (action == null)
+        {
+            view.HidePrompt();
+            return;
+        }
+
+        view.ShowPrompt(key, action, interactable.BlockedReason(gameObject));
+    }
+
+    /// <summary>
+    /// 손에 쥔 것이 있을 때 E가 무엇을 하는가 — <see cref="PlayerInteractor"/>의 갈래 순서를 그대로
+    /// 따라간다(#638/#365). 겨냥한 그 대상만 놓는 갈래가 먼저고, 겨냥한 상호작용이 없으면 전부 놓기다.
+    /// 안 그러면 "밧줄 풀기"가 뜨는데 놓기가 나가거나, 안내 없이 동료가 바닥에 떨어진다.
+    /// 겨눈 것이 아무것도 없을 때는 다루지 않는다 — 안내를 걸 대상이 없다.
+    /// </summary>
+    private LocalizedString HeldTargetPrompt()
+    {
+        GameObject aimTarget = m_interactor.CurrentTarget;
+        if (aimTarget == null)
+            return null;
+
+        bool dragging = m_escorter != null && m_escorter.IsDraggingAny;
+        bool carrying = m_carrier != null && m_carrier.IsCarrying;
+        if (!dragging && !carrying)
+            return null;
+
+        // ① 끌던 그 대상을 겨눴다 — 그 하나만 놓는다.
+        if (dragging)
+        {
+            NpcController aimedNpc = aimTarget.GetComponentInParent<NpcController>();
+            if (aimedNpc != null && m_escorter.IsDraggingNpc(aimedNpc))
+                return InteractPrompts.NpcRelease;
+        }
+
+        // ② 업은 동료를 겨눴다 — 그 몸만 내려놓는다.
+        if (carrying)
+        {
+            Transform carried = m_carrier.CarriedTransform;
+            if (carried != null && aimTarget.transform.IsChildOf(carried))
+                return InteractPrompts.PutDownBody;
+        }
+
+        // ③ 겨냥한 상호작용이 살아 있으면 그쪽이 이긴다 — 없으면 손에 쥔 것을 전부 놓는다.
+        //    사거리·아이템 우선순위가 섞인 interactUsable이 아니라 저쪽과 같은 기준으로 본다.
+        IInteractable aimed = m_interactor.CurrentInteractable;
+        if (aimed != null && aimed.CanInteract(gameObject))
+            return null;
+
+        if (dragging && carrying)
+            return InteractPrompts.ReleaseAll;
+
+        return dragging ? InteractPrompts.NpcRelease : InteractPrompts.PutDownBody;
     }
 
     private void SetOutlined(GameObject root, Color color)

@@ -1,5 +1,6 @@
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.Localization;
 
 /// <summary>
 /// 부활 키트 — Die 상태의 플레이어를 그 자리에서 즉시 부활시키는 소모성 아이템
@@ -13,6 +14,10 @@ public class ReviveKit : ItemBase
     /// 이 키트로 일으킬 수 있는 대상을 조준 중인지 — 윤곽선·크로스헤어 게이트. (#184)
     /// </summary>
     public override bool CanTarget(GameObject aimTarget) => ResolveTarget(aimTarget) != null;
+
+    // 조준 안내 (#664). CanTarget이 true인 아이템은 문구를 반드시 준다 — 안 주면 윤곽선은 키트 색인데
+    // 안내는 E 쪽으로 흘러가 색과 글자가 다른 키를 가리킨다.
+    public override LocalizedString TargetPromptLabel(GameObject aimTarget) => InteractPrompts.Revive;
 
     /// <summary>
     /// 사용 진입점 — 오너의 의도를 서버로 넘긴다. 실제 부활과 소모는 서버가 한다 (Scanner.Use와 같은 구조, #55).

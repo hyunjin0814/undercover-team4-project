@@ -92,6 +92,13 @@ public abstract class ItemBase : ChanneledInteractionBehaviour
     public virtual bool CanTarget(GameObject aimTarget) => false;
 
     /// <summary>
+    /// 조준 안내에 띄울 동작 문구 — "묶기"처럼 동사로. 키(좌클릭)는 표시 쪽이 붙인다. (#664)
+    /// <see cref="CanTarget"/>이 true일 때만 읽힌다. null이면 안내가 뜨지 않는다.
+    /// 대상에 따라 동작이 갈리면 여기서 갈라 준다 — CanTarget의 갈래와 순서를 맞출 것.
+    /// </summary>
+    public virtual LocalizedString TargetPromptLabel(GameObject aimTarget) => null;
+
+    /// <summary>
     /// 현재 아이템을 사용할 수 있는지 — UI 표시(장착 아이콘 활성/비활성 등)용 힌트. 기본값 true.
     /// 사용 가능 여부의 최종 판정은 Use() 구현부가 스스로 수행한다 (아래 Use() 계약 참고).
     /// </summary>

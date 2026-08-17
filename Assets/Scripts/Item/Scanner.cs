@@ -2,6 +2,7 @@ using System;
 using Cysharp.Threading.Tasks;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.Localization;
 
 /// <summary>스캐너 아이템. 겨냥하고 좌클릭하면 <b>즉시</b> 대상 시민의 스캔 정보가 오너 화면에 뜬다 (#608).
 /// 배터리는 옆에 붙은 <see cref="ItemBattery"/>가 들고 있고, 스캔 1회당 1 소모한다. (GDD 5-1/5-2)
@@ -106,6 +107,9 @@ public class Scanner : ItemBase
         CitizenIdentity identity = aimTarget.GetComponentInParent<CitizenIdentity>();
         return identity != null && identity.Profile != null;
     }
+
+    // 조준 안내 (#664). 배터리 방전·정전·스캔 중은 위 CanTarget이 걸러 안내도 함께 사라진다.
+    public override LocalizedString TargetPromptLabel(GameObject aimTarget) => InteractPrompts.Scan;
 
     /// <summary>아이템 사용 진입점. 오너의 의도를 서버로 전달한다.
     /// 대상 해석은 진단 로그·조기 반환을 위해 클라에서 수행하고,

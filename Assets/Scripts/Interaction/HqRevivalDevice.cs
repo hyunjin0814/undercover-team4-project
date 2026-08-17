@@ -1,5 +1,6 @@
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.Localization;
 
 /// <summary>
 /// 본부 부활 장치 — 기능 정지(Die)된 동료를 <b>넣어 두면</b> 30초 뒤 부활시킨다. (#365, GDD 7-5)
@@ -75,6 +76,9 @@ public class HqRevivalDevice : NetworkBehaviour, ICarriedBodyReceiver
         PlayerCarrier carrier = FindCarrier(interactor);
         return carrier != null && carrier.IsCarrying;
     }
+
+    // 조준 안내 (#664)
+    public LocalizedString PromptLabel(GameObject interactor) => InteractPrompts.HandOverBody;
 
     public void Interact(GameObject interactor)
     {

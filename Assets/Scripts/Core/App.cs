@@ -58,6 +58,7 @@ public class App : Singleton<App>
     private ToastView m_toastView;
     private SignalMessageView m_signalMessageView;
     private PromptView m_promptView;
+    private InteractPromptView m_interactPromptView;
     private SecretFavorHud m_secretFavorHud;
 #pragma warning restore CS0649
     #endregion
@@ -232,6 +233,7 @@ public class App : Singleton<App>
         public static ToastView Toast => Instance.m_toastView;
         public static SignalMessageView SignalMessage => Instance.m_signalMessageView;
         public static PromptView Prompt => Instance.m_promptView;
+        public static InteractPromptView InteractPrompt => Instance.m_interactPromptView; // 조준 대상 조작키 안내 (#664)
         public static SecretFavorHud SecretFavor => Instance.m_secretFavorHud; // 비밀 청탁 한 줄 (#485)
 
         // 씬 전환을 덮는 상주 로딩 화면 (AppBootstrap 하위). 씬 직접 Play 등 부트스트랩이 없으면 null

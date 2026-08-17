@@ -1,9 +1,13 @@
 using UnityEngine;
+using UnityEngine.Localization;
 
 /// <summary>CCTV 콘솔 전원 버튼 — 화면 송출을 끄고 켠다. (#362)</summary>
 public class CCTVPowerButton : MonoBehaviour, IInteractable
 {
     [SerializeField] private CCTVSwitcher m_switcher;
+
+    // 조준 안내 (#664)
+    public LocalizedString PromptLabel(GameObject interactor) => InteractPrompts.CctvPower;
 
     public void Interact(GameObject interactor)
     {

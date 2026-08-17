@@ -1,5 +1,6 @@
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.Localization;
 
 /// <summary>
 /// 월드에 놓인 아이템을 줍는 상호작용 진입점. (#88)
@@ -122,6 +123,10 @@ public class WorldItemPickup : MonoBehaviour, IInteractable
         if (m_highlight != null)
             m_highlight.SetGrounded(inWorld);
     }
+
+    // 조준 안내 (#664). 들려 있는 동안은 안내하지 않는다 — 아래 Interact가 그대로 되돌아가는 상태다.
+    public LocalizedString PromptLabel(GameObject interactor) =>
+        IsHeld ? null : InteractPrompts.Pickup;
 
     public void Interact(GameObject interactor)
     {

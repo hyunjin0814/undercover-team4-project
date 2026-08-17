@@ -1,6 +1,7 @@
 using System;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.Localization;
 
 /// <summary>
 /// 유치장 사이렌 버튼 (#488) — 본부에 설치되는 빨간 버튼. 누르면 유치장에 경보음이 울리고 진행 중인 탈옥(#231)이 저지된다.
@@ -75,6 +76,9 @@ public class JailSirenButton : InstallableItem
     /// <summary>미설치·쿨다운·먹통이면 윤곽선이 뜨지 않는다 — ServerFire가 거르는 조건과 같은 기준. (#184)</summary>
     public override bool CanInteract(GameObject interactor) =>
         base.CanInteract(interactor) && !IsOnCooldown && !IsJammed;
+
+    // 조준 안내 (#664). 미설치·쿨다운은 CanInteract가 이미 걸러 안내도 함께 사라진다.
+    public LocalizedString PromptLabel(GameObject interactor) => InteractPrompts.Siren;
 
     protected override void OnInteract(GameObject interactor)
     {

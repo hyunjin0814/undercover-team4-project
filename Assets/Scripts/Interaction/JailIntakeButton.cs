@@ -42,14 +42,28 @@ public class JailIntakeButton : NetworkBehaviour, IInteractable
     }
 
     /// <summary>
-    /// 항상 뜬다 — <b>확보한 신병이 있는지를 여기서 묻지 않는다.</b>
-    ///
-    /// 묻자면 클라이언트가 서버 전용 판단(누가 무엇을 확보했는가)을 흉내 내야 하고, 그러면 서버와
-    /// 어긋나는 순간 "윤곽선은 켜졌는데 안 눌린다"가 된다. 대신 눌렀을 때 결과를 말로 돌려준다 —
-    /// 빈손으로 눌러도 손해가 없는 조작이라 이쪽이 싸다.
+    /// 항상 뜬다 — <b>확보한 신병이 없어도 막지 않는다.</b> 빈손으로 눌러도 손해가 없는 조작이고,
+    /// 여기서 false를 돌리면 안내 자체가 사라져 "왜 안 되는지"를 말할 자리가 없어진다.
+    /// 없다는 사실은 회색 사유로 알린다 (<see cref="BlockedReason"/>).
     /// (사거리·가시선은 PlayerInteractor가 이미 걸러 준다)
     /// </summary>
     public bool CanInteract(GameObject interactor) => m_intake != null;
+
+    // 조준 안내 (#664)
+    public LocalizedString PromptLabel(GameObject interactor) => InteractPrompts.JailAdmit;
+
+    /// <summary>
+    /// 확보한 신병이 없으면 회색으로 뜬다 — 눌러 보고 알던 것을 겨눌 때 알린다. (#664)
+    ///
+    /// 예전에는 이 사유를 달지 못했다: 기준(#637)이 서버 전용 표식 위에 있어 클라가 흉내 내면
+    /// 서버와 어긋났다. 그 표식들이 동기화되면서(<see cref="NpcCustody.IsSecuredByAnyone"/>)
+    /// 이제 같은 기준을 그대로 읽는다. <see cref="CanInteract"/>는 여전히 참이다 — 빈손으로 눌러도
+    /// 손해가 없는 조작이고, 눌렀을 때의 안내(<see cref="ShowNoCustodyLocal"/>)가 정본으로 남는다.
+    /// </summary>
+    public LocalizedString BlockedReason(GameObject interactor) =>
+        m_intake != null && !m_intake.HasAdmittableCustody(interactor)
+            ? InteractPrompts.ReasonNoCustody
+            : null;
 
     /// <summary>E — 확보한 신병을 그 자리에서 판정해 감옥으로 보낸다. (#537)</summary>
     public void Interact(GameObject interactor)

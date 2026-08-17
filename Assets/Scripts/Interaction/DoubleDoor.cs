@@ -1,5 +1,6 @@
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.Localization;
 
 /// <summary>
 /// 양쪽으로 열리는 대문 — 플레이어가 상호작용키(E)로 여닫는다. 문짝 두 짝이 각자 반대로 회전한다.
@@ -131,6 +132,13 @@ public class DoubleDoor : NetworkBehaviour, IInteractable
 
     /// <summary>문짝이 하나라도 연결돼 있으면 여닫을 수 있다. (사거리·가시선은 PlayerInteractor가 걸러 준다)</summary>
     public bool CanInteract(GameObject interactor) => m_leafLeft != null || m_leafRight != null;
+
+    // 조준 안내 (#664) — 잠금 처리는 InteractableDoor와 같다. 라운드 시작 전 잠긴 동안 회색으로 뜬다.
+    public LocalizedString PromptLabel(GameObject interactor) =>
+        IsOpen ? InteractPrompts.DoorClose : InteractPrompts.DoorOpen;
+
+    public LocalizedString BlockedReason(GameObject interactor) =>
+        IsLocked ? InteractPrompts.ReasonLocked : null;
 
     /// <summary>E — 여닫기 토글. 잠겨 있으면 거부한다.</summary>
     public void Interact(GameObject interactor)

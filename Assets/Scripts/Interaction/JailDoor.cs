@@ -83,6 +83,38 @@ public class JailDoor : NetworkBehaviour, IInteractable
     /// </summary>
     public bool CanInteract(GameObject interactor) => m_intake != null;
 
+    /// <summary>
+    /// 조준 안내 (#664) — <see cref="ServerHandleInteract"/>의 갈래 순서를 그대로 따라간다.
+    /// 저쪽을 고치면 여기도 함께 고칠 것. 보는 값은 전부 클라에서 읽힌다.
+    /// </summary>
+    public LocalizedString PromptLabel(GameObject interactor)
+    {
+        JailZone zone = m_intake != null ? m_intake.Zone : null;
+        if (zone == null || interactor == null)
+            return null;
+
+        if (zone.ContainsPoint(interactor.transform.position)) // 1. 나오기
+            return InteractPrompts.JailExit;
+
+        if (m_jailLock != null && !m_jailLock.IsLocked) // 2. 다시 잠그기
+            return InteractPrompts.JailLock;
+
+        return InteractPrompts.JailEnter; // 3~4. 들어가기 (신병을 끌고 있으면 아래에서 막힌다)
+    }
+
+    /// <summary>신병을 끌고는 들어갈 수 없다 (갈래 3) — 눌러 보고 알던 것을 겨눌 때 알린다.</summary>
+    public LocalizedString BlockedReason(GameObject interactor)
+    {
+        // 나오기·잠그기 갈래는 끌고 있어도 성립한다 — 들어가기로 갈 때만 막힌다.
+        if (!ReferenceEquals(PromptLabel(interactor), InteractPrompts.JailEnter))
+            return null;
+
+        PlayerEscorter escorter = interactor.GetComponent<PlayerEscorter>();
+        return escorter != null && escorter.TetheredCount > 0
+            ? InteractPrompts.ReasonEscorting
+            : null;
+    }
+
     /// <summary>E — 상황에 따라 잠그기·나오기·수감·들어가기 중 하나. (#537)</summary>
     public void Interact(GameObject interactor)
     {

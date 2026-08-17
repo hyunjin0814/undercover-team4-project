@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Localization;
 
 public enum CCTVSwitchDirection
 {
@@ -18,6 +19,9 @@ public class CCTVSwitchButton : MonoBehaviour, IInteractable
 
     [SerializeField]
     private CCTVSwitchDirection m_direction = CCTVSwitchDirection.Next;
+
+    // 조준 안내 (#664)
+    public LocalizedString PromptLabel(GameObject interactor) => InteractPrompts.CctvSwitch;
 
     public void Interact(GameObject interactor)
     {

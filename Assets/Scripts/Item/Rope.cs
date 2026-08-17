@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Localization;
 
 /// <summary>
 /// 밧줄 아이템 — 기본 검거 수단. 겨냥한 NPC를 좌클릭으로 묶어 누운 채 질질 끌고 다닌다. (#269 → #369)
@@ -59,6 +60,14 @@ public class Rope : ItemBase
         if (target == null)
         {
             Debug.Log("밧줄을 쓸 대상이 없음 (NPC를 겨냥하지 않음)");
+            return;
+        }
+
+        // 이미 내가 끌고 있는 대상에는 좌클릭이 할 일이 없다 (#664). 재개는 손을 뗀 줄을 다시 쥐는
+        // 것이고(CanResumeRopeDrag는 '끌고 있음'을 보지 않는다), 합류·묶기는 중복 줄이라 서버가 막는다.
+        if (IsAlreadyDragging(target))
+        {
+            Debug.Log($"이미 끌고 있는 대상: {target.name}");
             return;
         }
 
@@ -124,6 +133,10 @@ public class Rope : ItemBase
         if (escorter == null)
             return false;
 
+        // 이미 끌고 있으면 좌클릭이 할 일이 없다 — 윤곽선도 안내도 끈다 (Use의 같은 가드와 한 쌍, #664)
+        if (IsAlreadyDragging(target))
+            return false;
+
         // 밧줄을 쓸 수 없는 대상에는 윤곽선도 뜨지 않는다 — Use의 조기 차단과 단일 기준 (#184)
         if (PlayerEscortCommands.IsRopeBlocked(target))
             return false;
@@ -139,6 +152,28 @@ public class Rope : ItemBase
                 || NpcStateRules.CanJoinDrag(target.CurrentState));
     }
 
+    /// <summary>
+    /// 조준 안내 (#664) — 위 <see cref="CanTarget"/>의 갈래를 그대로 따라간다.
+    /// 저쪽이 true일 때만 불리므로 자원·상태 검사는 다시 하지 않는다.
+    /// </summary>
+    public override LocalizedString TargetPromptLabel(GameObject aimTarget)
+    {
+        if (ResolveCarryTarget(aimTarget) != null)
+            return InteractPrompts.RopeBind; // 동료도 NPC와 같은 '묶기'로 적는다 — 조작이 같은 좌클릭이다
+
+        NpcController target = ResolveTarget(aimTarget);
+        if (target == null)
+            return null;
+
+        PlayerEscortCommands commands = Commands;
+        if (commands != null && commands.CanResumeRopeDrag(target))
+            return InteractPrompts.RopeResume;
+
+        return NpcStateRules.CanJoinDrag(target.CurrentState)
+            ? InteractPrompts.RopeJoin
+            : InteractPrompts.RopeBind;
+    }
+
     /// <summary>좌클릭 뗌 — 진행 중인 합류 채널링 취소를 서버에 요청한다. 풀기는 채널이 없어졌다 (#513). (#91)</summary>
     public override void CancelUse() => Commands?.CancelCapture();
 
@@ -148,6 +183,14 @@ public class Rope : ItemBase
     /// 아직 부착돼 있을 때 부르는 이 훅에서 서버 권위로 끊는다. (수갑에서 한 번 터진 버그 — 커밋 7a06861)
     /// </summary>
     public override void ServerCancelActiveUse() => Commands?.ServerCancelChannel();
+
+    // 내가 지금 이 대상을 끌고 있는가 — 묶여만 있는(E로 놓아둔) 대상은 false다.
+    // 그 구분이 곧 '다시 끌기'가 의미 있는 조건이다 (NpcSubdueInteractable.CanRejoinOwnRope와 같은 기준).
+    private bool IsAlreadyDragging(NpcController target)
+    {
+        PlayerEscorter tethers = Escorter;
+        return tethers != null && tethers.IsDraggingNpc(target);
+    }
 
     private static NpcController ResolveTarget(GameObject aimTarget)
     {

@@ -23,6 +23,9 @@ public class SignalDecoder : InstallableItem
     /// PlayerInteractor는 오너 클라에서만 돌므로(오너 외 비활성) 이 호출도 상호작용한
     /// 본인의 클라이언트에서만 일어난다 = 입력창은 로컬로만 열린다.
     /// </summary>
+    // 조준 안내 (#664)
+    public LocalizedString PromptLabel(GameObject interactor) => InteractPrompts.Decoder;
+
     protected override void OnInteract(GameObject interactor)
     {
         // 입력창은 HUD와 함께 로컬 플레이어 화면에 있다 — 씬에 UI 매니저·HUD가 없는 구성(단독 Play 등)이면

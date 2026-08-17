@@ -1,5 +1,6 @@
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.Localization;
 
 /// <summary>
 /// Shop 씬 맵 선택 콘솔의 이전/다음 버튼 (#578) — 호스트가 다가가 E로 다음 라운드 맵을 바꾼다.
@@ -31,6 +32,9 @@ public class MapSelectButton : MonoBehaviour, IInteractable
             && selection.MapCount > 1
             && MapSelection.IsSelectable;
     }
+
+    // 조준 안내 (#664)
+    public LocalizedString PromptLabel(GameObject interactor) => InteractPrompts.MapSelect;
 
     public void Interact(GameObject interactor)
     {

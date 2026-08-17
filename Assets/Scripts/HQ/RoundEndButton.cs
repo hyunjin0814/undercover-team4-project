@@ -1,6 +1,7 @@
 using System;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.Localization;
 
 /// <summary>
 /// 본부 라운드 종료 버튼 (#395) — 목표 금액을 채우면 활성화되고, 누르면 그 자리에서 라운드를 성공으로 끝낸다.
@@ -66,6 +67,9 @@ public class RoundEndButton : NetworkBehaviour, IInteractable
 
     /// <summary>목표를 채웠을 때만 누를 수 있다 — 조준 윤곽선도 그때만 켜진다. (#184)</summary>
     public bool CanInteract(GameObject interactor) => IsArmed;
+
+    // 조준 안내 (#664)
+    public LocalizedString PromptLabel(GameObject interactor) => InteractPrompts.RoundEnd;
 
     [Rpc(SendTo.Server)]
     private void RequestEndRoundRpc()

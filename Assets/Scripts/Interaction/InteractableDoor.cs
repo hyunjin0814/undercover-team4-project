@@ -1,5 +1,6 @@
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.Localization;
 
 /// <summary>
 /// 미닫이 문짝이 열릴 때 밀려나는 방향 — <b>문짝의 부모 기준 로컬 축</b>이라,
@@ -81,6 +82,14 @@ public class InteractableDoor : NetworkBehaviour, IInteractable
 
     // 잠겨 있어도 true — 아웃라인이 떠야 "문이 있고 잠겼다"를 알 수 있다. 거부는 Interact에서 한다.
     public bool CanInteract(GameObject interactor) => m_leaf != null;
+
+    // 조준 안내 (#664). 열림 여부로 동작이 갈리고, 잠겼으면 사유가 붙어 회색으로 뜬다 —
+    // CanInteract가 true라 윤곽선만 뜨던 자리에 "왜 안 열리는지"가 들어간다.
+    public LocalizedString PromptLabel(GameObject interactor) =>
+        IsOpen ? InteractPrompts.DoorClose : InteractPrompts.DoorOpen;
+
+    public LocalizedString BlockedReason(GameObject interactor) =>
+        IsLocked ? InteractPrompts.ReasonLocked : null;
 
     public void Interact(GameObject interactor)
     {

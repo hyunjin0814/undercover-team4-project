@@ -129,6 +129,10 @@ public class ShopStand : NetworkBehaviour, IInteractable
     // 잔액이 부족해도 눌러서 사유를 볼 수 있어야 하므로 게이팅하지 않는다 — 판정은 전부 서버가 한다.
     public bool CanInteract(GameObject interactor) => true;
 
+    // 조준 안내 (#664). 잔액 부족을 사유로 달지 않는다 — 값만 보려고 누르는 것을 열어 둔
+    // 진열대라(위 CanInteract가 늘 true인 이유) 살 수 없다고 미리 회색으로 막아 세울 자리가 아니다.
+    public LocalizedString PromptLabel(GameObject interactor) => InteractPrompts.Shop;
+
     public void Interact(GameObject interactor)
     {
         // Shop 씬은 정식 경로(Title → Lobby → Shop)로만 들어온다 — 세션 없이 단독 Play하면

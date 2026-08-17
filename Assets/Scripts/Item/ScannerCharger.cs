@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Localization;
 
 /// <summary>
 /// 본부 스캐너 충전기 — 상호작용 시 상대의 장착 아이템에 붙은 배터리(IChargeable)를 충전한다. (이슈 #60)
@@ -17,6 +18,9 @@ public class ScannerCharger : MonoBehaviour, IInteractable
     /// <summary>장착 아이템에 배터리가 있으면 상호작용 의미가 있다 — 조준 피드백(윤곽선) 판정용. (#184)
     /// 완충이어도 윤곽선을 띄운다 — E로 "이미 가득 참" 토스트 피드백을 주기 위함 (#309).</summary>
     public bool CanInteract(GameObject interactor) => FindBattery(interactor) != null;
+
+    // 조준 안내 (#664)
+    public LocalizedString PromptLabel(GameObject interactor) => InteractPrompts.Charge;
 
     public void Interact(GameObject interactor)
     {

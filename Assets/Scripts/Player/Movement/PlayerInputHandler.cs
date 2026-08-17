@@ -49,6 +49,61 @@ public class PlayerInputHandler : NetworkBehaviour
     public Vector2 LookInput { get; private set; }
     public bool IsSprinting { get; private set; }
 
+    /// <summary>
+    /// 상호작용 키 표기 — 조준 안내가 "무슨 키를 누르라"를 적을 때 쓴다. (#664)
+    /// 매 프레임 읽히는 자리라 캐시한다(만들 때마다 문자열이 새로 생긴다).
+    /// 재바인딩은 <see cref="HandleActionChange"/>가 캐시를 비워 반영한다.
+    /// </summary>
+    public string InteractBinding
+    {
+        get
+        {
+            if (m_interactBinding == null)
+                m_interactBinding = BindingDisplay(m_interactAction);
+
+            return m_interactBinding;
+        }
+    }
+
+    /// <summary>아이템 사용(좌클릭) 키 표시 문자열 — 안내 문구용. (#664)</summary>
+    public string UseItemBinding
+    {
+        get
+        {
+            if (m_useItemBinding == null)
+                m_useItemBinding = BindingDisplay(m_useItemAction);
+
+            return m_useItemBinding;
+        }
+    }
+
+    /// <summary>
+    /// 안내에 적을 키 표기 하나를 고른다 — 키보드·마우스 스킴의 첫 바인딩. 타깃이 PC라서다(GDD). (#664)
+    /// 인자 없는 GetBindingDisplayString은 못 쓴다: 바인딩을 전부 이어 붙여 상호작용은 "E | Y",
+    /// 아이템 사용은 "X | LMB | Primary Touch/Tap | Trigger | PrimaryAction | Enter"가 나온다.
+    /// 한 스킴 안에서도 여럿일 수 있어(아이템 사용은 LMB·Enter) 첫 번째로 자른다.
+    /// </summary>
+    private static string BindingDisplay(InputActionReference reference)
+    {
+        if (reference == null || reference.action == null)
+            return "(미할당)";
+
+        InputAction action = reference.action;
+        for (int i = 0; i < action.bindings.Count; i++)
+        {
+            InputBinding binding = action.bindings[i];
+            if (binding.isComposite || binding.isPartOfComposite)
+                continue;
+            if (binding.groups == null || !binding.groups.Contains(k_displayScheme))
+                continue;
+
+            return action.GetBindingDisplayString(i);
+        }
+
+        // 그 스킴에 바인딩이 없다 — 있는 것으로라도 적는다.
+        return action.GetBindingDisplayString();
+    }
+
     public event Action OnInteractStarted; // 상호작용 버튼 누름
     public event Action OnInteractPerformed; // 상호작용 발동 — 순수 Button이라 누르는 즉시 발화 (즉시발동)
     public event Action OnInteractCanceled; // 상호작용 버튼 뗌
@@ -65,6 +120,13 @@ public class PlayerInputHandler : NetworkBehaviour
     public event Action OnEmoteWheelClosed; // T 뗌 — 가리키던 칸 발동 (#219)
 
     private bool m_isSuspended;
+
+    // 안내에 적을 키 표기를 고르는 기준 스킴 — 타깃이 PC다 (#664, BindingDisplay 참고)
+    private const string k_displayScheme = "Keyboard&Mouse";
+
+    // 키 표기 캐시 — null이면 다음 요청 때 다시 만든다 (#664)
+    private string m_interactBinding;
+    private string m_useItemBinding;
 
     /// <summary>
     /// 게임플레이 입력이 정지된 상태인지 — 텍스트 입력 UI(신호 해석기 #108) 등이 켠다.
@@ -158,6 +220,8 @@ public class PlayerInputHandler : NetworkBehaviour
         m_jumpAction.action.started += OnJumpStartedHandler;
         m_emoteAction.action.started += OnEmoteStartedHandler;
         m_emoteAction.action.canceled += OnEmoteCanceledHandler;
+
+        InputSystem.onActionChange += HandleActionChange; // 키 표기 캐시 무효화 (#664)
     }
 
     public override void OnNetworkDespawn()
@@ -187,8 +251,21 @@ public class PlayerInputHandler : NetworkBehaviour
         m_emoteAction.action.started -= OnEmoteStartedHandler;
         m_emoteAction.action.canceled -= OnEmoteCanceledHandler;
 
+        InputSystem.onActionChange -= HandleActionChange;
+
         SetActionsEnabled(false);
         m_isSuspended = false; // 재접속·재스폰 시 정지 상태가 남지 않도록 초기화
+    }
+
+    // 바인딩이 바뀌면 키 표기 캐시를 버린다 — 다음에 읽을 때 새 키로 만든다. (#664)
+    // 재바인딩 UI가 아직 없어 지금은 발화하지 않지만, 생겼을 때 옛 키를 계속 적는 것을 막는다.
+    private void HandleActionChange(object obj, InputActionChange change)
+    {
+        if (change != InputActionChange.BoundControlsChanged)
+            return;
+
+        m_interactBinding = null;
+        m_useItemBinding = null;
     }
 
     private void OnMove(InputAction.CallbackContext ctx) => MoveInput = ctx.ReadValue<Vector2>();

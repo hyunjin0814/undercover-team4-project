@@ -1,6 +1,7 @@
 using System;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.Localization;
 
 /// <summary>
 /// 본부 제보 전화 (#102) — 간헐적으로 울리고, 받으면 대기 중이던 예비 용의자 1명이
@@ -137,6 +138,9 @@ public class TipCallPhone : NetworkBehaviour, IInteractable
 
     /// <summary>울리는 중에만 받을 수 있다 — 조준 윤곽선도 그때만 켜진다. (#184)</summary>
     public bool CanInteract(GameObject interactor) => IsRinging;
+
+    // 조준 안내 (#664)
+    public LocalizedString PromptLabel(GameObject interactor) => InteractPrompts.TipCall;
 
     [Rpc(SendTo.Server)]
     private void RequestAnswerRpc(RpcParams rpcParams = default)

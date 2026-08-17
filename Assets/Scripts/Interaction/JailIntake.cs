@@ -85,7 +85,7 @@ public class JailIntake : CommonManagerBase
     ///
     /// <b>확보의 기준은 갈래 둘이고, ①이 있으면 ②는 돌지 않는다</b> (#637) — ① 이 사람의 밧줄에
     /// 걸린 대상 전부, ② 버튼 앞 <see cref="m_admitReach"/> 안에서 <see cref="IsAdmittableState"/>이면서
-    /// <see cref="IsSecuredByAnyone"/>인 대상. 줄을 쥔 것이 곧 "이것을 넣겠다"는 선택이므로 그 위에
+    /// <see cref="NpcCustody.IsSecuredByAnyone"/>인 대상. 줄을 쥔 것이 곧 "이것을 넣겠다"는 선택이므로 그 위에
     /// 반경 스캔을 얹지 않는다 — 옆에 놓아둔 대상이 함께 검거되던 사고가 그 경로였다.
     ///
     /// ②는 손이 빈 사람 몫이다: 밧줄을 풀어 세워 둔 뒤 누르는 조작, <b>남이 끌고 온 신병을 대신
@@ -315,7 +315,7 @@ public class JailIntake : CommonManagerBase
                 continue;
             if (!IsAdmittableState(npc.CurrentState))
                 continue;
-            if (!IsSecuredByAnyone(npc))
+            if (npc.Custody == null || !npc.Custody.IsSecuredByAnyone)
                 continue;
             if ((npc.transform.position - origin).sqrMagnitude > sqrReach)
                 continue;
@@ -334,34 +334,67 @@ public class JailIntake : CommonManagerBase
     ///
     /// <b>휩쓸림은 소유 조건이 막는다</b> (#637) — 끌고 와서 내려놓은 시체는
     /// <see cref="NpcCustody.WasSecuredByPlayer"/>가 남지만, 길에 사살해 둔 시체는 셋 다 비어
-    /// <see cref="IsSecuredByAnyone"/>에서 걸러진다. 사고가 난 것이 후자였다.
+    /// <see cref="NpcCustody.IsSecuredByAnyone"/>에서 걸러진다. 사고가 난 것이 후자였다.
     /// </summary>
     private static bool IsAdmittableState(NpcState state) =>
         state is NpcState.Captured or NpcState.Escorted or NpcState.Dead;
 
+    // ---- 조준 안내용 조회 (#664) ----
+
+    // 프레임당 한 번만 훑는다 — 조준 중 문구·사유가 각각 물어 오므로 결과를 그 프레임 안에서 나눠 쓴다.
+    private GameObject m_custodyProbeInteractor;
+    private int m_custodyProbeFrame = -1;
+    private bool m_custodyProbeResult;
+
     /// <summary>
-    /// 누군가 확보한 대상인가 — 버튼 앞 반경 스캔이 <b>지나가던 NPC를 휩쓸지 않게</b> 하는 문지기. (#637)
+    /// 이 사람이 지금 누를 만한 신병이 있는가 — <b>조준 안내 전용</b>이고 전 피어에서 유효하다. (#664)
     ///
-    /// 상태와 거리만으로는 "끌고 온 신병"과 "그냥 거기 쓰러져 있던 대상"이 똑같아 보인다. 셋 중
-    /// 하나라도 있으면 누군가 손을 댄 것이다:
-    /// <list type="bullet">
-    ///   <item><see cref="NpcCustody.EscortTarget"/> — 지금 누군가를 따라오는 중(남이 끌고 온 신병·반출 대상)</item>
-    ///   <item><see cref="NpcCustody.IsJailExtracted"/> — 반출됐다 거리 이탈로 멈춘 대상 (#517)</item>
-    ///   <item><see cref="NpcCustody.WasSecuredByPlayer"/> — 밧줄을 풀어 문 앞에 세워 둔 신병 (#637)</item>
-    /// </list>
+    /// <see cref="CollectHeldBy"/>와 같은 기준을 따라간다(줄을 쥐었으면 그것, 아니면 반경 안의 확보된
+    /// 대상). 어긋나면 "회색인데 눌리긴 한다"가 되므로 저쪽을 고치면 여기도 함께 고칠 것.
+    /// 개수는 세지 않는다 — 첫 하나에서 끊는다.
     ///
-    /// <b>누가 확보했는지는 묻지 않는다</b> — 남이 끌고 온 신병을 대신 넣어 주는 협동이 설계에 있다
-    /// (팀 확정 2026-08-06). 걸러내려는 것은 <b>아무도 손대지 않은</b> 대상이다.
+    /// 보는 값이 전부 클라에서 읽힌다: 밧줄 목록은 NetworkList이고, 확보 표식 셋은
+    /// <see cref="NpcCustody.IsSecuredByAnyone"/>이 동기화된 것만 쓴다.
     /// </summary>
-    private static bool IsSecuredByAnyone(NpcController npc)
+    public bool HasAdmittableCustody(GameObject interactor)
     {
-        NpcCustody custody = npc.Custody;
-        return custody != null
-            && (
-                custody.EscortTarget != null
-                || custody.IsJailExtracted
-                || custody.WasSecuredByPlayer
-            );
+        if (interactor == null)
+            return false;
+
+        if (m_custodyProbeFrame == Time.frameCount && m_custodyProbeInteractor == interactor)
+            return m_custodyProbeResult;
+
+        m_custodyProbeFrame = Time.frameCount;
+        m_custodyProbeInteractor = interactor;
+        m_custodyProbeResult = ProbeCustody(interactor);
+        return m_custodyProbeResult;
+    }
+
+    // 씬 훑기가 있어 싸지 않다 — 부르는 쪽은 버튼을 <b>겨누고 있는</b> 동안뿐이고, 위 프레임 캐시가
+    // 그 동안에도 프레임당 한 번으로 묶는다.
+    private bool ProbeCustody(GameObject interactor)
+    {
+        // ① 줄을 쥐고 있으면 거기서 끝이다 (#637) — 반경 갈래는 손이 빈 사람 몫이다.
+        PlayerEscorter escorter = interactor.GetComponent<PlayerEscorter>();
+        if (escorter != null && escorter.TetheredCount > 0)
+            return true;
+
+        Vector3 origin = interactor.transform.position;
+        float sqrReach = m_admitReach * m_admitReach;
+
+        NpcController[] npcs = FindObjectsByType<NpcController>(FindObjectsSortMode.None);
+        for (int i = 0; i < npcs.Length; i++)
+        {
+            NpcController npc = npcs[i];
+            if (npc == null || !IsAdmittableState(npc.CurrentState))
+                continue;
+            if (npc.Custody == null || !npc.Custody.IsSecuredByAnyone)
+                continue;
+            if ((npc.transform.position - origin).sqrMagnitude <= sqrReach)
+                return true;
+        }
+
+        return false;
     }
 
     // 인계 몫(#484)의 귀속자 — 판정이 확정한 인계자 목록(밧줄 보유자 전원 + 버튼을 누른 사람,

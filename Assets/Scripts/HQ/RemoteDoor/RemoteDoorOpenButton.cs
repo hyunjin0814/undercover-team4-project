@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Localization;
 
 /// <summary>
 /// 본부 원격 문 개방 버튼 — 모니터에서 선택된 문을 여닫는다. (#489)
@@ -9,6 +10,9 @@ public class RemoteDoorOpenButton : MonoBehaviour, IInteractable
 {
     [SerializeField]
     private RemoteDoorConsole m_console;
+
+    // 조준 안내 (#664)
+    public LocalizedString PromptLabel(GameObject interactor) => InteractPrompts.RemoteDoorOpen;
 
     public void Interact(GameObject interactor)
     {

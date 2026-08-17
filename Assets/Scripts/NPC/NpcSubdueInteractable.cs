@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Localization;
 
 /// <summary>
 /// NPC의 상호작용키(E) 반응 (#76/#91/#398/#513) — 누르는 즉시 NPC 상태에 따라 갈린다.
@@ -67,6 +68,35 @@ public class NpcSubdueInteractable : MonoBehaviour, IInteractable
         && tethers != null
         && tethers.IsTetheredTo(m_controller)
         && !tethers.IsDraggingNpc(m_controller);
+
+    /// <summary>
+    /// 조준 안내 (#664) — 아래 <see cref="Interact"/>의 갈래를 그대로 따라간다. 어긋나면 거짓말이
+    /// 되므로 저쪽을 고치면 여기도 함께 고칠 것.
+    /// 내가 끌고 있는 대상은 여기 오지 않는다 — 그 E는 PlayerInteractor가 '놓기'로 먼저 가져간다(#638).
+    /// </summary>
+    public LocalizedString PromptLabel(GameObject interactor)
+    {
+        switch (m_controller.CurrentState)
+        {
+            case NpcState.Escorted:
+                if (NpcStateRules.IsFollowingUnroped(m_controller))
+                    return InteractPrompts.NpcHalt;
+
+                return CanRejoinOwnRope(FindTethers(interactor))
+                    ? InteractPrompts.NpcUnropeMine
+                    : null;
+
+            case NpcState.Captured:
+                return NpcStateRules.CanResumeUnropedEscort(m_controller)
+                    ? InteractPrompts.NpcEscortResume
+                    : InteractPrompts.NpcUnrope;
+
+            case NpcState.Jailed:
+                return InteractPrompts.NpcJailRelease;
+        }
+
+        return null;
+    }
 
     public void Interact(GameObject interactor)
     {
