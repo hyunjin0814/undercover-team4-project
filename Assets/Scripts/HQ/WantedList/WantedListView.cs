@@ -13,14 +13,18 @@ public class WantedListView : MonoBehaviour
     private WantedListManager Manager => App.Game.WantedList;
 
     [Header("UI 참조")]
-    [SerializeField] private RectTransform m_entryContainer; // 행 부모
-    [SerializeField] private WantedEntryView m_entryPrefab;  // 행 프리팹
+    [SerializeField]
+    private RectTransform m_entryContainer; // 행 부모
+
+    [SerializeField]
+    private WantedEntryView m_entryPrefab; // 행 프리팹
 
     private readonly List<WantedEntryView> m_rows = new List<WantedEntryView>();
 
     // 몽타주 문장을 조립할 옵션 정의 — 항목에는 인덱스만 실려 오므로 표시하는 쪽이 자기 언어로 만든다 (#497).
     // 배정기가 들고 있는 것을 그대로 쓴다 — 행 프리팹에 같은 에셋을 또 배선하면 두 곳이 어긋날 수 있다.
-    private AppearanceDatabase Database => App.Game.Appearance != null ? App.Game.Appearance.Database : null;
+    private AppearanceDatabase Database =>
+        App.Game.Appearance != null ? App.Game.Appearance.Database : null;
 
     private void OnEnable()
     {
@@ -75,13 +79,14 @@ public class WantedListView : MonoBehaviour
             return;
         }
 
-        NetworkList<WantedEntry> wanted = Manager.Wanted;
+        // 세션 밖(오프라인 Play)에서는 NetworkList가 비어 있으므로 매니저의 읽기 접근자를 쓴다 (#669).
+        int count = Manager.OpenCount;
 
         // 행 수를 리스트 수에 맞춘다 (부족하면 생성, 남으면 제거) — 매번 전부 파괴/생성하지 않고 재사용
-        while (m_rows.Count < wanted.Count)
+        while (m_rows.Count < count)
             m_rows.Add(Instantiate(m_entryPrefab, m_entryContainer));
 
-        while (m_rows.Count > wanted.Count)
+        while (m_rows.Count > count)
         {
             int last = m_rows.Count - 1;
             if (m_rows[last] != null)
@@ -90,10 +95,13 @@ public class WantedListView : MonoBehaviour
         }
 
         AppearanceDatabase database = Database;
-        if (database == null && wanted.Count > 0)
-            Debug.LogWarning("WantedListView: AppearanceDatabase를 찾지 못해 몽타주를 조립할 수 없다", this);
+        if (database == null && count > 0)
+            Debug.LogWarning(
+                "WantedListView: AppearanceDatabase를 찾지 못해 몽타주를 조립할 수 없다",
+                this
+            );
 
-        for (int i = 0; i < wanted.Count; i++)
-            m_rows[i].Bind(wanted[i], database);
+        for (int i = 0; i < count; i++)
+            m_rows[i].Bind(Manager.GetOpen(i), database);
     }
 }

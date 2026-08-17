@@ -453,8 +453,20 @@ public class AppearanceAssigner : CommonManagerBase
     )
     {
         var rawCounts = new int[criminals.Count];
+
+        // 범인끼리의 우연 부합도 센다 — 범인 B의 외형이 조건 A를 만족하면 B도 A의 정답이다.
+        // 자기 자신은 항상 자기 조건에 부합하므로 이 이중 루프가 대각선에서 1을 채운다.
         for (int i = 0; i < criminals.Count; i++)
-            rawCounts[i] = 1; // 범인 자신은 항상 자기 조건에 부합한다
+        {
+            for (int ci = 0; ci < criminals.Count; ci++)
+            {
+                if (
+                    m_criminalProfiles[i]
+                        .MatchesOn(m_criminalProfiles[ci], m_criminalRevealedAxes[ci])
+                )
+                    rawCounts[ci]++;
+            }
+        }
 
         var freePool = new List<NpcController>();
         foreach (NpcController npc in nonCriminalNpcs)
@@ -479,23 +491,51 @@ public class AppearanceAssigner : CommonManagerBase
         }
 
         var summary = new StringBuilder();
-        int poolCursor = 0;
         for (int ci = 0; ci < criminals.Count; ci++)
         {
             int need = m_montageMatchCount - rawCounts[ci];
             int filled = 0;
-            while (filled < need && poolCursor < freePool.Count)
+
+            // SciFi 후보가 이 조건을 만족할 수 있는지는 <b>후보와 무관하게</b> 카탈로그가 정한다 —
+            // 한 번 -1이면 어느 후보를 넣어도 -1이다. 루프 안에서 판정하면 실패한 후보를 계속 소모해
+            // 뒤쪽 조건들이 보정 기회를 통째로 잃는다. 그래서 여기서 한 번만 묻는다.
+            int sciFiModel =
+                catalog != null
+                    ? FindModelMatchingRevealed(
+                        catalog,
+                        m_criminalProfiles[ci],
+                        m_criminalRevealedAxes[ci]
+                    )
+                    : -1;
+
+            // 실제로 덮어쓴 후보만 풀에서 뺀다 — 이 조건으로 못 바꾸는 후보(모델 없는 SciFi)는
+            // 남겨 둬야 다음 조건이 쓸 수 있다. 그래서 조건 간 공유 커서 대신 소모식으로 훑는다.
+            int scan = 0;
+            while (filled < need && scan < freePool.Count)
             {
-                NpcController candidate = freePool[poolCursor++];
-                AppearanceProfile corrected = ForceMatch(candidate, catalog, ci);
+                NpcController candidate = freePool[scan];
+
+                if (sciFiModel < 0 && candidate.GetComponent<NpcCatalogAppearance>() != null)
+                {
+                    scan++; // 이 조건으로는 못 쓴다 — 건너뛰고 남겨 둔다
+                    continue;
+                }
+
+                AppearanceProfile corrected = ForceMatch(candidate, catalog, ci, sciFiModel);
                 applied[candidate] = corrected;
+                freePool.RemoveAt(scan); // 덮어썼으니 더는 '어느 조건과도 무관'이 아니다
                 if (corrected.MatchesOn(m_criminalProfiles[ci], m_criminalRevealedAxes[ci]))
                     filled++;
             }
 
             if (filled < need)
                 Debug.Log(
-                    $"[AppearanceAssigner] 조건 #{ci + 1} 부합 인원이 하한({m_montageMatchCount})에 {need - filled}명 못 미친다 — 자유 배정 후보 부족 (튜닝 정보)"
+                    $"[AppearanceAssigner] 조건 #{ci + 1} 부합 인원이 하한({m_montageMatchCount})에 {need - filled}명 못 미친다 — "
+                        + (
+                            sciFiModel < 0
+                                ? "이 조건을 만족하는 SciFi 모델이 카탈로그에 없다 (튜닝 정보)"
+                                : "자유 배정 후보 부족 (튜닝 정보)"
+                        )
                 );
 
             if (summary.Length > 0)
@@ -520,12 +560,15 @@ public class AppearanceAssigner : CommonManagerBase
         return profile;
     }
 
-    /// <summary>이 NPC를 지정한 조건에 맞게 강제로 덮어쓴다. SciFi는 일치 모델이 없으면 기존 자유
-    /// 배정 프로필을 그대로 둔다 — 경고가 아니라 튜닝 정보로 남긴다(#669, 이슈 §2).</summary>
+    /// <summary>이 NPC를 지정한 조건에 맞게 강제로 덮어쓴다. (#669)</summary>
+    /// <param name="sciFiModel">이 조건을 만족하는 카탈로그 모델 인덱스 — 부르는 쪽이
+    /// <see cref="FindModelMatchingRevealed"/>로 조건당 한 번만 구해 넘긴다(후보와 무관한 값이라
+    /// 후보마다 다시 물으면 실패한 후보를 헛되이 소모한다). -1이면 SciFi 후보는 손대지 않는다.</param>
     private AppearanceProfile ForceMatch(
         NpcController npc,
         AppearanceModelCatalog catalog,
-        int criminalIndex
+        int criminalIndex,
+        int sciFiModel
     )
     {
         AppearanceProfile criminal = m_criminalProfiles[criminalIndex];
@@ -533,14 +576,13 @@ public class AppearanceAssigner : CommonManagerBase
         NpcCatalogAppearance cat = npc.GetComponent<NpcCatalogAppearance>();
         if (cat != null && catalog != null)
         {
-            int idx = FindModelMatchingRevealed(catalog, criminal, axes);
-            if (idx < 0)
+            if (sciFiModel < 0)
             {
                 CitizenIdentity current = npc.GetComponent<CitizenIdentity>();
                 return current != null ? current.Appearance : AppearanceProfile.Unassigned;
             }
-            cat.SetModelIndex(idx);
-            AppearanceProfile p = catalog.GetProfile(idx);
+            cat.SetModelIndex(sciFiModel);
+            AppearanceProfile p = catalog.GetProfile(sciFiModel);
             AssignIdentity(npc, p);
             return p;
         }

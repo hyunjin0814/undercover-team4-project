@@ -406,7 +406,17 @@ public class JailIntake : CommonManagerBase
         // 감옥 안에서 다시 세우면(E 정지) 문 앞 재판정 없이 그 자리에서 다시 수감돼야 하는데,
         // 지우면 계상할 근거가 없어진다. 읽기는 ReleaseInmate <b>앞</b>이어야 한다 — 저쪽이 레코드를 지운다.
         if (m_jailZone.TryGetRecord(npc, out int bounty, out bool isCriminal))
+        {
             m_pendingRecord[npc] = (bounty, isCriminal);
+
+            // 진범이었으면 수배 조건을 다시 연다 (#669). 반출은 대상을 도시로 되돌리는 것이라
+            // 조건이 닫힌 채로 두면, GDD 7-2가 정한 문 앞 재판정에서 TryMatchOpen이 아무것도 못 찾아
+            // <b>진범이 오검거로 뒤집히고 현상금도 날아간다</b>. 탈옥(JailbreakEvent)이 같은 자리에서
+            // ReinstateByNpcId를 부르는 것과 같은 취지다 — 감옥 밖에 있는 동안은 조건이 열려 있어야 한다.
+            // 문을 안 지나고 그 자리에서 다시 앉히는 경로(ServerReturnToJail)가 이 열림을 되닫는다.
+            if (isCriminal)
+                App.Game.WantedList?.ReinstateByNpcId(npc.NetworkObjectId);
+        }
         else
             m_pendingRecord.Remove(npc);
 
@@ -450,6 +460,12 @@ public class JailIntake : CommonManagerBase
 
         m_pendingRecord.Remove(npc);
         ServerPlaceInJail(npc, record.Bounty, record.IsCriminal, System.Array.Empty<ulong>());
+
+        // 반출 때 다시 열어 둔 수배 조건을 닫는다 (#669) — 이 경로는 문 앞 게이트를 지나지 않아
+        // ArrestJudge가 돌지 않으므로, 판정이 하던 항목 닫기를 여기서 대신한다.
+        if (record.IsCriminal)
+            App.Game.WantedList?.ServerRecloseFor(npc);
+
         return true;
     }
 
@@ -590,10 +606,18 @@ public class JailIntake : CommonManagerBase
         if (npc == null || m_jailZone == null)
             return;
 
+        // 진범 여부는 원장을 지우기 <b>전에</b> 읽는다 — ReleaseDeceased가 레코드를 걷는다.
+        bool wasCriminal = m_jailZone.IsRecordedCriminal(npc);
+
         if (!m_jailZone.ReleaseDeceased(npc))
             return; // 계상된 적 없는 시체 — 그냥 들고 지나가는 중이다
 
         npc.Custody.ClearDelivered();
+
+        // 산 신병 반출과 같은 이유로 수배 조건을 다시 연다 (#669) — 이 함수가 여는 '재판정'이
+        // 조건이 닫힌 채로는 오검거밖에 낼 수 없다.
+        if (wasCriminal)
+            App.Game.WantedList?.ReinstateByNpcId(npc.NetworkObjectId);
 
         // 판정 불가 기억에서도 뺀다 — 원장에 오른 채로 버튼을 눌러 봤다면 '다시 물어도 답이 같다'로
         // 등록됐을 수 있는데(ServerAdmitCorpse의 false 경로), 표식을 걷은 지금은 답이 달라졌다.

@@ -23,14 +23,17 @@ public class ArrestNoticeBroadcaster : MonoBehaviour
     private const int k_writerSize = 128; // int + FixedString64(최대 66) < 128
 
     [Tooltip("전 플레이어에게 띄울 문구 — Hud.Arrest.Notice ({0}=대상 이름, {1}=남은 수배자 수)")]
-    [SerializeField] private LocalizedString m_noticeMessage;
+    [SerializeField]
+    private LocalizedString m_noticeMessage;
 
     [Tooltip("토스트가 화면에 머무는 시간(초)")]
     [Min(0f)]
-    [SerializeField] private float m_noticeSeconds = 3f;
+    [SerializeField]
+    private float m_noticeSeconds = 3f;
 
     [Tooltip("알림 배경색 — 판정 배너(VerdictBanner)의 '진범 검거' 초록과 맞춘 값")]
-    [SerializeField] private Color m_noticeTone = new Color(0.20f, 0.70f, 0.35f, 0.95f);
+    [SerializeField]
+    private Color m_noticeTone = new Color(0.20f, 0.70f, 0.35f, 0.95f);
 
     private ArrestJudge Judge => App.Game.ArrestJudge;
     private WantedListManager WantedList => App.Game.WantedList;
@@ -103,7 +106,10 @@ public class ArrestNoticeBroadcaster : MonoBehaviour
 
         // WantedListManager도 같은 이벤트를 구독해 항목을 지운다 — 구독 순서와 무관하게 맞는
         // 값을 내려고 "아직 리스트에 있으면 하나 뺀다"로 직접 계산한다.
-        int remaining = wantedList.Wanted.Count - (IsOnWantedList(wantedList, result.Npc) ? 1 : 0);
+        // 찾는 키는 <b>잡힌 개체가 아니라 충족된 조건</b>이다 (#669) — 조건 부합이면 둘이 다르고,
+        // 잡힌 개체로 찾으면 대개 목록에 없어 남은 수가 하나 많게 방송된다.
+        int remaining =
+            wantedList.OpenCount - (IsEntryOpen(wantedList, result.MatchedWantedId) ? 1 : 0);
 
         NetworkManager nm = NetworkManager.Singleton;
         if (nm == null || !nm.IsServer || nm.CustomMessagingManager == null)
@@ -134,15 +140,12 @@ public class ArrestNoticeBroadcaster : MonoBehaviour
         return result.Npc != null ? result.Npc.name : "알 수 없음";
     }
 
-    // NetworkList는 인덱스 조회뿐이라 훑는다.
-    private static bool IsOnWantedList(WantedListManager wantedList, NpcController npc)
+    // 이 수배 항목이 아직 열려 있는가 — 인덱스 조회뿐이라 훑는다.
+    private static bool IsEntryOpen(WantedListManager wantedList, ulong entryNpcId)
     {
-        if (npc == null)
-            return false;
-
-        for (int i = 0; i < wantedList.Wanted.Count; i++)
+        for (int i = 0; i < wantedList.OpenCount; i++)
         {
-            if (wantedList.Wanted[i].NpcId == npc.NetworkObjectId)
+            if (wantedList.GetOpen(i).NpcId == entryNpcId)
                 return true;
         }
 
@@ -173,7 +176,12 @@ public class ArrestNoticeBroadcaster : MonoBehaviour
         using FastBufferWriter writer = new FastBufferWriter(k_writerSize, Allocator.Temp);
         writer.WriteValueSafe(remaining);
         writer.WriteValueSafe(name);
-        nm.CustomMessagingManager.SendNamedMessage(k_messageName, m_targets, writer, NetworkDelivery.Reliable);
+        nm.CustomMessagingManager.SendNamedMessage(
+            k_messageName,
+            m_targets,
+            writer,
+            NetworkDelivery.Reliable
+        );
     }
 
     private void ReceiveNotice(ulong senderClientId, FastBufferReader reader)

@@ -19,7 +19,9 @@ public class RemainingCriminalsHud : MonoBehaviour
     private TextMeshProUGUI m_countText;
 
     // 코드가 대입하는 자리라 라벨에 LocalizeStringEvent를 붙일 수 없다 — 서로 덮어쓴다. (#497)
-    [Tooltip("표시 형식 — Hud.Criminals.Count ({0}=잡은 수, {1}=수배된 진범 수(TotalWanted)). 라운드 목표는 금액이므로(#395) 이 표시는 목표 진행도가 아니라 검거 현황이다 — 목표 진행도는 본부 게시판 RoundFundBoard가 담당")]
+    [Tooltip(
+        "표시 형식 — Hud.Criminals.Count ({0}=잡은 수, {1}=수배된 진범 수(TotalWanted)). 라운드 목표는 금액이므로(#395) 이 표시는 목표 진행도가 아니라 검거 현황이다 — 목표 진행도는 본부 게시판 RoundFundBoard가 담당"
+    )]
     [SerializeField]
     private LocalizedString m_countFormat;
 
@@ -33,13 +35,19 @@ public class RemainingCriminalsHud : MonoBehaviour
     {
         if (m_countText == null)
         {
-            Debug.LogWarning("RemainingCriminalsHud: 카운트 텍스트가 연결되지 않아 표시할 수 없다", this);
+            Debug.LogWarning(
+                "RemainingCriminalsHud: 카운트 텍스트가 연결되지 않아 표시할 수 없다",
+                this
+            );
             return;
         }
 
         if (WantedList == null)
         {
-            Debug.LogWarning("RemainingCriminalsHud: WantedListManager를 찾지 못해 표시할 수 없다", this);
+            Debug.LogWarning(
+                "RemainingCriminalsHud: WantedListManager를 찾지 못해 표시할 수 없다",
+                this
+            );
             SetVisible(false);
             return;
         }
@@ -89,7 +97,9 @@ public class RemainingCriminalsHud : MonoBehaviour
 
         SetVisible(true);
 
-        int caught = total - WantedList.Wanted.Count; // 전체 − 남은 = 잡은 수 (탈옥 재등재 시 다시 감소)
+        // 전체 − 남은 = 잡은 수 (탈옥 재등재 시 다시 감소). OpenCount는 세션 밖에서도 맞는 값이라
+        // total(TotalWanted)과 같은 출처를 본다 — Wanted.Count를 쓰면 오프라인에서 0이 나와 '전부 검거'가 된다 (#669)
+        int caught = total - WantedList.OpenCount;
         if (caught == m_lastCaught && total == m_lastTotal)
             return;
 
