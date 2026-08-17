@@ -35,7 +35,7 @@ public class JailIntakeButton : NetworkBehaviour, IInteractable
     private void Awake()
     {
         if (m_intake == null)
-            m_intake = FindFirstObjectByType<JailIntake>();
+            m_intake = App.Game.JailIntake;
 
         if (m_intake == null)
             Debug.LogWarning("JailIntakeButton: JailIntake를 찾지 못했다 — 수감이 동작하지 않는다", this);

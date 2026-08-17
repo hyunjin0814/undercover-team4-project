@@ -19,7 +19,8 @@ using UnityEngine;
 /// 본부 UI는 InmateCount/OnInmateCountChanged를 읽으면 된다.
 /// 자물쇠·탈출(#231)은 ReleaseInmate로 이 카운트에서 빠져나간다.
 /// </summary>
-public class JailZone : NetworkBehaviour
+[DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
+public class JailZone : NetworkedManagerBase
 {
     [Header("수감자 배치 지점 (비우면 감옥 자신의 위치)")]
     [Tooltip(
@@ -254,8 +255,10 @@ public class JailZone : NetworkBehaviour
     /// <summary>누적 현상금 변경 — 목표 진행 HUD·라운드 종료 버튼(#395)이 구독한다. 전 피어에서 발생.</summary>
     public event Action<int> OnBountyTotalChanged;
 
-    private void Awake()
+    protected override void Awake()
     {
+        base.Awake(); // App.Game.Jail 등록
+
         // 점유 배열은 배치 지점 수와 1:1 — 지점은 씬 배치라 런타임에 늘지 않으므로 여기서 한 번만 잡는다 (#462)
         m_placementOccupants = new NpcController[
             m_inmatePoints != null ? m_inmatePoints.Length : 0

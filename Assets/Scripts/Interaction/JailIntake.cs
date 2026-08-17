@@ -27,7 +27,8 @@ using UnityEngine;
 ///
 /// 장소 오브젝트라 App 파사드에 등록하지 않는다 — JailLock·JailZone과 같은 관례로 씬 탐색을 쓴다.
 /// </summary>
-public class JailIntake : MonoBehaviour
+[DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
+public class JailIntake : CommonManagerBase
 {
     [Header("감옥 (비우면 같은 오브젝트·부모에서 자동 탐색)")]
     [SerializeField]
@@ -51,8 +52,10 @@ public class JailIntake : MonoBehaviour
     /// <summary>감옥 — 문이 배치 지점·퇴장 지점을 물어볼 때 쓴다. 미배선이면 null.</summary>
     public JailZone Zone => m_jailZone;
 
-    private void Awake()
+    protected override void Awake()
     {
+        base.Awake(); // App.Game.JailIntake 등록
+
         // 감옥은 같은 오브젝트에 두는 것이 기본 — 인스펙터로 따로 지정할 수도 있다
         if (m_jailZone == null)
             m_jailZone = GetComponentInParent<JailZone>();

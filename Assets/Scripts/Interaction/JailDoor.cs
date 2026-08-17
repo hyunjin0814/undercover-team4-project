@@ -64,7 +64,7 @@ public class JailDoor : NetworkBehaviour, IInteractable
     {
         // 감옥 방이 도시에서 떨어져 있어 부모 탐색으로는 닿지 않는다 — 장소 오브젝트라 씬 탐색을 쓴다
         if (m_intake == null)
-            m_intake = FindFirstObjectByType<JailIntake>();
+            m_intake = App.Game.JailIntake;
 
         if (m_intake == null)
             Debug.LogWarning("JailDoor: JailIntake를 찾지 못했다 — 출입·수감이 동작하지 않는다", this);

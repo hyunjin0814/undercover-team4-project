@@ -56,8 +56,8 @@ public class RoundFundBoard : MonoBehaviour
         }
 
         // 진행도 원본은 유치장이다 — 값이 바뀔 때만 다시 그리도록 직접 구독한다(매 프레임 폴링 대신).
-        // JailZone은 App에 등록된 매니저가 아니라 씬 배치 오브젝트라 App 파사드 경로가 없다.
-        m_jail = FindFirstObjectByType<JailZone>();
+        // 감옥이 없는 씬에서는 null이다 — 아래 구독이 그대로 건너뛴다 (#592).
+        m_jail = App.Game.Jail;
         if (m_jail != null)
             m_jail.OnBountyTotalChanged += HandleBountyChanged;
 

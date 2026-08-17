@@ -143,7 +143,7 @@ public class SettlementController : MonoBehaviour
         int criminals = 0;
         int misdemeanors = 0;
         int gross = 0;
-        JailZone jail = FindFirstObjectByType<JailZone>();
+        JailZone jail = App.Game.Jail;
         if (jail != null)
             (criminals, misdemeanors, gross) = jail.TallySettlement();
 

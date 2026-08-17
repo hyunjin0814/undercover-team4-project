@@ -29,7 +29,7 @@ public class JailLockView : MonoBehaviour
         if (m_jailLock == null)
             m_jailLock = GetComponentInParent<JailLock>();
         if (m_jailLock == null)
-            m_jailLock = FindFirstObjectByType<JailLock>();
+            m_jailLock = App.Game.JailLock;
     }
 
     // 구독은 Start에서 — 자물쇠의 Awake(NetworkVariable 초기화)가 끝난 뒤가 보장된다 (아키텍처 규칙 R6)

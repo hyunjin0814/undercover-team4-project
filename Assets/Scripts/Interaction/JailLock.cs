@@ -13,7 +13,8 @@ using UnityEngine;
 /// 상태는 서버 권위로 정해 NetworkVariable로 전 피어에 동기화한다 (#56) —
 /// 자물쇠가 열린 것은 본부 화면에서 보여야 하므로 클라이언트도 읽을 수 있어야 한다.
 /// </summary>
-public class JailLock : NetworkBehaviour
+[DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
+public class JailLock : NetworkedManagerBase
 {
     [Header("접근 지점 (비우면 자물쇠 자신의 위치)")]
     [Tooltip("침입자(#231)가 걸어와 서는 지점 — 창살 문 바깥에 둔다. 자물쇠 자신이 우리 안에 있으면 경로가 막힌다 (#415)")]

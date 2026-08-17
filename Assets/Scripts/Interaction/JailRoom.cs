@@ -7,16 +7,13 @@ using UnityEngine;
 /// 마스크로 판정했는데, 감옥이 도시에서 떨어진 별도 NavMesh 섬이 되면서(#537) 영역 게이팅 자체가
 /// 없어졌다. 이제는 <see cref="JailZone"/>에 배선한 방 부피가 유일한 기준이다.
 ///
-/// <b>씬 오브젝트를 캐시하지만 매니저가 아니다</b> — App 파사드에 올릴 대상이 아니고(장소 오브젝트),
-/// 여기 있는 것은 "좌표 하나로 물어볼 창구"뿐이다. 참조가 죽으면(씬 전환) 다음 호출에서 다시 찾는다.
+/// <b>여기 있는 것은 "좌표 하나로 물어볼 창구"뿐이다</b> — 감옥 자체는 <see cref="App.Game.Jail"/>이
+/// 들고 있고(#592), 이 클래스는 그 위에 좌표 판정만 얹는다.
 ///
 /// 감옥이 없는 프로젝트(단독 테스트 씬 등)에서는 항상 false다 — 호출부가 각자 폴백을 정한다.
 /// </summary>
 public static class JailRoom
 {
-    // 씬의 감옥 — 매번 찾지 않게 잡아 둔다. Unity의 가짜 null 비교가 파괴된 참조를 걸러 준다.
-    private static JailZone s_zone;
-
     /// <summary>이 좌표가 감옥 방 안인가 — 감옥이 없거나 방 범위가 미배선이면 항상 false.</summary>
     public static bool Contains(Vector3 position)
     {
@@ -47,14 +44,6 @@ public static class JailRoom
     // 뽑은 점을 NavMesh로 당길 최대 거리(m) — 방 한 칸(2.5m)보다 조금 크게 잡아 벽 안쪽이 나와도 건진다.
     private const float k_snapRadius = 3f;
 
-    // 씬의 감옥 — 참조가 죽으면(씬 전환) 다음 호출에서 다시 찾는다
-    private static JailZone Zone
-    {
-        get
-        {
-            if (s_zone == null)
-                s_zone = Object.FindFirstObjectByType<JailZone>();
-            return s_zone;
-        }
-    }
+    // 씬에 감옥이 없으면 null — 씬 전환으로 참조가 죽는 문제는 App 등록/해제가 대신 처리한다 (#592)
+    private static JailZone Zone => App.Game.Jail;
 }

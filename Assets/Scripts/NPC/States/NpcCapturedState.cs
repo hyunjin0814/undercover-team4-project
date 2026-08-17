@@ -110,9 +110,8 @@ public class NpcCapturedState : NpcStateBase
 
         m_rejailTried = true;
 
-        // JailIntake는 매니저가 아니라 장소 오브젝트라 App 파사드 대상이 아니다 (PlayerEscortCommands와 같은 관례).
-        // 이 경로는 Captured 진입당 한 번만 도므로 탐색 비용이 매 프레임 쌓이지 않는다.
-        JailIntake intake = Object.FindFirstObjectByType<JailIntake>();
+        // 감옥이 없는 씬에서는 null이라 아래 검사가 그대로 걸러 준다 (#592).
+        JailIntake intake = App.Game.JailIntake;
         if (intake != null)
             intake.ServerReturnToJail(m_owner);
     }

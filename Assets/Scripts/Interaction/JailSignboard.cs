@@ -31,11 +31,11 @@ public class JailSignboard : MonoBehaviour
         if (m_label == null)
             m_label = GetComponentInChildren<TMP_Text>();
 
-        // 감옥은 장소 오브젝트라 App 파사드 대상이 아니다 — 씬 탐색이 관례다 (JailIntake와 같은 방식)
+        // 비워두면 App에서 받는다 — 감옥 시설은 실행 순서가 앞서 있어 여기서 이미 읽힌다 (#592)
         if (m_jailZone == null)
             m_jailZone = GetComponentInParent<JailZone>();
         if (m_jailZone == null)
-            m_jailZone = FindFirstObjectByType<JailZone>();
+            m_jailZone = App.Game.Jail;
 
         if (m_label == null)
             Debug.LogWarning("JailSignboard: 표시할 TMP_Text가 없다 — 간판이 갱신되지 않는다", this);

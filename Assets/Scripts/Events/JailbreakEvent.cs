@@ -123,15 +123,12 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
 
     private void Awake()
     {
-        // 매니저가 아닌 장소·부품만 여기서 찾는다 (자물쇠·유치장).
+        // 감옥 시설은 App 등록이라 여기서 바로 읽는다 — 실행 순서가 앞서 있어 Awake에서 이미 채워져 있다 (#592).
         // 매니저는 App 경유 프로퍼티로 읽으므로 Awake에서 손대지 않는다 — 등록이 아직 안 끝났을 수 있다.
         if (m_jailZone == null)
-            m_jailZone = FindFirstObjectByType<JailZone>();
+            m_jailZone = App.Game.Jail;
         if (m_jailLock == null)
-            m_jailLock =
-                m_jailZone != null
-                    ? m_jailZone.GetComponent<JailLock>()
-                    : FindFirstObjectByType<JailLock>();
+            m_jailLock = App.Game.JailLock;
     }
 
     // 매니저 구독은 Start에서 — 모든 매니저의 Awake(=App 등록)가 끝난 뒤가 보장된다 (아키텍처 규칙 R6).

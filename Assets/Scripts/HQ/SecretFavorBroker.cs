@@ -131,7 +131,7 @@ public class SecretFavorBroker : NetworkBehaviour
     // 그 대상으로 리롤이 다시 열린다. 대신 그 수감자는 기회를 잃는다(아래 HandleInmateAdmitted 주석).
     private readonly HashSet<NpcController> m_rolled = new HashSet<NpcController>();
 
-    // 유치장 — 수감 훅을 걸어 두려고 잡는다. 장소 오브젝트라 App 파사드 대상이 아니다(JailIntake와 같은 관례).
+    // 유치장 — 수감 훅을 걸어 두려고 잡는다. App 등록이라 Start에서 읽는다 (#592).
     private JailZone m_jail;
 
     // 감옥 문 — 반출 대상이 문 밖으로 나오는 순간을 받으려고 잡는다 (#548).
@@ -154,7 +154,7 @@ public class SecretFavorBroker : NetworkBehaviour
         if (m_phone == null)
             Debug.LogWarning("SecretFavorBroker: TipCallPhone을 찾지 못해 청탁이 걸려오지 않는다", this);
 
-        m_jail = FindFirstObjectByType<JailZone>();
+        m_jail = App.Game.Jail;
         if (m_jail != null)
         {
             m_jail.OnInmateAdmitted += HandleInmateAdmitted;
@@ -167,8 +167,8 @@ public class SecretFavorBroker : NetworkBehaviour
             Debug.LogWarning("SecretFavorBroker: JailZone을 찾지 못해 청탁이 걸려오지 않는다", this);
 
         // 반출 대상이 문 밖으로 나오는 순간을 받는다 — 목적지를 아는 것은 이쪽뿐이다 (#548).
-        // JailZone과 같은 관례로 찾는다(장소 오브젝트라 App 파사드 대상이 아니다).
-        m_intake = FindFirstObjectByType<JailIntake>();
+        // JailZone과 같은 경로로 받는다 (#592).
+        m_intake = App.Game.JailIntake;
         if (m_intake != null)
             m_intake.OnInmateExited += HandleInmateExited;
         else

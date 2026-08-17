@@ -88,13 +88,13 @@ public class RoundManager : CommonManagerBase
     private int m_endedTargetFund = -1;
 
     // 인스펙터에서 비워 뒀으면 씬에서 한 번 찾아 캐시한다 (ArrestJudge의 인계 구역과 같은 방식).
-    // JailZone은 App에 등록된 매니저가 아니라 씬 배치 오브젝트라 App 파사드 경로가 없다.
+    // 감옥이 없는 씬(로비·타이틀)에서는 null이다 — 읽는 쪽이 전부 null을 검사한다 (#592).
     private JailZone Jail
     {
         get
         {
             if (m_jailZone == null)
-                m_jailZone = FindFirstObjectByType<JailZone>();
+                m_jailZone = App.Game.Jail;
             return m_jailZone;
         }
     }

@@ -14,8 +14,9 @@
 
 - **App** ([Assets/Scripts/Core/App.cs](../Assets/Scripts/Core/App.cs)) — 전역 매니저 접근의 단일 경로.
   - `App.Net` — SessionManager · AuthBootstrap · VivoxManager
-  - `App.Game` — RoundManager · SuddenEventManager · WantedListManager · DirectoryManager · ArrestJudge · CriminalAssigner · NpcSpawner · AppearanceAssigner · WrongfulArrestPenalty · TeamFund · FxManager · EffectManager
+  - `App.Game` — RoundManager · SuddenEventManager · WantedListManager · DirectoryManager · ArrestJudge · CriminalAssigner · NpcSpawner · AppearanceAssigner · WrongfulArrestPenalty · TeamFund · FxManager · EffectManager · JailZone · JailIntake · JailLock
   - `App.UI` — UIManagerBase(3단계 예정) · CrosshairUI · ChannelingGaugeUI
+    - **게임 씬에만 있는 등록 대상은 다른 씬에서 `null`이다** — `SceneReadyGate` · `SettlementConfirmGate` · 감옥 시설 셋(`JailZone`·`JailIntake`·`JailLock`). 읽는 쪽이 `?.`나 null 검사로 받는다. "로비·타이틀에서 빈 슬롯이 된다"는 것은 등록을 막는 사유가 아니다 — 빈 것이 곧 "그 씬에는 없다"는 뜻이다 (#592).
   - `App.SceneFlow` — 현재 씬의 SceneManagerBase (3단계 예정)
   - `App.Sound` — SoundManager (그룹이 아닌 단일 프로퍼티 — 시스템 서비스 하나뿐이라 중첩 클래스를 두지 않았다. BGM·UI음이 붙으면(#483) 그때 그룹으로 승격한다)
 - **등록 메커니즘** — `CommonManagerBase`(일반) / `NetworkedManagerBase`(NetworkBehaviour)를 상속하면 Awake에서 `ManagerHandler`가 리플렉션으로 App의 같은 타입 필드에 주입하고, 파괴 시 해제한다. **App 필드에 직접 대입하는 코드를 만들지 말 것.**
@@ -81,12 +82,9 @@ R9(예약): UI 패널은 `PanelBase` 상속 + `OpenPanel<T>()` 경유 — 4단�
 
 | 코드 | 사유 |
 |---|---|
-| JailDoor → JailIntake `Find` · JailbreakEvent → JailLock `Find` · JailRoom → JailZone `Find`(정적 캐시) | 장소(출입구·자물쇠·구역) 오브젝트 — 매니저 아님. 감옥 방이 도시에서 떨어진 별도 공간이라(#537) 부모 탐색으로는 닿지 않는다. 전부 `Awake`/`Start` 1회 또는 참조가 죽었을 때만 다시 찾는 정적 캐시라 매 프레임 비용이 없다. 인스펙터 연결을 우선하고 비었을 때만 폴백한다. 삭제된 `JailIntake → JailScanner Find` 항목을 대체한다(보안 스캐너 게이트가 문 앞 판정으로 바뀌며 `JailScanner`가 폐기됨 — #537) |
-| PlayerEscortCommands · NpcCapturedState · SecretFavorBroker → JailIntake `Find` | 장소(출입구) 오브젝트 — 매니저 아님. **참조 도메인은 Player·NPC·HQ 셋으로 R3 ②는 넘지만**(#537로 `NpcCapturedState`, #548로 `SecretFavorBroker`가 추가됨), 위 JailZone 항목과 같은 사유로 등록하지 않는다 — 본부 맵에 배치되는 설치물이라 App 상주 매니저로 올리면 씬 없는 구성(로비·타이틀)에서 빈 슬롯이 된다. 셋 다 상시 폴링이 아니라 E 입력·`Captured` 진입·`Start` 1회만 도는 경로라 탐색 비용도 없다. 인계 단말이 폐기되면서 삭제된 `ArrestJudge → HqDropoffZone Find` 항목을 대체한다 (#492/#537) |
 | RoundTimerUI → RoundTimerSync `Find` | Round 도메인 내부 부품 (HQ 타이머 표시가 생기면 승격 후보) |
 | SessionManager → AuthBootstrap `SerializeField` | 같은 오브젝트/프리팹 내 직접 연결 |
 | RoundEndResetter의 테스트 씬 폴백 `SceneManager.LoadScene` | EScene 매핑이 없는 테스트 씬 한정 — 정식 흐름은 App.LoadScene(Title)로 전환 완료 (#247) |
-| JailbreakEvent · CustodyRouter · RoundManager · SettlementController · RoundFundHud · SecretFavorBroker → JailZone `Find`/`SerializeField` | 장소(구역) 오브젝트 — 매니저 아님. JailIntake·JailLock과 같은 분류다. 참조 도메인이 늘어(#395로 Round·UI 추가) R3의 승격 기준은 넘지만, 본부 맵에 배치되는 설치물이라 App 상주 매니저로 올리면 씬 없는 구성(로비·타이틀)에서 빈 슬롯이 된다. 인스펙터 연결을 우선하고 비었을 때만 씬 탐색으로 폴백한다 |
 | SceneReadyGate → `App.Game.ReadyGate` 등재 | 세어지는 참조 도메인은 Round(RoundManager) 하나라 R3 ②에 미달하지만, 실사용은 로딩 흐름(InGameManager)·표시(ReadyWaitHud)·라운드 시작(RoundManager)을 가로지르는 서버 권위 코디네이션 지점이다. 특히 ReadyWaitHud는 HUD.prefab이 오너 스폰 시 **런타임 생성**돼 씬 오브젝트를 인스펙터로 배선할 수 없어 App 경로 외 대안이 없다 (#410) |
 | LonePlayerWatch → HqOccupancyZone `Find` | 장소(구역) 오브젝트 — 매니저 아님. JailZone·JailIntake와 같은 분류다. 참조 도메인이 Events 하나뿐이라 R3 승격 기준에 미달하고, 쓰는 쪽(AbductionEvent) Awake에서 1회 탐색이라 런타임 비용도 없다. 인스펙터 연결을 우선하고 비었을 때만 씬 탐색으로 폴백한다 (#371) |
 | SecretFavorBroker → TipCallPhone `Find`(폴백) | 설치물(전화기) 오브젝트 — 매니저 아님. 참조 도메인이 HQ 하나라 R3 승격 기준에 미달하고, `Start` 1회 탐색이라 런타임 비용도 없다. 인스펙터 연결을 우선하고 비었을 때만 씬 탐색으로 폴백한다 (#485) |

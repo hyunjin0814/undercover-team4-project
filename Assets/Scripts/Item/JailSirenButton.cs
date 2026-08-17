@@ -13,10 +13,9 @@ public class JailSirenButton : InstallableItem
     private const double k_noCooldown = -1d;
 
     // 경보음이 울릴 자리 — 버튼이 있는 본부가 아니라 유치장이다. 갇힌 본인에게 들려야 억제력이 생긴다.
-    // 인스펙터에 배선하지 않고 찾는 이유는 맵마다 씬이 다르기 때문이다 — 배선을 두면 맵을 한 장
-    // 늘릴 때마다 사람이 기억해서 이어야 하고, 실제로 #488 이후 지금까지 어느 씬에서도 이어지지
-    // 않아 사이렌은 내내 무음이었다. 매니저가 아닌 장소·부품이라 이 탐색은 R1에 걸리지 않는다
-    // (JailbreakEvent가 유치장·자물쇠를 찾는 것과 같은 처리).
+    // 인스펙터에 배선하지 않는 이유는 맵마다 씬이 다르기 때문이다 — 배선을 두면 맵을 한 장 늘릴
+    // 때마다 사람이 기억해서 이어야 하고, 실제로 #488 이후 지금까지 어느 씬에서도 이어지지 않아
+    // 사이렌은 내내 무음이었다. App 등록(#592)이라 맵이 늘어도 배선할 것이 없다.
     private JailZone m_jailZone;
 
     // 연타로 감시를 대체하지 못하게 하는 값 — 자물쇠 해제 창(JailbreakEvent.m_unlockSeconds, 기본 10초)보다
@@ -139,7 +138,7 @@ public class JailSirenButton : InstallableItem
     private void PlayLocal()
     {
         if (m_jailZone == null)
-            m_jailZone = FindFirstObjectByType<JailZone>();
+            m_jailZone = App.Game.Jail;
 
         if (m_jailZone == null)
         {

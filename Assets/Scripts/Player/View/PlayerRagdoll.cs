@@ -1001,6 +1001,30 @@ public class PlayerRagdoll : MonoBehaviour
         )
             target.y = ground.y - CapsuleBottomOffset;
 
+        // ⚠ <b>루트를 옮기기 전에 뼈를 잡아 두고, 아래에서 되돌린다.</b>
+        //
+        // "동적 리지드바디는 부모 트랜스폼을 따라가지 않는다"는 이 파일의 전제는 <b>다음 물리
+        // 스텝이 포즈를 되써 준 뒤부터</b> 참이다. PhysX가 월드 포즈를 써 넣으면 Unity는 그것을
+        // <b>그 시점의 부모 기준 로컬</b>로 저장하므로, 그 뒤 Update에서 부모를 옮기면 자식의
+        // 월드는 부모 × 로컬로 <b>같이 끌려간다.</b> 렌더는 Update·LateUpdate 다음이라 그 어긋난
+        // 몸이 한 프레임 그려지고, 다음 FixedUpdate에서 되쓰이며 툭 내려온다.
+        //
+        // <b>진입 프레임이 그 한 번이다.</b> 평소 이 함수는 잔차 몇 cm를 따라가지만 진입 때는
+        // 루트가 캡슐 밑면(y≈0)에서 골반(y≈0.9)으로 <b>한 방에 뛴다</b> — 그 프레임에 몸 전체가
+        // 골반 높이만큼 떠서 그려진다. 물리를 거치지 않으므로 겹침 탈출 속도 상한
+        // (<see cref="RagdollRig"/>의 k_maxDepenetrationVelocity)으로는 줄지 않는다.
+        //
+        // <c>NpcRagdoll.ServerFreezeInPlace</c> ①④와 같은 패턴이다 — 저쪽은 얼리는 순간의 같은
+        // 왕복(실측 14.6cm)을 이 방식으로 잡았고, 진입 쪽에만 빠져 있었다.
+        //
+        // <b>아래 <see cref="FollowBodyYaw"/>까지 감싼다</b> — 회전도 계층을 타고 자식에게
+        // 전해지므로, 골반 높이만큼 떨어져 있는 몸이 루트 원점을 축으로 휜다.
+        //
+        // 되돌리는 대입은 <b>렌더 전용</b>이다: 이 프로젝트는 <c>m_AutoSyncTransforms = 0</c>이라
+        // 트랜스폼에 쓴 값이 액터로 넘어가지 않는다. PhysX의 포즈는 손대지 않은 채, 화면에
+        // 그려지는 자리만 제자리로 돌린다.
+        m_rig.CapturePose();
+
         // 사망 중에는 CharacterController가 꺼져 있으므로(EnterRagdoll) 대입이 곧 이동이다.
         // 스윕은 쓰지 않는다 — 서 있는 1.8m 캡슐과 굴러가는 탄도 시체는 갈 수 있는 곳이 다르고,
         // 지형이 갈리는 순간 캡슐이 뒤처져 동기화 위치가 시체를 대표하지 못한다
@@ -1015,6 +1039,9 @@ public class PlayerRagdoll : MonoBehaviour
         // 정착 후의 yaw는 ResolveSettledRootPose가 이미 확정했다 — 시체는 방향을 바꾸지 않는다.
         if (m_state == RagdollState.Ragdoll)
             FollowBodyYaw();
+
+        // 위 CapturePose의 짝 — 루트를 옮기고 돌린 뒤 뼈를 원래 월드 포즈로 되돌린다.
+        m_rig.RestoreCapturedPose();
     }
 
     private void FollowBodyYaw()

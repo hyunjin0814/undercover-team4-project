@@ -9897,6 +9897,7 @@ MonoBehaviour:
   m_flightAlignPullSpeed: 16
   m_alignSnapDistance: 2.5
   m_remoteSpeedClamp: 20
+  m_logRootFollow: 0
 --- !u!114 &6852879000339947848
 MonoBehaviour:
   m_ObjectHideFlags: 0

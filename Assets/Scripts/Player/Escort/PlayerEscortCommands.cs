@@ -710,9 +710,8 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         if (target == null || !IsInRange(target))
             return;
 
-        // JailIntake는 매니저가 아니라 장소 오브젝트라 App 파사드 대상이 아니다 (JailLock·JailZone과 같은 관례).
-        // E 입력 때만 도는 경로라 매 프레임 탐색 비용도 없다.
-        JailIntake intake = FindFirstObjectByType<JailIntake>();
+        // 감옥이 없는 씬에서는 null이다 — 아래에서 경고하고 끊는다 (#592).
+        JailIntake intake = App.Game.JailIntake;
         if (intake == null)
         {
             Debug.LogWarning("PlayerEscortCommands: JailIntake가 없어 반출할 수 없다", this);
@@ -768,8 +767,8 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         target.Custody.StopEscort();
 
         // 감옥 안이면 재수감 — 아니면 아무 일도 없었던 것처럼 false를 돌려준다.
-        // JailIntake는 매니저가 아니라 장소 오브젝트라 App 파사드 대상이 아니다 (ServerJailRelease와 같은 관례).
-        JailIntake intake = FindFirstObjectByType<JailIntake>();
+        // 감옥이 없는 씬에서는 null이다 (#592).
+        JailIntake intake = App.Game.JailIntake;
         if (intake != null && intake.ServerReturnToJail(target))
         {
             NotifyOwner($"재수감: {target.name}");

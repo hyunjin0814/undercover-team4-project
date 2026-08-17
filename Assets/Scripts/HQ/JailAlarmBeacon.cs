@@ -87,10 +87,9 @@ public class JailAlarmBeacon : MonoBehaviour
 
     private void Start()
     {
-        // 비워두면 씬에서 찾는다 — 자물쇠는 App에 등록된 매니저가 아니라 씬 배치 오브젝트라
-        // App 파사드 경로가 없다 (RoundFundBoard가 JailZone을 찾는 것과 같은 이유)
+        // 비워두면 App에서 받는다 (#592) — 감옥 시설은 실행 순서가 앞서 있어 여기서 이미 읽힌다
         if (m_jailLock == null)
-            m_jailLock = FindFirstObjectByType<JailLock>();
+            m_jailLock = App.Game.JailLock;
 
         if (m_jailLock == null)
         {
