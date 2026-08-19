@@ -12,6 +12,10 @@ PrefabInstance:
       propertyPath: GlobalObjectIdHash
       value: 1073337618
       objectReference: {fileID: 0}
+    - target: {fileID: 3508257805276926635, guid: e7cbd7673d85ce0488590f20f53288ac, type: 3}
+      propertyPath: m_WalkableMask
+      value: 4294967255
+      objectReference: {fileID: 0}
     - target: {fileID: 3692059701882310837, guid: e7cbd7673d85ce0488590f20f53288ac, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
