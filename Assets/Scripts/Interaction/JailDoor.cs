@@ -3,30 +3,31 @@ using UnityEngine;
 using UnityEngine.Localization;
 
 /// <summary>
-/// 감옥 문 (#415/#537) — 도시와 격리된 감옥 방을 잇는 <b>순간이동 상호작용 오브젝트</b>다.
-/// 문 뒤에 실제 공간은 없다. 걸어서 지날 수 있는 통로가 아니라 E를 누르는 지점이다.
+/// 철창문 (#415/#537/#722) — 본부 본관과 유치장 별동을 잇는 <b>순간이동 상호작용 오브젝트</b>다.
+/// 문 뒤가 눈에 보이게 됐지만(별동이 본관에 붙었다) 걸어서 지날 수 있는 통로는 아니다 —
+/// 철창과 문짝 콜라이더가 개구부를 막고 셀 바닥은 여전히 NavMesh 섬이다. E를 누르는 지점이다.
 ///
 /// <b>여닫는 개념 자체가 없다</b> (#537). 자동 개폐(#522)는 "닫힌 문을 신병이 뚫고 지나간다"를 막으려고
 /// 넣은 것인데(문짝 콜라이더가 CharacterController만 막고 NavMeshAgent·밧줄 끌기는 통과했다),
 /// 문턱을 넘는 이동 자체가 없어져 막을 대상이 사라졌다. 미끄러지는 연출도 함께 걷어냈다 — 통과가
-/// 아니라 순간이동이라 문짝이 열릴 이유가 없다. 잠김 상태는 문에 걸린 사슬
-/// (<see cref="JailLockView"/>)이 대신 보여 준다.
+/// 아니라 순간이동이라 문짝이 열릴 이유가 없다.
+///
+/// <b>이 문은 잠금을 다루지 않는다</b> (#744). 잠그는 갈래가 여기 있었지만(#492), 열린 채 방치하는
+/// 것이 이득이 되고 그동안 탈출 이벤트가 재발동하지 못하는 원인이었다. 개방은 배전반 해킹이,
+/// 복구는 <see cref="JailLock"/>의 자동 재잠금이 맡는다 — 플레이어가 손댈 것이 없다.
 ///
 /// <b>이 문은 내 몸이 오가는 것만 담당한다.</b> 신병을 넣는 것은 옆에 둔 <see cref="JailIntakeButton"/>이다 —
 /// 같은 키가 상황에 따라 다른 일을 하면 조준 윤곽선이 무엇을 약속하는지 흐려지기 때문이다
-/// (그쪽 주석에 근거가 있다). E는 세 갈래이고 순서가 곧 우선순위다:
+/// (그쪽 주석에 근거가 있다). E는 두 갈래이고 <b>서 있는 위치로 갈린다</b>:
 ///
-///  1. <b>감옥 안에 있으면 나온다</b> — 따라오던 반출 대상도 함께 문 밖으로 나온다. 확보한 대상이
+///  1. <b>셀 안에 있으면 나온다</b> — 따라오던 반출 대상도 함께 문 밖으로 나온다. 확보한 대상이
 ///     없어도 언제든 나올 수 있다.
-///  2. <b>자물쇠가 풀려 있으면 잠근다</b> (#492/#231) — 털린 감옥을 되돌리는 것은 플레이어의 책임이고,
-///     그 조작이 여기다. 들어가기보다 앞서는 이유: 탈옥 중에 출입부터 되면 "먼저 잠근다"는 압박이 사라진다.
-///  3. <b>밖에서 빈손이면 들어간다</b> — 감옥 안 입장 지점으로 순간이동한다.
+///  2. <b>밖에서 빈손이면 들어간다</b> — 셀 안 입장 지점으로 순간이동한다.
 ///     신병을 <b>끌고 있으면 막는다</b>: 이 문은 플레이어만 옮기므로, 묶인 신병을 둔 채 들어가면
-///     줄이 400m로 늘어나 끊기고 신병만 도시에 남는다. 넣는 것은 옆 버튼의 일이다.
+///     줄이 늘어나 끊기고 신병만 밖에 남는다. 넣는 것은 옆 버튼의 일이다.
 ///
-/// <b>이 컴포넌트는 두 곳에 붙는다</b> — 도시 쪽 컨테이너 문과 <b>감옥 방 안의 출구 문</b>이다.
-/// 방 안에도 조준할 대상이 있어야 나올 수 있기 때문이고, 갈래가 위치로 갈리므로 같은 스크립트로 족하다.
-/// 방 안 문에서는 1번만 성립한다(자물쇠 잠그기는 도시 쪽 일이라 안에서는 건너뛴다).
+/// <b>같은 문 하나가 양방향을 겸한다</b> (#722) — 갈래가 위치로 갈리므로 셀 안쪽에 출구 문을 따로
+/// 둘 이유가 없다.
 ///
 /// <b>이 문으로 감옥에 들어가는 것은 플레이어뿐이다.</b> NPC는 상호작용을 걸 수단이 없고
 /// (E는 <see cref="PlayerInteractor"/>만 쏜다), 서버 처리도 <see cref="PlayerMovement"/>가 있는
@@ -45,14 +46,6 @@ public class JailDoor : NetworkBehaviour, IInteractable
     [Tooltip("판정·배치·순간이동을 실제로 수행하는 쪽 — 이 문은 요청만 넘긴다")]
     [SerializeField] private JailIntake m_intake;
 
-    [Header("자물쇠 — 도시 쪽 문만 물린다")]
-    [Tooltip(
-        "E로 '잠그기'를 할 수 있게 하는 자물쇠 (#231/#492).\n\n"
-            + "감옥 방 안의 출구 문은 <b>비워 둘 것</b>: 잠그는 것은 도시 쪽 조작이라, 물리면 방 안에서도 "
-            + "잠그기 갈래가 생겨 나가기와 경합한다"
-    )]
-    [SerializeField] private JailLock m_jailLock;
-
     [Header("거절 안내")]
     [Tooltip("신병을 끌고 들어가려 할 때 누른 사람에게만 띄울 문구 — HudTable/Hud.Jail.NeedButton")]
     [SerializeField] private LocalizedString m_needButtonMessage;
@@ -68,18 +61,14 @@ public class JailDoor : NetworkBehaviour, IInteractable
 
         if (m_intake == null)
             Debug.LogWarning("JailDoor: JailIntake를 찾지 못했다 — 출입·수감이 동작하지 않는다", this);
-
-        // 자물쇠는 <b>자동 탐색하지 않는다</b> — 비어 있는 것이 곧 "이 문은 잠그는 문이 아니다"라는 뜻이다.
-        // 찾아 넣으면 감옥 방 안의 출구 문까지 자물쇠를 물어, 탈옥 중에 방 안 문이 계속 열려 있고
-        // 잠그기 갈래가 위치 판정 순서에만 기대게 된다. 도시 쪽 문은 프리팹에서 직접 배선한다.
     }
 
     // ---- 플레이어 상호작용 ----
 
     /// <summary>
     /// 항상 뜬다 — 문은 이제 조작이 아니라 출입구다. (사거리·가시선은 PlayerInteractor가 이미 걸러 준다)
-    /// 자물쇠가 잠겨 있어도 막지 않는다: 자물쇠는 침입자(#231)를 막는 장치이지 경찰의 출입을 막는 것이
-    /// 아니고, 잠긴 문 앞에서 E가 죽으면 감옥에 들어갈 방법 자체가 없어진다.
+    /// 철창문이 열려 있든 닫혀 있든 막지 않는다: 잠금은 침입자(#231)를 막는 장치이지 경찰의 출입을
+    /// 막는 것이 아니고, 애초에 이 문은 잠금을 보지 않는다 (#744).
     /// </summary>
     public bool CanInteract(GameObject interactor) => m_intake != null;
 
@@ -96,16 +85,13 @@ public class JailDoor : NetworkBehaviour, IInteractable
         if (zone.ContainsPoint(interactor.transform.position)) // 1. 나오기
             return InteractPrompts.JailExit;
 
-        if (m_jailLock != null && !m_jailLock.IsLocked) // 2. 다시 잠그기
-            return InteractPrompts.JailLock;
-
-        return InteractPrompts.JailEnter; // 3~4. 들어가기 (신병을 끌고 있으면 아래에서 막힌다)
+        return InteractPrompts.JailEnter; // 2. 들어가기 (신병을 끌고 있으면 아래에서 막힌다)
     }
 
-    /// <summary>신병을 끌고는 들어갈 수 없다 (갈래 3) — 눌러 보고 알던 것을 겨눌 때 알린다.</summary>
+    /// <summary>신병을 끌고는 들어갈 수 없다 (갈래 2) — 눌러 보고 알던 것을 겨눌 때 알린다.</summary>
     public LocalizedString BlockedReason(GameObject interactor)
     {
-        // 나오기·잠그기 갈래는 끌고 있어도 성립한다 — 들어가기로 갈 때만 막힌다.
+        // 나오기 갈래는 끌고 있어도 성립한다 — 들어가기로 갈 때만 막힌다.
         if (!ReferenceEquals(PromptLabel(interactor), InteractPrompts.JailEnter))
             return null;
 
@@ -115,7 +101,7 @@ public class JailDoor : NetworkBehaviour, IInteractable
             : null;
     }
 
-    /// <summary>E — 상황에 따라 잠그기·나오기·수감·들어가기 중 하나. (#537)</summary>
+    /// <summary>E — 셀 안이면 나오기, 밖이면 들어가기. (#537/#744)</summary>
     public void Interact(GameObject interactor)
     {
         if (!IsSpawned)
@@ -157,30 +143,17 @@ public class JailDoor : NetworkBehaviour, IInteractable
             return;
 
         // 1. 안에 있으면 나온다 — 따라오던 반출 대상도 함께 (JailIntake가 동행을 찾는다).
-        //
-        // <b>자물쇠보다 먼저 본다.</b> 잠그기는 도시 쪽 문의 일이고, 방 안에서 잠글 이유가 없다.
-        // 순서를 뒤집으면 탈옥이 진행 중일 때 방 안 문이 '잠그기'로 먹혀 <b>갇힌 것처럼 보인다</b> —
-        // 두 번 눌러야 나가지는데, 그 한 번이 무엇을 했는지 안에서는 보이지 않는다.
         if (zone.ContainsPoint(interactor.transform.position))
         {
             m_intake.ServerExitJail(mover);
             return;
         }
 
-        // 2. 털린 감옥을 잠근다 — 자물쇠가 풀린 동안은 들어가기보다 이것이 앞선다 (#492).
-        //    탈옥 중에 출입부터 되면 "먼저 잠근다"는 압박이 사라진다.
-        if (m_jailLock != null && !m_jailLock.IsLocked)
-        {
-            m_jailLock.ServerRelock();
-            Debug.Log("[감옥 문] 자물쇠를 다시 잠갔다");
-            return;
-        }
-
-        // 3. <b>신병을 끌고 있으면 들여보내지 않는다.</b>
+        // 2. <b>신병을 끌고 있으면 들여보내지 않는다.</b>
         //
-        // 이 문은 <b>플레이어만</b> 옮긴다(클래스 주석). 묶인 신병을 둔 채 들어가면 줄이 도시와
-        // 감옥 방 사이 400m로 늘어나 끊기고, 신병은 도시에 홀로 남는다 — 판정도 안 받은 채
-        // 방치돼 결국 달아난다. 넣는 조작은 옆 버튼이므로 여기서는 막고 그쪽으로 보낸다.
+        // 이 문은 <b>플레이어만</b> 옮긴다(클래스 주석). 묶인 신병을 둔 채 들어가면 줄이 늘어나
+        // 끊기고, 신병은 문 밖에 홀로 남는다 — 판정도 안 받은 채 방치돼 결국 달아난다.
+        // 넣는 조작은 옆 버튼이므로 여기서는 막고 그쪽으로 보낸다.
         PlayerEscorter escorter = interactor.GetComponent<PlayerEscorter>();
         if (escorter != null && escorter.TetheredCount > 0)
         {
@@ -189,7 +162,7 @@ public class JailDoor : NetworkBehaviour, IInteractable
             return;
         }
 
-        // 4. 빈손 — 감옥 안으로 들어간다. 신병 수감은 이 문이 아니라 옆 버튼이다 (JailIntakeButton)
+        // 3. 빈손 — 셀 안으로 들어간다. 신병 수감은 이 문이 아니라 옆 버튼이다 (JailIntakeButton)
         m_intake.ServerEnterJail(mover);
     }
 

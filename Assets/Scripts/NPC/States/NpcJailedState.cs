@@ -64,20 +64,29 @@ public class NpcJailedState : NpcStateBase
         // Warp = 위치를 즉시 옮기고 NavMesh에 다시 붙이는 것. 대상이 어디에 있었든(문 앞·도시 한복판)
         // 감옥 안 배치 지점으로 건너오는 유일한 수단이다 — 두 NavMesh 섬 사이에 경로가 없기 때문이다.
         //
-        // 에이전트를 끄지 않으므로 재부착 실패로 굳을 위험은 없다. 반환값을 보는 이유는 실패가 조용하기
-        // 때문이다: 지점이 NavMesh 밖이면 워프가 실패하고 대상은 <b>문 앞에 그대로 남는다</b> —
-        // 눈으로는 "수감이 안 됐네"로만 보여 씬 배치 실수를 놓치기 쉽다.
-        if (!m_owner.Agent.Warp(m_owner.Custody.JailSpot.position))
+        // 반환값을 보는 이유는 실패가 조용하기 때문이다: 지점이 NavMesh 밖이면 대상이
+        // <b>문 앞에 그대로 남는데</b>, 눈으로는 "수감이 안 됐네"로만 보여 씬 배치 실수를 놓치기 쉽다.
+        if (m_owner.Agent.Warp(m_owner.Custody.JailSpot.position))
         {
-            Debug.LogWarning(
-                $"NpcJailedState: 배치 지점으로 워프 실패 — 감옥 밖에 남는다. "
-                    + $"지점이 감옥 NavMesh 위에 있는지 확인할 것: {m_owner.Custody.JailSpot.name}",
-                m_owner
-            );
+            m_owner.transform.rotation = SpotRotation();
             return;
         }
 
-        m_owner.transform.rotation = SpotRotation();
+        // <b>에이전트가 꺼져 있으면 실패가 정상이다</b> — Warp는 그때 false를 돌려주지만 몸은 옮겨
+        // 준다(실측). 들어오는 경로는 <b>기절 래그돌인 채로 수감되는 신병</b>이다: 검거는 무력화가
+        // 전제라 거의 모든 수감이 이쪽이고, 밧줄을 걷어도 래그돌이 에이전트를 쥐고 있어 켜지지 않는다
+        // (<c>NpcRopeDrag.ReleaseDrag</c>의 래그돌 가드 — "뗀 쪽이 되돌린다"). NavMesh 재부착은
+        // 일어날 때 래그돌이 하고(<c>NpcRagdoll</c>), <see cref="Tick"/>은 붙기 전까지 배회를 미룬다.
+        //
+        // 방향은 맞추지 않는다 — 래그돌이 쥔 몸의 루트 회전은 골반을 따라가므로 여기서 돌려도 되돌아온다.
+        if (!m_owner.Agent.enabled)
+            return;
+
+        Debug.LogWarning(
+            $"NpcJailedState: 배치 지점으로 워프 실패 — 감옥 밖에 남는다. "
+                + $"지점이 감옥 NavMesh 위에 있는지 확인할 것: {m_owner.Custody.JailSpot.name}",
+            m_owner
+        );
     }
 
     /// <summary>

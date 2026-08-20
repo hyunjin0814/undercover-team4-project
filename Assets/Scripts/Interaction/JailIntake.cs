@@ -557,6 +557,12 @@ public class JailIntake : CommonManagerBase
         Transform exit = m_jailZone.ExitPoint;
 
         List<NpcCustody> followers = NpcCustody.FindFollowersOf(mover.transform);
+
+        // 데리고 나오는 대상이 있을 때만 정문을 연다 (#744) — 경찰 혼자 나오는 데 본부 대문이
+        // 저절로 열릴 이유는 없다. 반출 대상은 여기서부터 도시까지 걸어 나간다.
+        if (followers.Count > 0)
+            m_jailZone.ServerOpenFrontDoors();
+
         for (int i = 0; i < followers.Count; i++)
         {
             followers[i].ServerExitJail(m_jailZone.ExitSlot(i + 1)); // 0번은 플레이어 자리다

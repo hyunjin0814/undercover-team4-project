@@ -60,8 +60,15 @@ public class NpcController : NetworkBehaviour
     // 라운드 종료 정지(freeze) 플래그 — 서버(또는 오프라인)에서만 의미. 켜지면 FSM/이동을 멈춘다.
     private bool m_frozen;
 
-    // 프리팹이 정한 통행 마스크 — 도로를 빼고 되돌릴 때의 기준값 (#634 후속). Awake에서 1회 확정.
-    private int m_baseAreaMask;
+    // 프리팹이 정한 통행 마스크 — Awake에서 1회 확정하고 이후 <b>절대 바뀌지 않는다</b> (#634 후속).
+    private int m_prefabAreaMask;
+
+    // 지금 추가로 열어 준 영역(Jail·HQ) — 유치장에 드나드는 동안만 얹힌다 (#744, SetGrantedAreas)
+    private int m_grantedAreas;
+
+    // 호출부가 요구한 영역 — m_grantedAreas와 다르면 아직 반영하지 못한 것이다 (TickAreaGrant)
+    private int m_requestedAreas;
+    private float m_areaGrantProbeSeconds;
 
     // 도로 위라 아직 마스크를 좁히지 못했다 — 벗어나는 즉시 좁힌다 (TickRoadEgress)
     private bool m_roadEgressPending;
@@ -120,9 +127,9 @@ public class NpcController : NetworkBehaviour
         m_agent = GetComponent<NavMeshAgent>();
 
         // 프리팹이 정한 통행 마스크를 <b>좁히기 전에</b> 잡아 둔다 (#634 후속).
-        // 되돌릴 때 NavMesh.AllAreas로 복구하면 프리팹이 일부러 뺀 영역(Jail, #415)까지 되살아나고,
+        // 되돌릴 때 NavMesh.AllAreas로 복구하면 프리팹이 일부러 뺀 영역(Jail·HQ)까지 되살아나고,
         // 좁아진 뒤의 m_agent.areaMask를 기준으로 삼으면 한 번 좁힌 뒤 영영 못 되돌린다.
-        m_baseAreaMask = m_agent.areaMask;
+        m_prefabAreaMask = m_agent.areaMask;
 
         m_custody = GetComponent<NpcCustody>();
         m_death = GetComponent<NpcDeath>();
@@ -155,8 +162,13 @@ public class NpcController : NetworkBehaviour
         m_stateMachine.AddState(NpcState.Releasing, new NpcReleasingState(this, m_fleeConfig));
         m_stateMachine.AddState(NpcState.Dead, new NpcDeadState(this));
 
-        // 도로 통행 정책은 새 상태의 Enter()가 목적지를 잡기 <b>전에</b> 걸려야 한다 — 그래서
+        // 통행 정책은 새 상태의 Enter()가 목적지를 잡기 <b>전에</b> 걸려야 한다 — 그래서
         // OnStateChanged가 아니라 OnBeforeEnter다 (#634 후속)
+        //
+        // <b>순서가 계약이다.</b> 유치장 통행 반납이 도로 정책보다 먼저다 — 반납이 뒤로 가면
+        // ApplyRoadPolicy가 아직 넓은 기준값으로 마스크를 걸고, Enter()가 그 마스크로 본부 실내에
+        // 배회 지점을 잡는다 (#744).
+        m_stateMachine.OnBeforeEnter += RevokeGrantedAreasOnCityLife;
         m_stateMachine.OnBeforeEnter += ApplyRoadPolicy;
 
         // FSM 전이(서버/오프라인에서만 발생)를 동기화 변수 또는 로컬 이벤트로 흘려보낸다
@@ -243,6 +255,11 @@ public class NpcController : NetworkBehaviour
         // 떨거나 몸을 두고 루트만 날아간다. <b>갈리는 기준은 "대상이 래그돌이냐"다</b>(docs/ragdoll.md §8).
         if (m_death.IsDead)
             return;
+
+        // 미뤄 둔 Jail·HQ 통행 회수 (#744) — <b>사망 게이트 뒤</b>다. 시체는 돌려줄 통행이 없고,
+        // 앞에 두면 본부에서 죽은 방출 대상이 영영 끝나지 않는 회수를 매 주기 재시도한다.
+        // 기절·넉백은 이 게이트를 지나므로, 멈춰 있는 동안에도 발밑은 계속 확인된다.
+        TickAreaGrant();
 
         // 방치 회복 — 사망 게이트 뒤, 나머지 게이트보다는 앞 (#707)
         m_health.Tick();
@@ -455,14 +472,92 @@ public class NpcController : NetworkBehaviour
     // ---- 도로 통행 정책 (#634 후속) ----
 
     /// <summary>
-    /// 프리팹이 정한 통행 마스크 — <b>도로 정책이 적용되기 전</b>의 값이다.
+    /// 이 몸에 지금 허용된 통행 마스크 — <b>도로 정책이 적용되기 전</b>의 값이다.
+    /// 프리팹이 정한 마스크에 <see cref="SetGrantedAreas"/>로 열어 준 영역을 얹은 것.
     ///
     /// "이 몸을 NavMesh 어디에 놓을 수 있는가"를 묻는 쪽(넉백 착지·래그돌 기상)이 쓴다.
     /// 그건 "지금 걸어도 되는 곳인가"와 다른 질문이라 <see cref="NavMeshAgent.areaMask"/>를
     /// 쓰면 안 된다 — 배회 중이라 마스크가 좁아진 몸이 도로 위에 떨어지면 착지점을 못 찾는다.
-    /// (Jail 제외는 이 값에도 살아 있어 #415의 이유는 그대로 지켜진다)
+    /// (Jail·HQ 제외는 부여받지 않은 몸에는 그대로 살아 있어 #415/#722의 이유가 지켜진다)
     /// </summary>
-    internal int BaseAreaMask => m_baseAreaMask;
+    internal int BaseAreaMask => m_prefabAreaMask | m_grantedAreas;
+
+    /// <summary>
+    /// 유치장에 드나드는 동안 <b>추가로</b> 열어 줄 통행 영역 — 서버(또는 오프라인) 전용. (#744)
+    ///
+    /// 시민 프리팹의 마스크는 Jail·HQ를 빼고 있어(배회 시민이 셀·본부에 걸어 들어오지 못하게) 수감자와
+    /// 방출 대상만 그때그때 열어 줘야 한다. 부르는 곳은 셋이고 <b>덮어쓰기</b>다(누적이 아니다):
+    /// 수감 시 <c>JailMask</c>, 셀을 나설 때 <c>HqMask</c>, 도시에 정착하면 0.
+    ///
+    /// <b>프리팹 마스크가 아니라 이 값을 갈아 끼우는 이유</b>는 <see cref="ApplyRoadPolicy"/>가 상태
+    /// 전이마다 <see cref="BaseAreaMask"/>로 되돌리기 때문이다 — 에이전트의 <c>areaMask</c>를 직접
+    /// 건드리면 다음 전이에서 지워진다.
+    /// </summary>
+    internal void SetGrantedAreas(int areas)
+    {
+        m_requestedAreas = areas;
+        ApplyGrantedAreas();
+    }
+
+    /// <summary>
+    /// 요구받은 영역을 실제로 반영한다 — <b>얻는 것은 즉시, 잃는 것은 발밑을 비운 뒤.</b> (#744)
+    ///
+    /// <b>잃는 쪽을 미루는 이유</b>는 도로와 같다(<see cref="ApplyRoadPolicy"/>): 서 있는 폴리곤이
+    /// 마스크 밖이 되면 경로 계산이 통째로 실패해(<c>PathInvalid</c>) 그 자리에서 굳는다. 도로와
+    /// 다른 점은 굳는 자리가 <b>본부 실내나 셀</b>이라는 것이다 — 도로처럼 스스로 걸어 나올 수도 없다.
+    ///
+    /// <b>얻는 쪽까지 함께 미루면 안 된다.</b> 셀을 나설 때 Jail을 놓고 HQ를 받는데, 그 순간 몸은
+    /// 아직 셀 안(Jail 위)이라 둘을 묶어 미루면 HQ도 안 열린 채 워프가 진행되고, 워프는 마스크를
+    /// 보지 않으므로(<see cref="TryWarpNear"/>는 <c>AllAreas</c>로 붙인다) <b>못 걷는 폴리곤 위에
+    /// 몸을 내려놓는다</b>.
+    ///
+    /// 이 구조라 <b>워프 실패도 저절로 수습된다</b> — 셀에 남으면 다음 확인에서 발밑이 여전히 Jail이라
+    /// 그 통행이 계속 유지된다.
+    /// </summary>
+    private void ApplyGrantedAreas()
+    {
+        int losing = m_grantedAreas & ~m_requestedAreas;
+        int keep = losing != 0 ? losing & NpcNavAreas.AreaMaskAt(transform.position) : 0;
+        int next = m_requestedAreas | keep;
+
+        if (next == m_grantedAreas)
+            return;
+
+        m_grantedAreas = next;
+
+        // 지금 상태 기준으로 다시 건다 — 이 호출은 상태 전이 밖에서도 오므로(수감·방출) 여기서
+        // 걸지 않으면 다음 전이까지 옛 마스크가 남는다.
+        ApplyRoadPolicy(m_stateMachine.CurrentState);
+    }
+
+    /// <summary>
+    /// 평소 시민 생활로 돌아오면 유치장 통행을 반납한다 — <see cref="NpcStateMachine.OnBeforeEnter"/>. (#744)
+    ///
+    /// <b>Idle·Walk가 기준인 이유</b>는 그 둘이 "이 사람의 볼일이 끝났다"는 유일한 공통 종착지라서다 —
+    /// 탈옥 도주도, 반출 도주도, 잔류도 결국 여기로 가라앉는다. 방출 경로마다 회수를 배선하면
+    /// 새 경로가 생길 때마다 빠뜨린다.
+    ///
+    /// 여기서는 "이제 필요 없다"만 알린다 — 실제로 언제 빠지는지는 <see cref="ApplyGrantedAreas"/>가 정한다.
+    /// </summary>
+    private void RevokeGrantedAreasOnCityLife(NpcState next)
+    {
+        if (next is NpcState.Idle or NpcState.Walk)
+            SetGrantedAreas(0);
+    }
+
+    // 미뤄 둔 회수가 가능해졌는지 확인한다 — 서버(또는 오프라인) 전용. 도로 이탈과 같은 주기로 본다. (#744)
+    private void TickAreaGrant()
+    {
+        if (m_grantedAreas == m_requestedAreas)
+            return;
+
+        m_areaGrantProbeSeconds += Time.deltaTime;
+        if (m_areaGrantProbeSeconds < k_roadEgressProbeInterval)
+            return;
+        m_areaGrantProbeSeconds = 0f;
+
+        ApplyGrantedAreas();
+    }
 
     // 도로 이탈 확인 주기(초) — 대기 중인 개체만, 그것도 간격을 두고 본다.
     // 매 프레임 NavMesh를 샘플하면 군중 규모에서 그대로 비용이 된다.
@@ -482,7 +577,7 @@ public class NpcController : NetworkBehaviour
         if (NpcNavAreas.AllowsRoad(next))
         {
             m_roadEgressPending = false;
-            SetAreaMask(m_baseAreaMask);
+            SetAreaMask(BaseAreaMask);
             return;
         }
 
@@ -490,12 +585,12 @@ public class NpcController : NetworkBehaviour
         {
             m_roadEgressPending = true;
             m_roadEgressProbeSeconds = 0f;
-            SetAreaMask(m_baseAreaMask); // 벗어날 때까지는 도로를 쓸 수 있어야 나갈 수 있다
+            SetAreaMask(BaseAreaMask); // 벗어날 때까지는 도로를 쓸 수 있어야 나갈 수 있다
             return;
         }
 
         m_roadEgressPending = false;
-        SetAreaMask(NpcNavAreas.ExcludeRoad(m_baseAreaMask));
+        SetAreaMask(NpcNavAreas.ExcludeRoad(BaseAreaMask));
     }
 
     /// <summary>
@@ -523,7 +618,7 @@ public class NpcController : NetworkBehaviour
         if (!NpcNavAreas.IsOnRoad(transform.position))
         {
             m_roadEgressPending = false;
-            SetAreaMask(NpcNavAreas.ExcludeRoad(m_baseAreaMask));
+            SetAreaMask(NpcNavAreas.ExcludeRoad(BaseAreaMask));
             return;
         }
 
@@ -602,7 +697,7 @@ public class NpcController : NetworkBehaviour
     {
         exit = default;
 
-        int offRoadMask = NpcNavAreas.ExcludeRoad(m_baseAreaMask);
+        int offRoadMask = NpcNavAreas.ExcludeRoad(BaseAreaMask);
         Vector3 origin = transform.position;
 
         float bestClearSqr = float.MaxValue;

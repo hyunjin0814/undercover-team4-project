@@ -10426,7 +10426,11 @@ MonoBehaviour:
   m_spawnPoints: []
   m_spawnRadius: 8
   m_sampleMaxDistance: 4
+  m_maxSnapDistance: 1.5
+  m_roadClearance: 0.5
   m_minSpawnSeparation: 2
+  m_validateConnectivity: 1
+  m_anchorProbeCount: 8
   m_spawnPerFrame: 3
   m_spawnOnStart: 0
 --- !u!1 &233511321 stripped
@@ -65939,8 +65943,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1543622379}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.14118773, y: 0.28661373, z: -0.042748205, w: 0.94662094}
-  m_LocalPosition: {x: 30.5, y: 3.4, z: 164.5}
+  m_LocalRotation: {x: -0.044837173, y: 0.94534576, z: -0.28730813, w: -0.14753023}
+  m_LocalPosition: {x: 35.389893, y: 3.9, z: 167.06197}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -87325,6 +87329,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 1392311702}
     m_Modifications:
+    - target: {fileID: 1394153943246874420, guid: 72ac0c64722ce8741812059d1badf100, type: 3}
+      propertyPath: m_fontSize
+      value: 35.05
+      objectReference: {fileID: 0}
     - target: {fileID: 1669176161116226989, guid: 72ac0c64722ce8741812059d1badf100, type: 3}
       propertyPath: m_AnchorMax.y
       value: 0
@@ -87349,6 +87357,10 @@ PrefabInstance:
       propertyPath: m_AnchoredPosition.y
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 1848505696608719090, guid: 72ac0c64722ce8741812059d1badf100, type: 3}
+      propertyPath: m_fontSize
+      value: 35.05
+      objectReference: {fileID: 0}
     - target: {fileID: 2466750112211977979, guid: 72ac0c64722ce8741812059d1badf100, type: 3}
       propertyPath: m_AnchorMax.y
       value: 0
@@ -87372,6 +87384,10 @@ PrefabInstance:
     - target: {fileID: 2466750112211977979, guid: 72ac0c64722ce8741812059d1badf100, type: 3}
       propertyPath: m_AnchoredPosition.y
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4212604529772346419, guid: 72ac0c64722ce8741812059d1badf100, type: 3}
+      propertyPath: m_fontSize
+      value: 35.05
       objectReference: {fileID: 0}
     - target: {fileID: 6450168059518259497, guid: 72ac0c64722ce8741812059d1badf100, type: 3}
       propertyPath: m_AnchorMax.y

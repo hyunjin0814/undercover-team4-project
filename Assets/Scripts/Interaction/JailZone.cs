@@ -37,10 +37,20 @@ public class JailZone : NetworkedManagerBase
 
     [Header("퇴장 지점 (비우면 감옥 자신의 위치)")]
     [Tooltip(
-        "감옥에서 나오는 플레이어·반출 대상이 서는 도시 쪽 자리 — 감옥 문 바깥 NavMesh 위에 둘 것. "
-            + "탈옥으로 방출된 수감자도 여기로 나온다 (#231)"
+        "셀에서 나오는 플레이어·반출 대상이 서는 자리 — <b>철창문 안쪽 본관 실내</b>의 NavMesh(HQ 영역) "
+            + "위에 둘 것 (#744). 탈옥으로 방출된 수감자도 여기로 나온 뒤 본부를 가로질러 도시로 걸어 나간다.\n\n"
+            + "Z축(파랑 화살표)이 <b>본관 안쪽</b>을 보게 둘 것 — 여럿이 한 번에 나올 때 그 방향으로 "
+            + "줄이 늘어난다 (ExitSlot). 반대로 두면 자리가 철창 너머로 파고든다"
     )]
     [SerializeField] private Transform m_exitPoint;
+
+    [Header("본부 정문 (비우면 자동 개폐 없음)")]
+    [Tooltip(
+        "방출·반출 대상이 도시로 나갈 때 열어 줄 본부 정문 (#744). 안 열면 닫힌 문짝을 그대로 "
+            + "통과한다 — 문짝 콜라이더는 CharacterController만 막고 NavMeshAgent는 지나간다.\n\n"
+            + "닫는 것은 플레이어 몫이다 (E 토글)"
+    )]
+    [SerializeField] private DoubleDoor[] m_frontDoors;
 
     [Header("감옥 방 범위 (비우면 자식에서 자동 탐색)")]
     [Tooltip(
@@ -99,10 +109,37 @@ public class JailZone : NetworkedManagerBase
     public IReadOnlyCollection<NpcController> Inmates => m_inmates;
 
     /// <summary>
-    /// 감옥에서 나오는 대상이 서는 도시 쪽 지점 — 미배선이면 감옥 자신의 위치. (#415/#537)
-    /// 감옥 방은 도시와 이어진 경로가 없으므로, 방출·반출·퇴장이 전부 여기로 순간이동한다.
+    /// 셀에서 나오는 대상이 서는 <b>본관 실내</b> 지점 — 미배선이면 감옥 자신의 위치. (#415/#537/#744)
+    /// 셀 바닥은 본관과 이어진 경로가 없으므로, 방출·반출·퇴장이 전부 여기로 순간이동한다.
+    /// 그 뒤 도시까지는 <b>걸어서</b> 간다 — 그 구간이 본부가 알아채고 막을 수 있는 창이다.
     /// </summary>
     public Transform ExitPoint => m_exitPoint != null ? m_exitPoint : transform;
+
+    /// <summary>
+    /// 본부 정문을 연다 — 셀에서 나온 대상이 도시로 나갈 길을 튼다. 서버(또는 오프라인) 전용. (#744)
+    ///
+    /// 열지 않아도 <b>NPC는 지나간다</b>(문짝 콜라이더가 NavMeshAgent를 막지 않는다) — 여는 것은
+    /// 통행이 아니라 <b>그림</b>을 위해서다. 닫힌 문을 뚫고 나가는 장면이 곧 "탈옥이 일어났다"는
+    /// 신호를 죽인다.
+    ///
+    /// <b>닫지는 않는다.</b> 자동으로 닫으면 아직 줄지어 나가는 뒷사람이 문을 통과하게 되고,
+    /// 몇 명이 남았는지는 여기서 알 수 없다. 닫는 것은 플레이어의 E다.
+    ///
+    /// 잠긴 문은 건너뛴다 — 준비 구간의 잠금은 <b>플레이어</b>의 현장 선점을 막는 것이고
+    /// (<see cref="DoubleDoor"/>), NPC는 어차피 지나가므로 열어서 얻는 것이 없다.
+    /// </summary>
+    public void ServerOpenFrontDoors()
+    {
+        if (IsSpawned && !IsServer)
+            return;
+
+        if (m_frontDoors == null)
+            return;
+
+        for (int i = 0; i < m_frontDoors.Length; i++)
+            if (m_frontDoors[i] != null && !m_frontDoors[i].IsLocked)
+                m_frontDoors[i].ServerSetOpen(true);
+    }
 
     /// <summary>문에 E를 눌러 들어온 플레이어가 서는 감옥 안 지점 — 미배선이면 감옥 자신의 위치. (#537)</summary>
     public Transform PlayerEntryPoint => m_playerEntryPoint != null ? m_playerEntryPoint : transform;
@@ -113,8 +150,8 @@ public class JailZone : NetworkedManagerBase
     /// 퇴장 지점 하나에 전부 내보내면 같은 좌표에 겹쳐 놓이고, 물리가 그 겹침을 풀면서 서로를
     /// 튕겨낸다(플레이어의 CharacterController와 NPC 캡슐이 같은 자리에서 만난다).
     ///
-    /// 좌우로 번갈아 벌리되 줄은 <b>퇴장 지점이 보는 쪽</b>(도시 방향)으로 늘어난다. 반대로 깔면
-    /// 뒤가 곧 감옥 벽이라 자리가 벽 안으로 파고들고, NavMesh 스냅이 그것을 도로 끌어내면서
+    /// 좌우로 번갈아 벌리되 줄은 <b>퇴장 지점이 보는 쪽</b>(본관 안쪽)으로 늘어난다. 반대로 깔면
+    /// 뒤가 곧 철창이라 자리가 벽 안으로 파고들고, NavMesh 스냅이 그것을 도로 끌어내면서
     /// 결국 같은 자리에 몰린다.
     ///
     /// 0번은 퇴장 지점 그 자신이다 — 데리고 나오는 플레이어가 쓰는 자리라, 동행은 1번부터 준다.
@@ -373,9 +410,9 @@ public class JailZone : NetworkedManagerBase
         RefreshBountyTotal();
         Debug.Log($"[유치장] 수용: {npc.name} — 현재 {InmateCount}명, 누적 현상금 {BountyTotal}원");
 
-        // 자동 재잠금은 제거됐다 (#492) — 탈옥으로 열린 자물쇠는 <b>플레이어가 직접 잠가야 한다</b>
-        // (유치장 문에 E). 수감만 하면 저절로 잠기던 예전 처리는 "털렸으면 가서 잠근다"는 책임을
-        // 없애 버렸다. 열린 자물쇠는 문이 열린 채로 남고, 본부 경보등(JailAlarmBeacon)이 함께 알린다.
+        // 수감 시 재잠금은 하지 않는다 (#492) — 잠금 복구는 JailLock의 자동 재잠금 타이머 몫이다 (#744).
+        // 수감이 잠금까지 겸하면 "털렸으면 어떻게든 되돌린다"가 수감 타이밍에 얹혀, 되돌리는 시점이
+        // 유치장 사정에 따라 들쭉날쭉해진다.
 
         // 수감 중 사망을 지켜본다 — 죽으면 점유에서 빼야 한다 (아래 HandleInmateDied)
         npc.Death.OnDied += HandleInmateDied;

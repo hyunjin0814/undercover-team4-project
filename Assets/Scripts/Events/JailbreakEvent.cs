@@ -21,13 +21,14 @@ using UnityEngine;
 /// 조건 충족), 반복 수익은 ArrestJudge가 첫 판정 후 마커 보상을 비워 막는다.
 ///
 /// 흐름(전부 서버 권위 · #56):
-///  1. <see cref="CanTrigger"/> — 자물쇠 잠김 + 수감자 존재일 때 성립 (본부 무인 조건은 #311에서 제거).
+///  1. <see cref="CanTrigger"/> — <b>수감자 존재</b>일 때 성립 (본부 무인 조건은 #311에서, 자물쇠 잠김
+///     조건은 #744에서 제거 — 그 조건이 "안 잠그는 게 이득"과 라운드 내내 재발동 불가를 함께 만들었다).
 ///  2. <see cref="ServerBegin"/> — 침입자 NPC를 도시 스폰 포인트에 스폰(다음 프레임에 StartIntrude).
 ///     · 걸어오는 동안 유치장이 비면(반출) 침입을 포기하고 도심에 잔류한다 — 전제가 무너진 발동이라,
 ///       그대로 두면 아무도 없는 유치장을 털어 자물쇠만 열어 놓고 끝난다.
 ///  3. 해제 착수(OnIntrudeUnlockStarted) — 본부 경보를 울린다(자물쇠 경보 한정 — 토스트는 4에서).
 ///     <b>여기서부터는 유치장이 비어도 접지 않는다</b> — 이 구간이 팀의 마지막 저지 기회라(위 '대응 구간'),
-///     이미 알린 위협을 시스템이 대신 지우면 달려온 쪽에는 이유가 읽히지 않는다. 열린 자물쇠는 플레이어가 잠근다.
+///     이미 알린 위협을 시스템이 대신 지우면 달려온 쪽에는 이유가 읽히지 않는다. 열린 철창문은 스스로 닫힌다 (#744).
 ///  4. 해제 완료(OnIntrudeFinished reached=true) — 자물쇠를 열고 수감자를 전원 방출한다. 전원에게 토스트를 띄운다.
 ///     · 방출: JailZone.ReleaseInmate + NpcCustody.ClearDelivered + StartFlee(재검거 가능하게)
 ///     · 진범만: RoundManager.ReportCriminalEscaped + WantedListManager.ReinstateByNpcId
@@ -136,12 +137,13 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         if (Spawner == null || Spawner.SpawnPoints == null || Spawner.SpawnPoints.Count == 0)
             return false;
 
-        // 자물쇠가 아직 잠겨 있고, 풀어 줄 수감자가 실제로 있어야 성립한다 — 빈 유치장에서
-        // 자물쇠만 여는 무의미 발동을 막는다. 본부 무인 조건은 #311에서 제거 — 본부에 있어도
-        // 침입자를 알아채고 저지해야 하는 상시 위협이 됐다.
-        // (자물쇠는 새 수감자가 들어올 때 JailZone.Admit이 다시 잠그므로 연속 발동은 자연히 막힌다)
-        if (!m_jailLock.IsLocked)
-            return false;
+        // 풀어 줄 수감자가 실제로 있어야 성립한다 — 빈 유치장을 터는 무의미 발동을 막는다.
+        // 본부 무인 조건은 #311에서 제거 — 본부에 있어도 침입자를 알아채고 저지해야 하는 상시 위협이 됐다.
+        //
+        // <b>자물쇠 잠김 조건은 #744에서 뺐다.</b> 열린 자물쇠를 되돌리는 유일한 수단이 플레이어의
+        // E였는데, 안 누르면 이 조건이 false로 굳어 <b>그 라운드 내내 재발동하지 않았다</b> — 열어 둘수록
+        // 이득이 되는 구조였다. 이제 복구는 JailLock의 자동 재잠금이 하고, 연속 발동 억제는 추첨 주기
+        // (SuddenEventManager)가 맡는다.
         if (m_jailZone.InmateCount <= 0)
             return false;
 
@@ -224,7 +226,7 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
         //
         // <b>경보가 울리기 전에만 접는다.</b> 이동 구간은 아직 아무도 이벤트를 모르니 조용히 접어도
         // 잃는 것이 없지만, 해제 구간은 팀이 달려와 막는 마지막 기회다(#261) — 그 기회를 시스템이
-        // 대신 없애면 안 된다. 경보 뒤로는 빈 유치장이어도 끝까지 가고, 자물쇠는 플레이어가 다시 잠근다.
+        // 대신 없애면 안 된다. 경보 뒤로는 빈 유치장이어도 끝까지 가고, 철창문은 스스로 닫힌다 (#744).
         //
         // 접는 방식은 사이렌 제지(<see cref="ServerRepelIntruder"/>)와 같은 경로다 — 침입 상태를
         // 벗어나면 채널링이 조용히 취소되고(NpcIntrudeState 주석), 배회 복귀를 HandleStateChanged가
@@ -282,8 +284,12 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
             if (point == null)
                 continue;
 
+            // 침입자도 시민 프리팹과 같은 마스크를 쓴다 — 셀·본부 실내에 솟지 않는다 (#744).
+            // 걸어와 배전반 앞에 서는 것이 이 이벤트의 관찰 구간이라(#261), 본부 안에서 시작하면
+            // 그 구간이 통째로 사라진다.
             if (SuddenEventUtil.TryFindSpawnPositionNear(
-                    point.position, 0f, m_spawnRadius, m_navSampleMaxDistance, m_maxSpawnAttempts, out result))
+                    point.position, 0f, m_spawnRadius, m_navSampleMaxDistance, m_maxSpawnAttempts,
+                    SuddenEventUtil.SpawnAreaMask(m_intruderPrefab), out result))
                 return true;
         }
 
@@ -418,6 +424,12 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
                 m_releaseBuffer.Add(inmate);
         }
 
+        // 정문을 먼저 연다 (#744) — 방출된 수감자는 본관 실내로 나와 본부를 가로질러 도시로 달아난다.
+        // 열지 않으면 닫힌 문짝을 그대로 통과해(NavMeshAgent는 문짝에 막히지 않는다) 탈옥이 일어난
+        // 흔적이 화면에 남지 않는다.
+        if (m_releaseBuffer.Count > 0)
+            m_jailZone.ServerOpenFrontDoors();
+
         for (int i = 0; i < m_releaseBuffer.Count; i++)
             ReleaseInmate(m_releaseBuffer[i], i);
 
@@ -444,15 +456,16 @@ public class JailbreakEvent : MonoBehaviour, ISuddenEvent
                 WantedList.ReinstateByNpcId(inmate.NetworkObjectId);
         }
 
-        // 감옥은 도시와 이어진 NavMesh 경로가 아예 없는 격리 공간이라(#537), 방출만 하면 방 안에 그대로
-        // 남는다 — 문 밖 퇴장 지점으로 순간이동시킨 뒤 도주시킨다. (예전에는 Jail 통행 회수까지 함께
-        // 했는데, 통행 게이팅 자체가 사라져 워프만 남았다)
+        // 셀 바닥은 본관과 이어진 NavMesh 경로가 없는 섬이라(#722), 방출만 하면 셀 안에 그대로
+        // 남는다 — 철창문 안쪽 퇴장 지점으로 순간이동시킨 뒤 도주시킨다. 그쪽이 셀 통행을 본부 통행으로
+        // 갈아 끼우므로(NpcCustody.ServerExitJail) 여기서 마스크를 따로 손대지 않는다 (#744).
         //
         // 자리를 하나씩 벌린다 — 전원을 한 좌표에 쏟으면 겹침을 푸는 물리가 서로를 튕겨낸다.
         inmate.Custody.ServerExitJail(m_jailZone.ExitSlot(slot));
 
-        // 감옥을 뛰쳐나와 도주한다 — 침입자를 위협으로 삼아 반대로 달아난 뒤 배회로 섞여 든다.
-        // 근처에 플레이어가 없으면 도주 상태가 곧 배회로 복귀한다(NpcFleeState).
+        // 본부를 가로질러 도주한다 — 침입자를 위협으로 삼아 반대로 달아난 뒤 배회로 섞여 든다.
+        // 침입자는 배전반 앞(별동 바깥)에 있으므로 도주 방향이 자연히 본부 정문 쪽으로 잡힌다.
+        // 근처에 플레이어가 없으면 도주 상태가 곧 배회로 복귀하고, 그때 본부 통행이 반납된다(#744).
         inmate.Reaction.StartFlee(m_intruder != null ? m_intruder.transform : null);
 
         // 방출된 난동꾼은 조용한 시민으로 남지 않는다 — 도주가 가라앉으면 원래 소란 행동을 재개한다

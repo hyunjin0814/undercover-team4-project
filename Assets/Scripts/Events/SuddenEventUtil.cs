@@ -151,8 +151,23 @@ public static class SuddenEventUtil
     }
 
     /// <summary>
+    /// 스폰할 프리팹이 설 수 있는 영역 마스크 — 프리팹 에이전트의 통행 마스크에서 도로만 더 뺀다
+    /// (라운드 시작부터 차도 한복판에 서 있지 않게, #634). <see cref="NpcSpawner"/>와 같은 계산이다.
+    ///
+    /// <b>안 걸면 못 가는 영역에 스폰된다</b> (#744) — 시민 마스크는 셀(Jail)·본부 실내(HQ)를 빼고
+    /// 있는데 <c>NavMesh.AllAreas</c>로 고르면 그 안에 솟고, 딛고 선 폴리곤이 마스크 밖이라 굳는다.
+    /// </summary>
+    public static int SpawnAreaMask(NpcController prefab)
+    {
+        NavMeshAgent agent = prefab != null ? prefab.GetComponent<NavMeshAgent>() : null;
+        return NpcNavAreas.ExcludeRoad(agent != null ? agent.areaMask : NavMesh.AllAreas);
+    }
+
+    /// <summary>
     /// 기준점 주변 링(min~max 거리) 안에서 NavMesh 위 스폰 지점을 찾는다 — 시도 실패가 반복되면 false.
     /// 화면 밖·너무 붙지 않게 플레이어에게서 일정 거리를 두고 스폰하기 위함.
+    /// <paramref name="areaMask"/>는 <b>스폰할 프리팹이 설 수 있는 영역</b>이다 — <see cref="SpawnAreaMask"/>로
+    /// 뽑아 넘길 것. 기본값을 두지 않는 이유는 빠뜨리면 그대로 버그가 되기 때문이다 (#744).
     /// <paramref name="hiddenFromPlayers"/>가 참이면 모든 현장 플레이어의 시야에서 벗어난 지점만
     /// 통과시킨다 (#332 A — 눈앞 팝인 방지). 전 시도가 시야에 걸리면 false — 호출부의 불발 폴백 유지.
     /// </summary>
@@ -162,6 +177,7 @@ public static class SuddenEventUtil
         float distanceMax,
         float navSampleMaxDistance,
         int maxAttempts,
+        int areaMask,
         out Vector3 result,
         bool hiddenFromPlayers = false
     )
@@ -177,7 +193,7 @@ public static class SuddenEventUtil
                     candidate,
                     out NavMeshHit hit,
                     navSampleMaxDistance,
-                    NavMesh.AllAreas
+                    areaMask
                 )
             )
                 continue;

@@ -20,23 +20,37 @@ using UnityEngine.AI;
 /// </summary>
 public static class NpcNavAreas
 {
-    /// <summary>도로 영역 이름 — Navigation 설정 Areas 탭의 문자열과 같아야 한다.</summary>
+    /// <summary>영역 이름 — Navigation 설정 Areas 탭의 문자열과 같아야 한다.</summary>
     public const string k_roadAreaName = "Road";
 
+    /// <summary>유치장 셀 바닥 영역 (#415 → #744에서 복귀) — 시민 프리팹의 통행 마스크에서 빠져 있다.</summary>
+    public const string k_jailAreaName = "Jail";
+
+    /// <summary>본부 실내 영역 (#722) — 시민 프리팹의 통행 마스크에서 빠져 있다.</summary>
+    public const string k_hqAreaName = "HQ";
+
     private static int s_roadMask = -1; // -1 = 아직 조회 전
+    private static int s_jailMask = -1;
+    private static int s_hqMask = -1;
 
     /// <summary>도로 영역 비트마스크. 프로젝트 설정에 그 영역이 없으면 0이라 아래가 전부 무동작이 된다.</summary>
-    public static int RoadMask
+    public static int RoadMask => ResolveMask(k_roadAreaName, ref s_roadMask);
+
+    /// <summary>셀 바닥 영역 비트마스크 — 수감 중에만 열어 준다 (<c>NpcController.SetGrantedAreas</c>).</summary>
+    public static int JailMask => ResolveMask(k_jailAreaName, ref s_jailMask);
+
+    /// <summary>본부 실내 영역 비트마스크 — 셀에서 나와 도시로 걸어 나가는 동안만 열어 준다.</summary>
+    public static int HqMask => ResolveMask(k_hqAreaName, ref s_hqMask);
+
+    // 이름 → 비트마스크 1회 조회. 없는 영역은 0이라 부르는 쪽이 자연히 무동작이 된다.
+    private static int ResolveMask(string areaName, ref int cache)
     {
-        get
+        if (cache < 0)
         {
-            if (s_roadMask < 0)
-            {
-                int area = NavMesh.GetAreaFromName(k_roadAreaName);
-                s_roadMask = area >= 0 ? 1 << area : 0;
-            }
-            return s_roadMask;
+            int area = NavMesh.GetAreaFromName(areaName);
+            cache = area >= 0 ? 1 << area : 0;
         }
+        return cache;
     }
 
     /// <summary>
@@ -84,8 +98,22 @@ public static class NpcNavAreas
         return NavMesh.SamplePosition(position, out NavMeshHit _, clearance, RoadMask);
     }
 
-    // "지금 도로 위인가" 판정 반경(m) — 발밑을 묻는 것이라 좁게 잡는다.
-    private const float k_onRoadProbeRadius = 0.5f;
+    // "지금 이 영역 위인가" 판정 반경(m) — 발밑을 묻는 것이라 좁게 잡는다.
+    private const float k_onAreaProbeRadius = 0.5f;
+
+    /// <summary>
+    /// 발밑 폴리곤의 영역 비트마스크 — NavMesh 밖이면 0. (#744)
+    ///
+    /// <b>영역은 마스크가 아니라 맞은 폴리곤에서 읽는다.</b> 특정 영역 마스크로 직접 샘플하면
+    /// 반경 안에 그 영역이 있기만 해도 걸려서, 인도에 선 NPC가 도로 위로 잘못 판정된다.
+    /// (<see cref="HasRoadWithin"/>은 일부러 그 반대를 묻는 자다)
+    /// </summary>
+    public static int AreaMaskAt(Vector3 position)
+    {
+        return NavMesh.SamplePosition(position, out NavMeshHit hit, k_onAreaProbeRadius, NavMesh.AllAreas)
+            ? hit.mask
+            : 0;
+    }
 
     /// <summary>
     /// 지금 도로 위에 서 있는가 — <b>마스크를 좁혀도 되는지</b>를 가른다.
@@ -93,15 +121,14 @@ public static class NpcNavAreas
     /// 도로 위에서 Road를 빼면 서 있는 폴리곤 자체가 마스크 밖이 되어 경로 계산이 통째로 실패한다
     /// (실측: <c>CalculatePath</c> → <c>PathInvalid</c>, 반환값도 false). 그 자리가 하필 차도
     /// 한복판이라, 좁히는 쪽은 반드시 이걸 먼저 물어야 한다.
+    ///
+    /// 같은 사정이 Jail·HQ 통행 회수에도 그대로 있어(#744) 판정을 <see cref="AreaMaskAt"/>로 모았다.
     /// </summary>
     public static bool IsOnRoad(Vector3 position)
     {
         if (RoadMask == 0)
             return false;
 
-        // 영역은 마스크가 아니라 <b>맞은 폴리곤</b>에서 읽는다 — Road 마스크로 직접 샘플하면
-        // 반경 안에 도로가 있기만 해도 참이 되어, 인도에 선 NPC가 도로 위로 잘못 판정된다.
-        return NavMesh.SamplePosition(position, out NavMeshHit hit, k_onRoadProbeRadius, NavMesh.AllAreas)
-            && (hit.mask & RoadMask) != 0;
+        return (AreaMaskAt(position) & RoadMask) != 0;
     }
 }

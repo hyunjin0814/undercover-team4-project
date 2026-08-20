@@ -190,6 +190,7 @@ public abstract class SpawnedNpcEventBase : MonoBehaviour, ISuddenEvent
 
         if (!SuddenEventUtil.TryFindSpawnPositionNear(
                 player.position, m_spawnDistanceMin, m_spawnDistanceMax, m_navSampleMaxDistance, m_maxSpawnAttempts,
+                SuddenEventUtil.SpawnAreaMask(m_npcPrefab),
                 out Vector3 spawnPosition, hiddenFromPlayers: true)) // 눈앞 팝인 방지 (#332 A)
         {
             Debug.LogWarning($"{GetType().Name}({m_displayName}): NavMesh 위 스폰 지점을 찾지 못해 발생 취소", this);

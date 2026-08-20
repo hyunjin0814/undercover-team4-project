@@ -170,6 +170,14 @@ public class NpcCustody : NetworkBehaviour
         // 죽는다"는 전투 중인 몸을 겨눈 규칙이고, 판정까지 끝나 수감된 몸은 그 자리가 아니다).
         m_owner.Health.ServerRestoreFull();
 
+        // <b>셀 바닥 통행을 연다</b> (#744). 셀 바닥은 Jail 영역이고 시민 프리팹의 마스크에서 빠져 있어
+        // (#415의 방식이 #722에서 되살아났다), 열어 주지 않으면 방 안 배회가 목적지를 하나도 못 뽑아
+        // 수감자가 마네킹이 된다 (NpcJailedState.BeginWander).
+        //
+        // 전이보다 <b>먼저</b> 건다 — Jailed 진입이 곧 배치 지점으로의 워프이고, 그 뒤 첫 배회가
+        // 바로 이 마스크로 목적지를 고른다.
+        m_owner.SetGrantedAreas(NpcNavAreas.JailMask);
+
         JailSpot = spot;
         m_owner.StateMachine.ChangeState(NpcState.Jailed);
     }
@@ -221,14 +229,16 @@ public class NpcCustody : NetworkBehaviour
     }
 
     /// <summary>
-    /// 감옥 밖으로 내보낸다 — 퇴장 동행·탈옥 방출이 부른다. 서버(또는 오프라인) 전용. (#415/#537)
+    /// 셀 밖으로 내보낸다 — 퇴장 동행·탈옥 방출이 부른다. 서버(또는 오프라인) 전용. (#415/#537/#744)
     ///
-    /// 감옥은 도시와 이어진 NavMesh 경로가 없는 격리 공간이라(#537), 방출은 곧 순간이동이다.
-    /// 워프가 실패하면(퇴장 지점이 NavMesh 밖) 경고만 남기고 제자리에 둔다 — 감옥 안에 남는 편이
+    /// 셀 바닥은 본관과 이어진 NavMesh 경로가 없는 섬이라(#722), 나가는 것은 곧 순간이동이다.
+    /// 워프가 실패하면(퇴장 지점이 NavMesh 밖) 경고만 남기고 제자리에 둔다 — 셀 안에 남는 편이
     /// NavMesh 밖에 떨어져 굳는 것보다 낫다.
     ///
-    /// <b>Jail 영역 통행 회수는 사라졌다</b> (#537). 감옥이 별도 NavMesh 섬이 되면서 시민이 걸어
-    /// 들어올 경로 자체가 없어져, 영역 마스크로 막을 일이 없다.
+    /// <b>통행을 셀에서 본부로 갈아 끼우는 것이 워프보다 앞이다</b> (#744) — 퇴장 지점이 본관 실내(HQ
+    /// 영역)인데 워프는 마스크를 보지 않으므로, 순서가 뒤집히면 <b>못 걷는 폴리곤 위에 몸을 내려놓는다</b>.
+    /// 갈아 끼우기·반납의 규칙은 <c>NpcController.ApplyGrantedAreas</c>에 있다(워프 실패로 셀에 남는
+    /// 경우까지 그쪽이 받는다).
     /// </summary>
     public void ServerExitJail(Vector3 exitPosition)
     {
@@ -238,11 +248,13 @@ public class NpcCustody : NetworkBehaviour
         if (m_owner.Agent == null)
             return;
 
+        m_owner.SetGrantedAreas(NpcNavAreas.HqMask);
+
         // 워프 유틸은 코어에 있다 — 밧줄 놓기(#369)와 공유하는 공용 헬퍼라서다 (계획서 § 3-6)
         if (!m_owner.TryWarpNear(exitPosition))
         {
             Debug.LogWarning(
-                $"NpcCustody: 감옥 퇴장 지점으로 워프 실패 — 제자리에 둔다: {name}",
+                $"NpcCustody: 셀 퇴장 지점으로 워프 실패 — 제자리에 둔다: {name}",
                 this
             );
         }

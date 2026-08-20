@@ -279,13 +279,15 @@ public partial class AbductionEvent : MonoBehaviour, ISuddenEvent
     // 팝인이 보이는 편이 낫다 — 거리는 어차피 지켜지므로 눈앞에 솟지는 않는다.
     private bool TryFindGroupSpawnPosition(Transform target, out Vector3 position)
     {
+        int areaMask = SuddenEventUtil.SpawnAreaMask(m_abductorPrefab);
+
         return SuddenEventUtil.TryFindSpawnPositionNear(
                    target.position, m_spawnDistanceMin, m_spawnDistanceMax,
-                   m_navSampleMaxDistance, m_maxSpawnAttempts,
+                   m_navSampleMaxDistance, m_maxSpawnAttempts, areaMask,
                    out position, hiddenFromPlayers: true)
                || SuddenEventUtil.TryFindSpawnPositionNear(
                    target.position, m_spawnDistanceMin, m_spawnDistanceMax,
-                   m_navSampleMaxDistance, m_maxSpawnAttempts,
+                   m_navSampleMaxDistance, m_maxSpawnAttempts, areaMask,
                    out position, hiddenFromPlayers: false);
     }
 

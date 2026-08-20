@@ -18,7 +18,8 @@ public static class InteractPrompts
     public static readonly LocalizedString JailAdmit = Of("Hud.Interact.JailAdmit");
     public static readonly LocalizedString JailEnter = Of("Hud.Interact.JailEnter");
     public static readonly LocalizedString JailExit = Of("Hud.Interact.JailExit");
-    public static readonly LocalizedString JailLock = Of("Hud.Interact.JailLock");
+
+    // Hud.Interact.JailLock('잠그기')은 #744에서 갈래가 사라져 제거했다 — 문자열 테이블 항목은 남아 있다.
 
     // ---- 본부 단말 ----
     public static readonly LocalizedString Dispatch = Of("Hud.Interact.Dispatch");
