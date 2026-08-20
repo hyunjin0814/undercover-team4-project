@@ -165,9 +165,10 @@ public class NpcController : NetworkBehaviour
         // 통행 정책은 새 상태의 Enter()가 목적지를 잡기 <b>전에</b> 걸려야 한다 — 그래서
         // OnStateChanged가 아니라 OnBeforeEnter다 (#634 후속)
         //
-        // <b>순서가 계약이다.</b> 유치장 통행 반납이 도로 정책보다 먼저다 — 반납이 뒤로 가면
-        // ApplyRoadPolicy가 아직 넓은 기준값으로 마스크를 걸고, Enter()가 그 마스크로 본부 실내에
-        // 배회 지점을 잡는다 (#744).
+        // <b>두 구독자 사이의 순서는 계약이 아니다</b> (#744). OnBeforeEnter는 구독자를 <b>전부</b>
+        // 돌린 뒤에 Enter()로 넘어가고(NpcStateMachine.ChangeState), 반납이 실제로 값을 바꾸면
+        // ApplyGrantedAreas가 스스로 ApplyRoadPolicy를 다시 부른다 — 어느 쪽을 먼저 걸어도 Enter()가
+        // 보는 마스크는 같다. 반납을 앞에 둔 것은 마스크를 두 번 쓰지 않으려는 것뿐이다.
         m_stateMachine.OnBeforeEnter += RevokeGrantedAreasOnCityLife;
         m_stateMachine.OnBeforeEnter += ApplyRoadPolicy;
 
