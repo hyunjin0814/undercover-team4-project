@@ -66,6 +66,10 @@ MonoBehaviour:
     m_Metadata:
       m_Items:
       - rid: 8213493152023576666
+  - m_Id: 7416925042147329
+    m_Localized: Someone else is drawing - try again in a moment
+    m_Metadata:
+      m_Items: []
   - m_Id: 8128692487618560
     m_Localized: 'Next map: {0}'
     m_Metadata:

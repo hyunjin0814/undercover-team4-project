@@ -55,6 +55,10 @@ MonoBehaviour:
     m_Key: Shop.Gacha.Tokens
     m_Metadata:
       m_Items: []
+  - m_Id: 7416925042147329
+    m_Key: Shop.Gacha.Busy
+    m_Metadata:
+      m_Items: []
   - m_Id: 8128692487618560
     m_Key: Shop.MapSelect.Next
     m_Metadata:

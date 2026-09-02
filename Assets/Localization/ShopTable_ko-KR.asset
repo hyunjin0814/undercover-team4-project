@@ -64,6 +64,10 @@ MonoBehaviour:
     m_Metadata:
       m_Items:
       - rid: 8213493152023576665
+  - m_Id: 7416925042147329
+    m_Localized: "\uB2E4\uB978 \uB300\uC6D0\uC774 \uBF51\uB294 \uC911\uC774\uB2E4 \u2014 \uC7A0\uC2DC \uB4A4\uC5D0 \uB2E4\uC2DC"
+    m_Metadata:
+      m_Items: []
   - m_Id: 8128692487618560
     m_Localized: "\uB2E4\uC74C \uCD9C\uB3D9\uC9C0: {0}"
     m_Metadata:
