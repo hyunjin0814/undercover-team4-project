@@ -501,9 +501,13 @@ public class CosmeticGachaMachine : NetworkBehaviour, IInteractable
     /// </summary>
     private async UniTask PlayRevealAsync(EAccessorySlot slot, int index)
     {
-        // <b>m_shown은 한 칸뿐이다.</b> 연출이 겹쳐 들어오면 나중 것이 앞의 것을 덮어써 앞 모형이
-        // 영영 남았다 — 차례표가 겹침 자체를 막지만, 여기서도 남은 것을 먼저 치워 한 칸을 지킨다.
-        Clear();
+        // <b>m_shown은 한 칸뿐이라 겹치면 나중 것을 버린다.</b> 예전에는 나중 것이 앞의 것을
+        // 덮어써 앞 모형이 영영 남았다. 여기서 지우고 시작하면 그 누수는 막히지만 이번엔 반대로
+        // 도는 연출의 모형을 남이 뺏어 가, 그쪽 SpinAsync가 제자리에서 끝나며 <b>내 모형</b>을
+        // 치운다(모형이 먼저 사라진다). 차례표 덕에 정상 흐름에서는 여기 겹쳐 들지 않고,
+        // 남는 것은 릴이 없는 씬(패널 미배치)에서 남의 연출 꼬리와 겹치는 경우뿐이다.
+        if (m_playing)
+            return;
 
         m_playing = true;
         try
