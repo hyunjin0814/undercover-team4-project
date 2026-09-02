@@ -423,21 +423,6 @@ public class InteractionFeedback : NetworkBehaviour
         ApplyJailOutlineLayer(outlinable, root.transform.position);
         outlinable.enabled = true;
         m_currentOutlinable = outlinable;
-
-        // TEMP DIAG (#856) — 이슈 원인 규명용. 확인 끝나면 제거.
-        var diagList = new System.Collections.Generic.List<Outlinable>();
-        Outlinable.GetAllActiveOutlinables(diagList);
-        bool diagRegistered = diagList.Contains(outlinable);
-        Camera diagCam = m_outliner != null ? m_outliner.GetComponent<Camera>() : null;
-        Debug.Log(
-            $"[856-DIAG] root={root.name} registered={diagRegistered} listCount={diagList.Count} " +
-            $"targets={outlinable.OutlineTargetsCount} outlineLayer={outlinable.OutlineLayer} " +
-            $"mask={(m_outliner != null ? m_outliner.OutlineLayerMask : -999)} " +
-            $"outlinerObj={(m_outliner != null ? m_outliner.gameObject.name : "null")} " +
-            $"outlinerEnabled={(m_outliner != null ? m_outliner.enabled : false)} " +
-            $"camEnabled={(diagCam != null ? diagCam.enabled : false)} " +
-            $"forceIntoRT={(diagCam != null ? diagCam.forceIntoRenderTexture : false)}"
-        );
     }
 
     /// <summary>
