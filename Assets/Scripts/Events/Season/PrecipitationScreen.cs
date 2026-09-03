@@ -115,7 +115,7 @@ public class PrecipitationScreen : MonoBehaviour
         Streak = 13f,
         Thickness = 28f, // 크면 얇다. 빗줄기는 눈보다 가늘다
         Occupancy = 0.50f,
-        Tilt = 0.18f,
+        Tilt = 0f, // 비는 곧게 떨어뜨린다 (#981)
         Drift = 0f,
         Layers = 3f,
         Opacity = 0.55f,

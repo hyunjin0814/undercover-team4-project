@@ -470,7 +470,7 @@ MonoBehaviour:
     Streak: 13
     Thickness: 28
     Occupancy: 0.5
-    Tilt: 0.2
+    Tilt: 0
     Drift: 0
     Layers: 3
     Opacity: 0.55
