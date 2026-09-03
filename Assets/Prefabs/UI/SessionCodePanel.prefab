@@ -390,6 +390,7 @@ MonoBehaviour:
   m_background: {fileID: 0}
   m_codeText: {fileID: 249102981429736456}
   m_copyButton: {fileID: 5315919410591817056}
+  m_copyAction: {fileID: 6768052483521627623, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_codeFormat:
     m_TableReference:
       m_TableCollectionName: GUID:fcf4ad2fe921de24dbc4ac35f8b789b7
@@ -404,6 +405,15 @@ MonoBehaviour:
       m_TableCollectionName: GUID:fcf4ad2fe921de24dbc4ac35f8b789b7
     m_TableEntryReference:
       m_KeyId: 7100000000103
+      m_Key: 
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  m_copyHint:
+    m_TableReference:
+      m_TableCollectionName: GUID:fcf4ad2fe921de24dbc4ac35f8b789b7
+    m_TableEntryReference:
+      m_KeyId: 10889461068554240
       m_Key: 
     m_FallbackState: 0
     m_WaitForCompletion: 0

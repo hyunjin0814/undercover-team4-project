@@ -67,6 +67,10 @@ MonoBehaviour:
     m_Key: Common.Toast.Copied
     m_Metadata:
       m_Items: []
+  - m_Id: 10889461068554240
+    m_Key: Common.Session.CopyHint
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

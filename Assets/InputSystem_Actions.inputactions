@@ -733,9 +733,29 @@
                     "processors": "",
                     "interactions": "",
                     "initialStateCheck": false
+                },
+                {
+                    "name": "CopySessionCode",
+                    "type": "Button",
+                    "id": "bb2b957a-6ab9-4eb3-9585-cf3c512de4f3",
+                    "expectedControlType": "Button",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
                 }
             ],
             "bindings": [
+                {
+                    "name": "",
+                    "id": "0df665d1-bf84-4a66-8e39-5e8188abb390",
+                    "path": "<Keyboard>/c",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "Keyboard&Mouse",
+                    "action": "CopySessionCode",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
                 {
                     "name": "Gamepad",
                     "id": "809f371f-c5e2-4e7a-83a1-d867598f40dd",

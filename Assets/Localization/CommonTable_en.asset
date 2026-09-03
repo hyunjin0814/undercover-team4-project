@@ -75,6 +75,10 @@ MonoBehaviour:
     m_Localized: Copied!
     m_Metadata:
       m_Items: []
+  - m_Id: 10889461068554240
+    m_Localized: '[{0}] Copy'
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:
