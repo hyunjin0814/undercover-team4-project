@@ -68,8 +68,10 @@ public class Taser : ItemBase, IAimedWeapon
 
     // 조준 히트 버퍼 — 크로스헤어(HasValidAimTarget)가 매 프레임 도는 경로라
     // RaycastAll(호출마다 배열 할당) 대신 NonAlloc + 고정 버퍼를 쓴다. (Baton.s_hitBuffer와 동일 관례)
-    // 16칸은 래그돌 본까지 세면 군중 안에서 넘친다 (#779)
-    private static readonly RaycastHit[] s_aimBuffer = new RaycastHit[64];
+    // 16칸은 래그돌 본까지 세면 군중 안에서 넘친다 (#779). 보정(EvaluateAssist)은 선이 아니라 굵은 관을
+    // 훑어 후보가 훨씬 많다 — 사람 하나가 뼈까지 12칸을 먹으므로 64칸은 군중 대여섯이면 다시 넘친다 (#984).
+    // 넘치면 잘린 히트는 못 보고, 가려 줄 사람이 빠지면 그 뒤 사람이 대신 뽑힌다.
+    private static readonly RaycastHit[] s_aimBuffer = new RaycastHit[128];
 
     // ---- ItemBase ----
 
@@ -308,10 +310,6 @@ public class Taser : ItemBase, IAimedWeapon
                 && collider.GetComponentInParent<PlayerIncapacitation>() == null)
                 continue;
 
-            if (AimOcclusion.IsEnvironmentBlocked(
-                    origin, s_aimBuffer[i].point, ~0, k_assistProbeRadius, holderRoot))
-                continue;
-
             bestDistance = distance;
             bestIndex = i;
         }
@@ -320,6 +318,16 @@ public class Taser : ItemBase, IAimedWeapon
             return AimResult.NoHit;
 
         hit = s_aimBuffer[bestIndex];
+
+        // 가림 검사는 <b>고른 하나에만</b> 한다. 후보마다 돌리면 크로스헤어가 매 프레임 부르는 경로에서
+        // 군중을 겨눌 때 스피어캐스트가 수십 번 나간다. 가장 가까운 사람이 벽 뒤면 그대로 빗나감이다 —
+        // 그 뒤 사람으로 넘어가면 앞사람을 가린 엄폐를 보정이 통과해 버린다.
+        if (AimOcclusion.IsEnvironmentBlocked(
+                origin, hit.point, ~0, k_assistProbeRadius, holderRoot))
+        {
+            hit = default;
+            return AimResult.NoHit;
+        }
 
         NpcController npc = hit.collider.GetComponentInParent<NpcController>();
         if (npc == null)
