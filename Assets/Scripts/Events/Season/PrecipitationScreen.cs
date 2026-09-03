@@ -109,16 +109,16 @@ public class PrecipitationScreen : MonoBehaviour
     [Header("프리셋 — 비")]
     [SerializeField] private Preset m_rain = new Preset
     {
-        Tint = new Color(0.62f, 0.72f, 0.90f),
-        Cells = 34f,
-        Fall = 9f, // m/s
-        Streak = 12f,
-        Thickness = 22f,
-        Occupancy = 0.40f,
+        Tint = new Color(0.72f, 0.80f, 0.95f),
+        Cells = 20f, // 칸이 커야 줄기가 길게 뻗는다 — 줄기는 한 칸을 넘지 못한다 (#981)
+        Fall = 8f, // m/s
+        Streak = 13f,
+        Thickness = 28f, // 크면 얇다. 빗줄기는 눈보다 가늘다
+        Occupancy = 0.50f,
         Tilt = 0.18f,
         Drift = 0f,
         Layers = 3f,
-        Opacity = 0.5f,
+        Opacity = 0.55f,
         CenterClear = 0.5f,
         MaskCut = 0.55f,
         MaskSoft = 0.10f,

@@ -464,16 +464,16 @@ MonoBehaviour:
     FarDistance: 15
     LandFade: 2
   m_rain:
-    Tint: {r: 0.72, g: 0.8, b: 0.94, a: 1}
-    Cells: 18
-    Fall: 9
-    Streak: 14
-    Thickness: 7
-    Occupancy: 0.22
+    Tint: {r: 0.72, g: 0.8, b: 0.95, a: 1}
+    Cells: 20
+    Fall: 8
+    Streak: 13
+    Thickness: 28
+    Occupancy: 0.5
     Tilt: 0.2
     Drift: 0
     Layers: 3
-    Opacity: 0.38
+    Opacity: 0.55
     CenterClear: 0.55
     MaskCut: 0.6
     MaskSoft: 0.06
