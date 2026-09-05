@@ -215,9 +215,6 @@ public partial class NpcRagdoll : MonoBehaviour
         // 멈추면 흔들리는 팔을 키네마틱으로 한 프레임에 세워 버렸다(그것이 "갑자기 굳는" 어색함).
         if (m_rig.AllAsleep)
         {
-            // 진단(임시) — 경과가 0에 가까우면 물리가 한 프레임도 못 굴러 보고 바로 정착한 것이다
-            // (진입 로그의 AllAsleep=True와 짝 — 같이 뜨면 재기절 즉시정착 가설 확정).
-            // Debug.Log($"[진단 즉시정착] {name} 정착호출 경과={m_elapsedInRagdoll:F3}s", this);
             ServerSettleInPlace();
             return;
         }
@@ -248,8 +245,6 @@ public partial class NpcRagdoll : MonoBehaviour
             m_blending = false;
 
         TickHoldPoseUntilStream();
-
-        // TickRiseProbe(); // 진단 ⑦ (임시)
     }
 
     /// <summary>
@@ -366,8 +361,6 @@ public partial class NpcRagdoll : MonoBehaviour
         if (m_state != RagdollState.Animated)
             return; // 도달 불가 — 상태는 Animated/Ragdoll 둘뿐이다. 정착은 m_settled가 따로 든다
 
-        SampleAnimatorClock(); // 진단 ④ (임시) — ⚠ 애니메이터를 끄기 전에 읽어야 한다
-
         // ⚠ 애니메이터를 끄기 전에 — 안에서 강제 평가를 한다.
         SnapToAnimatorPoseIfBlending();
 
@@ -381,21 +374,10 @@ public partial class NpcRagdoll : MonoBehaviour
         // 도로 끌어당긴다.
         m_blending = false;
 
-        // LogUnstreamedBones(); // 진단 ④ (임시) — ⚠ 못박기 전 값이어야 피어 간 차이가 보인다
-
         // 말단 뼈(손·발·손가락)만 바인드로 못박는다 — 전 피어가 각자 부른다. 스트림이 안 싣는 뼈라
         // 그냥 두면 피어마다 애니메이터가 마지막에 놓은 손발 모양이 남는다.
         // ⚠ 몸 모양을 만드는 체인 뼈는 여기서 손대지 않는다 — 그쪽은 스트림이 싣는다(그쪽 주석의 사고).
         m_rig.RestoreUnstreamedBonesToBind();
-
-        // 진단 ⑥ (임시) — ⚠ <b>물리에 넘기기 전</b>이어야 한다. 애니메이터가 남긴 자세가 이미
-        // 얼마나 파고들어 있었는지가 이 로그의 요점이다.
-        // if (HasMoveAuthority)
-            // LogFloorPenetration("진입");
-
-        // LogBoneLengthDrift("진입"); // 진단 ⑧ (임시)
-
-        m_riseProbeFrame = -1; // 진단 ⑦ (임시) — 진입 로그가 이 프레임을 이미 찍었다
 
         ReleaseAgentForRagdoll();
 
@@ -405,11 +387,6 @@ public partial class NpcRagdoll : MonoBehaviour
 
         ReleaseBonesToPhysics();
         m_rig.ApplyImpulse(impulse);
-
-        // 진단(임시) — 재기절 즉시정착 가설. 물리로 넘긴 직후 이미 잠들어 있으면(=AllAsleep 참)
-        // 이번 Update의 뒤쪽 AllAsleep 검사가 같은 프레임에 바로 정착시킨다("무너지는 연출 생략").
-        // if (HasMoveAuthority)
-            // Debug.Log($"[진단 즉시정착] {name} 진입직후 AllAsleep={m_rig.AllAsleep}", this);
 
         m_streamer?.BeginStreaming(); // 권위가 아니면 스스로 무동작이다
 
@@ -491,8 +468,6 @@ public partial class NpcRagdoll : MonoBehaviour
 
         if (HasMoveAuthority)
             ServerReattachToNavMesh();
-
-        // BeginRiseProbe(); // 진단 ⑦ (임시)
     }
 
     // 뼈를 물리로 놓아준다 — 단, 원격에서는 놓아주지 않는다. 원격은 자세를 받아 입히기만 하므로
@@ -550,18 +525,11 @@ public partial class NpcRagdoll : MonoBehaviour
 
         m_settled = true;
 
-        // LogFloorPenetration("정착"); // 진단 ⑥ (임시)
-        // LogBoneLengthDrift("정착"); // 진단 ⑧ (임시)
-
         // 스트림을 끊고 마지막 자세를 한 번 더 보낸다 — 이것이 원격의 종착 상태다.
         // ⚠ <b>좌표계는 바뀌지 않는다 — 스트리밍과 같은 월드다.</b> 그래서 원격은 이 패킷을 받아도
         // 화면이 변하지 않는다. 옛 구조는 여기서 로컬로 갈아타 몸을 루트에 매달았고, 그 전환이
         // 정착 순간의 점프였다.
         m_streamer?.EndStreaming();
-
-        // 진단 ⑨ (임시) — 방금 보낸 <b>종착 자세</b>가 원격에서 어떤 몸이 되는가. 이 시체는 여기서
-        // 멈추므로, 이 한 줄이 곧 클라 화면에 남는 차이다.
-        // LogRemoteReconstructionError("정착");
     }
 
     // 잠든 몸이 다시 움직이기 시작했다 — 서버 전용. 밟힘·폭발·밧줄 어느 쪽이든 여기로 모인다.
@@ -616,9 +584,6 @@ public partial class NpcRagdoll : MonoBehaviour
         // 도착 순서가 뒤집힌 피어를 위한 보정 — 사망 폴링이 아직 안 왔으면 상태가 Animated다.
         m_state = RagdollState.Ragdoll;
         m_settled = true;
-
-        // LogRemoteSettledClearance(); // 진단 ⑤ (임시)
-        // LogFloorPenetration("정착·원격"); // 진단 ⑥ (임시)
     }
 
     // ---- 밧줄 파사드 ----
@@ -644,16 +609,12 @@ public partial class NpcRagdoll : MonoBehaviour
 
         WakeCorpse();
         m_rope?.Attach(carrier);
-
-        // LogBoneLengthDrift("밧줄부착"); // 진단 ⑧ (임시)
     }
 
     /// <summary>이 사람이 쥔 가닥만 푼다 — 줄다리기에서 한 명이 손을 뗄 때. <b>멱등</b>.</summary>
     public void EndRopePull(Transform carrier)
     {
         m_rope?.Detach(carrier);
-
-        // LogBoneLengthDrift("밧줄해제"); // 진단 ⑧ (임시)
     }
 
     /// <summary>걸린 밧줄을 전부 푼다 — 내려놓기·줄 끊김·운반자 소실. <b>멱등</b>.
@@ -661,8 +622,6 @@ public partial class NpcRagdoll : MonoBehaviour
     public void EndRopePull()
     {
         m_rope?.Detach();
-
-        // LogBoneLengthDrift("밧줄전체해제"); // 진단 ⑧ (임시)
     }
 
     // ---- 배치 (유치장 수감 / 퇴장) ----
@@ -701,8 +660,6 @@ public partial class NpcRagdoll : MonoBehaviour
         if (m_state != RagdollState.Ragdoll)
             EnterRagdoll(Vector3.zero);
 
-        // LogBoneLengthDrift("배치전"); // 진단 ⑧ (임시)
-
         Vector3 delta = position - transform.position;
 
         transform.position = position;
@@ -723,11 +680,6 @@ public partial class NpcRagdoll : MonoBehaviour
         // 보간 없이 나가야 한다 — 평범한 스냅샷으로 보내면 원격이 출발지와 도착지 사이를
         // 보간하며 시체가 맵을 가로질러 날아간다(실측 573.94m을 21프레임).
         m_streamer?.SendTeleportPose();
-
-        // 진단 ⑧⑨ (임시) — ⚠ <b>방금 보낸 그 자세</b>를 재는 자리다. 아래 WakeAll이 물리를 깨우면
-        // 다음 스텝부터 몸이 달라지므로 여기서 재야 원격이 받은 것과 같은 자세를 잰다.
-        // LogBoneLengthDrift("배치후");
-        // LogRemoteReconstructionError("배치후");
 
         // 옮긴 몸은 깨어난 것으로 본다 — 도착지에서 다시 무너져 잠드는 과정이 원격에도 흘러야 한다.
         // 이미 잠들어 있었다면 다음 Update가 곧바로 다시 재우고 종착 패킷을 한 번 더 보낸다.
