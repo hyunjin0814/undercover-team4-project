@@ -221,8 +221,11 @@ public class RagdollPoseStreamer : NetworkBehaviour
     /// <summary>
     /// 이 피어가 자세를 정하는 쪽인가 — 물리를 굴리고 보내는 쪽. <b>세션이 아니면 항상 참이다</b>
     /// (오프라인 Play에서는 자기가 유일한 피어다).
+    ///
+    /// 바깥에 열지 않는다 — 소유자는 자기 권위(<c>HasMoveAuthority</c>)로 판단하고, 이쪽은
+    /// 송수신 게이트가 스스로 삼킨다(<see cref="BeginStreaming"/> 주석).
     /// </summary>
-    public bool IsPoseAuthority
+    private bool IsPoseAuthority
     {
         get
         {

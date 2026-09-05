@@ -471,39 +471,14 @@ public class RagdollRig : MonoBehaviour
         return false;
     }
 
-    /// <summary>
-    /// <b>관절이 달린 뼈</b>의 로컬 위치가 바인드에서 얼마나 벗어났는지(m) — 최댓값. 진단용.
-    /// 이것이 관절이 보는 "뼈 길이"다. 관절 없는 뼈(골반)를 세면 안 되는 이유는 docs §5.
-    /// </summary>
-    public float MaxBindPositionDrift
-    {
-        get
-        {
-            if (m_bindBones == null)
-                return 0f;
-
-            float worst = 0f;
-            for (int i = 0; i < m_bindBones.Length; i++)
-            {
-                if (m_bindBones[i] == null || !m_bindJointed[i])
-                    continue;
-
-                float drift = Vector3.Distance(m_bindBones[i].localPosition, m_bindPositions[i]);
-                if (drift > worst)
-                    worst = drift;
-            }
-            return worst;
-        }
-    }
-
     // ---- 진단 보조 (임시 — NpcRagdoll의 진단 ⑨가 쓴다. 그 블록과 함께 지운다. docs §14) ----
 
     /// <summary>스트림에 실리는 뼈 — <b>계층 순서</b>라 그대로 훑으면 체인이 풀린다. 진단 전용.</summary>
     public Transform[] PoseBones => m_poseBones;
 
     /// <summary>
-    /// <b>뼈마다</b>의 바인드 로컬 위치 드리프트(m) — <see cref="MaxBindPositionDrift"/>를
-    /// "어느 뼈인지"까지 벌려 놓은 것. 대상은 같다(관절이 달린 뼈만).
+    /// <b>뼈마다</b>의 바인드 로컬 위치 드리프트(m) — 관절이 달린 뼈만 잰다.
+    /// 관절 없는 뼈(골반)를 세면 안 되는 이유는 docs §5.
     /// </summary>
     /// <returns>담은 개수.</returns>
     public int CollectBindPositionDrift(System.Collections.Generic.List<(string Bone, float Drift)> into)
@@ -563,24 +538,6 @@ public class RagdollRig : MonoBehaviour
 
             m_bindBones[i].localPosition = m_bindPositions[i];
             m_bindBones[i].localRotation = m_bindRotations[i];
-        }
-    }
-
-    /// <summary>
-    /// <b>뼈 길이만</b>(관절이 달린 뼈의 위치) 바인드로 되돌린다 — 자세는 손대지 않는다.
-    /// 원격이 받은 회전을 입히기 직전에 쓴다. ⚠ 키네마틱일 때만 의미가 있다 (docs §5).
-    /// </summary>
-    public void RestoreBindBoneLengths()
-    {
-        if (m_bindBones == null)
-            return;
-
-        for (int i = 0; i < m_bindBones.Length; i++)
-        {
-            if (m_bindBones[i] == null || !m_bindJointed[i])
-                continue;
-
-            m_bindBones[i].localPosition = m_bindPositions[i];
         }
     }
 
@@ -684,36 +641,6 @@ public class RagdollRig : MonoBehaviour
     }
 
     /// <summary>
-    /// 뼈 콜라이더를 켜고 끈다 — 시체 오브젝트는 항상 활성이어야 해서(NGO 사양) 숨기는 일을
-    /// 렌더러·콜라이더가 맡는다 (docs §7).
-    /// ⚠ 껐다 켜면 <see cref="IgnoreCollisionWith"/> 상태가 초기화된다.
-    /// </summary>
-    public void SetBoneCollidersEnabled(bool value)
-    {
-        if (m_boneColliders == null)
-            return;
-
-        for (int i = 0; i < m_boneColliders.Length; i++)
-        {
-            if (m_boneColliders[i] != null)
-                m_boneColliders[i].enabled = value;
-        }
-    }
-
-    /// <summary>이 리그가 구동하는 스킨드 메시를 켜고 끈다 — 시체를 보이거나 숨긴다.</summary>
-    public void SetSkinsEnabled(bool value)
-    {
-        if (m_skins == null)
-            return;
-
-        for (int i = 0; i < m_skins.Length; i++)
-        {
-            if (m_skins[i] != null)
-                m_skins[i].enabled = value;
-        }
-    }
-
-    /// <summary>
     /// 래그돌 동안 컬링 바운즈를 매 프레임 재계산시킨다 — 안 하면 날아간 시체가 통째로 컬링돼
     /// 화면에서 사라진다. 비용이 있어 래그돌이 켜진 동안만 올린다 (docs §7).
     /// </summary>
@@ -750,22 +677,18 @@ public class RagdollRig : MonoBehaviour
     }
 
     /// <summary>
-    /// 직전 <see cref="ApplyImpulse"/>에서 실제로 힘이 <b>들어간</b> 뼈 수 — 0이면 통째로 버려졌다.
-    /// 계측으로 넣었다가 <b>영구 가드로 남겼다</b>: 이 실패는 #768·#957에서 세 번 났고 매번
-    /// 조용했다(경고 하나 없이 "안 날아간다"로만 보인다). 근거는 docs/865-down-ragdoll.md §9-7.
-    /// </summary>
-    public int LastImpulseAppliedCount { get; private set; }
-
-    /// <summary>
     /// 전 뼈에 같은 속도를 주고, 골반보다 높은 뼈에만 조금 더 얹어 텀블을 만든다.
     /// 폭심 기준 <c>AddExplosionForce</c>를 쓰지 않는 이유는 결정론이다 (docs §8).
     /// </summary>
     public void ApplyImpulse(Vector3 velocity)
     {
-        LastImpulseAppliedCount = 0;
-
         if (velocity == Vector3.zero || m_bodies == null || m_hipsBone == null)
             return;
+
+        // 실제로 힘이 들어간 뼈 수 — 0이면 통째로 버려졌다는 뜻이고, 아래 경고가 그것을 잡는다.
+        // 계측으로 넣었다가 <b>영구 가드로 남겼다</b>: 이 실패는 #768·#957에서 세 번 났고 매번
+        // 조용했다(경고 하나 없이 "안 날아간다"로만 보인다). 근거는 docs/865-down-ragdoll.md §9-7.
+        int applied = 0;
 
         float hipsHeight = m_hipsBone.position.y;
         for (int i = 0; i < m_bodies.Length; i++)
@@ -777,7 +700,7 @@ public class RagdollRig : MonoBehaviour
 
             float lift = m_bodies[i].worldCenterOfMass.y - hipsHeight;
             m_bodies[i].linearVelocity += velocity * (1f + m_tumbleBias * lift);
-            LastImpulseAppliedCount++;
+            applied++;
         }
 
         // ⚠ <b>힘을 실을 뼈가 하나도 없었다.</b> 뼈가 전부 키네마틱이라는 뜻이고, 그러면 임펄스가
@@ -786,7 +709,7 @@ public class RagdollRig : MonoBehaviour
         //  · 소유권이 방금 넘어와 뼈가 아직 원격 시절 키네마틱인 것 (§15)
         //  · 권위가 아닌 피어에 임펄스를 보낸 것 (§9-7)
         // 셋 다 "안 날아간다"로만 보였다. 조용히 넘기지 않는다.
-        if (LastImpulseAppliedCount == 0)
+        if (applied == 0)
         {
             Debug.LogWarning(
                 $"RagdollRig: 임펄스({velocity.magnitude:0.00})가 통째로 버려졌다 — 뼈가 전부 "
@@ -1109,8 +1032,8 @@ public class RagdollRig : MonoBehaviour
         return count;
     }
 
-    /// <summary>골반 뼈의 인덱스 — 못 찾으면 -1.</summary>
-    public int HipsBodyIndex()
+    // 골반 뼈의 인덱스 — 못 찾으면 -1. 아래 팔·체인 수집이 쓰는 내부 질의다.
+    private int HipsBodyIndex()
     {
         if (m_bodies == null)
             return -1;
@@ -1151,8 +1074,8 @@ public class RagdollRig : MonoBehaviour
         return count;
     }
 
-    /// <summary>관절이 매달린 부모 뼈의 인덱스 — 골반이거나 못 찾으면 -1.</summary>
-    public int ParentBoneIndex(int index)
+    // 관절이 매달린 부모 뼈의 인덱스 — 골반이거나 못 찾으면 -1. 위 수집들과 ChildBoneIndex가 쓴다.
+    private int ParentBoneIndex(int index)
     {
         if (m_joints == null || index < 0 || index >= m_joints.Length || m_joints[index] == null)
             return -1;

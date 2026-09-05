@@ -626,23 +626,16 @@ public partial class PlayerRagdoll : MonoBehaviour
     }
 
     /// <summary>
-    /// 날아가는 구간을 즉시 끝내고 정착으로 넘긴다 — 운반 시작(#365)처럼 외부 사정이 있을 때.
-    /// 정착해도 몸이 굳지는 않는다 (docs §7).
-    /// </summary>
-    public void ForceSettle()
-    {
-        if (m_state == RagdollState.Ragdoll)
-            Settle();
-    }
-
-    /// <summary>
     /// 애니메이터로 되돌린다.
     /// <paramref name="blend"/>가 참이면 정착 포즈에서 기상 자세로 보간하고(본부 부활),
     /// 거짓이면 즉시 되돌린다(라운드 리셋·씬 전환·despawn).
     ///
     /// ⚠ <b>순서가 그대로 결과를 바꾼다</b> — 특히 블렌드 출발점은 뼈 길이 복원보다 먼저다. docs §8.
+    ///
+    /// ⚠ <b>바깥에서 부르지 않는다.</b> 부활은 <see cref="PollRagdollCause"/>가 동기화된 사유를 보고
+    /// 결정한다 — "죽음을 본 뒤에만 부활이 성립한다"(<c>ragdoll.md</c> 불변식 5)를 지키는 유일한 문이다.
     /// </summary>
-    public void ExitToAnimator(bool blend)
+    private void ExitToAnimator(bool blend)
     {
         // DumpFallRate("이탈"); // 창이 닫히기 전에 부활했다 — 남은 값으로라도 마감한다
         if (m_state == RagdollState.Animated || m_rig == null || !m_rig.IsValid)
@@ -1152,8 +1145,8 @@ public partial class PlayerRagdoll : MonoBehaviour
         m_streamer?.EndStreaming();
 
         // 사망(Die)은 부활 키트가 별도로 풀지만, 비행(Launched)은 정착 자체가 복구 신호다 — 여기서
-        // 서버에 알린다(#815). 이 함수는 권위 피어에서만 도므로(Update의 HasMoveAuthority 게이트,
-        // ForceSettle은 아직 호출부가 없다) 곧 그 오너가 통보를 보낸다.
+        // 서버에 알린다(#815). 이 함수는 권위 피어에서만 도므로(Update의 HasMoveAuthority 게이트)
+        // 곧 그 오너가 통보를 보낸다.
         if (m_incapacitation == null)
             return;
 

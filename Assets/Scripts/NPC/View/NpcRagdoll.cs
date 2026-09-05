@@ -533,7 +533,7 @@ public partial class NpcRagdoll : MonoBehaviour
     ///
     /// <b>몸을 건드리지 않는다.</b> 키네마틱 전환도, 뼈 길이 복원도, 지면 재정렬도 없다 — 잠든
     /// 몸은 이미 물리가 놓은 자리에 있고 원격은 이미 그 자세를 그리고 있다. 옛 구조가 이 자리에서
-    /// 하던 일들(<c>SetKinematic</c>·<c>RestoreBindBoneLengths</c>·최저뼈 재정렬)은 전부
+    /// 하던 일들(<c>SetKinematic</c>·뼈 길이 복원·최저뼈 재정렬)은 전부
     /// <b>키네마틱 얼림이 만든 문제를 되받는 것</b>이었고, 얼림이 없으니 함께 사라졌다.
     /// 근거는 docs/npc-ragdoll.md §4.
     /// </summary>
