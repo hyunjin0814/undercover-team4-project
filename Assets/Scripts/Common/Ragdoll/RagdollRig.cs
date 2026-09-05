@@ -24,11 +24,11 @@ public class RagdollRig : MonoBehaviour
     // ---- 프리팹에 저장되지 않는 Rigidbody 값 — 런타임에 다시 건다 (docs §2) ----
 
     // 겹침 탈출 속도 상한. 이 값이 곧 시체가 튀어오르는 높이다(0.5m/s = 1.3cm).
+    // 엔진·프로젝트 기본값은 10이라 이 값은 그 1/20이다.
     //
-    // ⚠ <b>지금 이 값이 낙하 속도를 지배하고 있는지 재는 중이다</b> (#759). 실측: 골반 0.66m가
-    // 떨어지는 데 약 2.5초(자유낙하 0.36초)이고, 구간 속도가 0.16~0.72m/s로 <b>이 상한 근처를
-    // 넘지 못한다</b>. 엔진·프로젝트 기본값은 10이라 이 값은 그 1/20이다.
-    // 그래서 인스펙터로 빼 두었다 — 아래 필드가 정본이고 이 상수는 기본값이다.
+    // ⚠ <b>한때 이 값을 슬로모션(#759)의 용의자로 봤으나 무죄로 끝났다</b> — 원인은 루트 추종이
+    // 프레임마다 돌던 것이었다(docs/759 §2·§4-A). 인스펙터로 빼 둔 것은 그때의 A/B 실험 잔재이고,
+    // 아래 필드가 정본·이 상수가 기본값인 구성은 그대로 둔다.
     private const float k_maxDepenetrationVelocity = 0.5f;
 
     // 관절 projection을 껐으므로 관절을 붙드는 일은 전부 solver 반복이 맡는다 (기본 6/1로는 늘어난다).
@@ -44,72 +44,18 @@ public class RagdollRig : MonoBehaviour
              "다시 건다.</b>\n\n" +
              "<b>0.5는 엔진 기본값(10)의 1/20이다.</b> 튀어오름을 막으려고 조인 값인데(0.5m/s = 1.3cm), " +
              "그 대가로 <b>접촉 해소가 느려진다</b> — 겹친 상태로 있는 몸은 초당 이 값만큼만 빠져나온다.\n\n" +
-             "⚠ <b>#759 계측 중</b>: 시체가 천천히 쓰러지는 구간 속도(0.16~0.72m/s)가 이 상한 근처를 " +
-             "넘지 못한다. 10(기본값)으로 올려 낙하 곡선이 정상이 되는지 보는 실험용으로 뺐다. " +
-             "올리면 겹침에서 <b>튀어오름</b>이 커지므로(10m/s면 수십 cm) 확정되면 중간값을 찾는다.")]
+             "⚠ 올리면 겹침에서 <b>튀어오름</b>이 커진다(10m/s면 수십 cm). 슬로모션(#759)의 원인이 " +
+             "아님은 실측으로 확인됐으므로(docs/759 §4-A) 바꿀 이유가 있을 때만 건드릴 것.")]
     [SerializeField] private float m_maxDepenetrationVelocity = k_maxDepenetrationVelocity;
 
     [Tooltip("골반보다 높은 뼈에 얹는 추가 속도 비율(1/m) — 상체가 더 빨라 다리가 끌리는 텀블이 생긴다")]
     [SerializeField] private float m_tumbleBias = 0.8f;
 
-    // ⚠ #759 계측 — 원인이 닫혀 주석 처리했다(2026-08-20). 근거: docs/759-ragdoll-slowmotion-handoff.md
-    //    §4-B 충돌검출 실험 스위치 — 인스펙터 필드 둘과 -ragdollDiscrete 인자.
-    /*
-    // ---- #759 A/B 실험용 (원인이 잡히면 이 둘은 지운다 — docs/759 §6) ----
-
-    [Tooltip("⚠ <b>#759 실험용.</b> 켜면 아래 값으로 뼈 Rigidbody의 충돌 검출 방식을 런타임에 덮는다.\n\n" +
-             "프리팹은 전 뼈가 <b>ContinuousSpeculative</b>다. speculative CCD는 겹치기 <b>전에</b> " +
-             "접촉을 만들어 미리 제동을 걸고, 그렇게 잡힌 접촉이 침투로 취급되면 해소 속도가 " +
-             "<b>침투해소상한(0.5m/s)</b>에 묶인다 — 관측된 구간 속도 0.16~0.72m/s가 그 스케일이다.\n\n" +
-             "Discrete로 덮었을 때 <c>[낙하속도]</c>의 <b>낙하곡선 0.25s 칸</b>이 올라오면 가설 B 확정.")]
-    [SerializeField] private bool m_overrideCollisionDetection;
-
-    [Tooltip("위를 켰을 때 걸 값 — 실험의 기본은 Discrete다.\n\n" +
-             "⚠ 이 둘은 <b>직렬화 필드라 빌드 안에서는 못 바꾼다.</b> 빌드로 재려면 실행 인자 " +
-             "<b>-ragdollDiscrete</b>를 쓴다 — 그쪽이 이 필드를 이긴다.")]
-    [SerializeField] private CollisionDetectionMode m_collisionDetection = CollisionDetectionMode.Discrete;
-
-    // 인스펙터 필드는 직렬화라 <b>빌드 안에서는 못 바꾼다</b> — 한 빌드로 두 조건을 다 보려고
-    // 실행 인자를 하나 받는다. 결과를 만드는 것은 <b>권위 피어의 물리뿐</b>이므로
-    // <b>호스트 PC만</b> 이 인자로 띄우면 된다:
-    //
-    //     undercover-team4-project.exe -ragdollDiscrete
-    //
-    // 실제로 무엇이 걸렸는지는 <c>[리그물리]</c>의 <c>충돌검출=</c>가 말해 준다 — 그쪽이 정본이다.
-    // #759가 닫히면 이 블록과 위 두 필드를 함께 지운다.
-    private const string k_discreteArg = "-ragdollDiscrete";
-
-    private static bool? s_discreteArgPresent; // 한 번만 훑는다 — 인자는 실행 중 안 바뀐다
-
-    private static bool DiscreteRequestedByArgs()
-    {
-        if (s_discreteArgPresent.HasValue)
-            return s_discreteArgPresent.Value;
-
-        bool found = false;
-        string[] args = System.Environment.GetCommandLineArgs();
-        for (int i = 0; i < args.Length; i++)
-        {
-            if (string.Equals(args[i], k_discreteArg, System.StringComparison.OrdinalIgnoreCase))
-            {
-                found = true;
-                break;
-            }
-        }
-
-        s_discreteArgPresent = found;
-        if (found)
-            Debug.Log($"[리그물리] 실행 인자 {k_discreteArg} — 뼈 충돌 검출을 Discrete로 덮는다 (#759)");
-
-        return found;
-    }
-    */
-
     private Transform m_boneRoot; // 리그 최상단 — 뼈·스킨 수집 범위를 여기로 못박는다
 
     private Rigidbody[] m_bodies; // 래그돌 레이어의 뼈 Rigidbody만 (손에 든 아이템의 rb가 섞이지 않게)
     private Collider[] m_boneColliders; // 위와 같은 순서 — 뼈마다 하나 (위저드가 그렇게 만든다)
-    private CharacterJoint[] m_joints; // 위와 같은 순서 — 골반만 null (#759 앵커 오차 계측)
+    private CharacterJoint[] m_joints; // 위와 같은 순서 — 골반만 null. 뼈 체인 질의(#980)가 쓴다
     private float[] m_baseLinearDamping; // 감쇠를 풀 때 되돌릴 평시 값 — 프리팹이 진실이라 상수로 박지 않는다
     private float[] m_baseAngularDamping;
 
@@ -178,102 +124,6 @@ public class RagdollRig : MonoBehaviour
             return lowest;
         }
     }
-
-    /// <summary>뼈 평균 속도(m/s) — 정착 판정에 쓴다.</summary>
-    public float AverageSpeed
-    {
-        get
-        {
-            if (m_bodies == null || m_bodies.Length == 0)
-                return 0f;
-
-            float total = 0f;
-            for (int i = 0; i < m_bodies.Length; i++)
-                total += m_bodies[i].linearVelocity.magnitude;
-            return total / m_bodies.Length;
-        }
-    }
-
-    // ⚠ #759 계측 — 원인이 닫혀 주석 처리했다(2026-08-20). 근거: docs/759-ragdoll-slowmotion-handoff.md
-    //    관절 앵커 계측 API — JointCount / HasAutoConfiguredAnchors / MaxJointAnchorError.
-    /*
-    // ---- #759 A/B 계측 — 관절 앵커 (원인이 잡히면 지운다, docs/759 §6) ----
-
-    /// <summary>관절 수 — 골반은 관절이 없으므로 뼈 수보다 하나 적다.</summary>
-    public int JointCount
-    {
-        get
-        {
-            if (m_joints == null)
-                return 0;
-
-            int n = 0;
-            for (int i = 0; i < m_joints.Length; i++)
-            {
-                if (m_joints[i] != null)
-                    n++;
-            }
-            return n;
-        }
-    }
-
-    /// <summary>관절이 <c>connectedAnchor</c>를 자동으로 굽는가 — 하나라도 켜져 있으면 참.</summary>
-    public bool HasAutoConfiguredAnchors
-    {
-        get
-        {
-            if (m_joints == null)
-                return false;
-
-            for (int i = 0; i < m_joints.Length; i++)
-            {
-                if (m_joints[i] != null && m_joints[i].autoConfigureConnectedAnchor)
-                    return true;
-            }
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// <b>관절 앵커 오차(m) — 지금 이 순간 솔버가 풀어야 하는 위치 오차의 최댓값.</b> (#759 가설 A)
-    ///
-    /// 관절의 두 앵커점(내 바디 기준 <c>anchor</c>, 상대 바디 기준 <c>connectedAnchor</c>)을 각각
-    /// 월드로 옮겨 그 거리를 잰다. 관절이 성립하면 이 둘은 <b>같은 점</b>이어야 하므로 0에 수렴한다.
-    ///
-    /// <b>0이 아닌 채로 출발하면 솔버는 매 스텝 중력이 아니라 이 오차를 푼다</b> — 그것이
-    /// "뼈는 떠는데 몸은 안 나가는" 그림이다. <c>autoConfigureConnectedAnchor</c>가 켜져 있으면
-    /// 앵커가 <b>관절이 활성화된 순간의 자세</b>로 구워지므로, 그 순간이 실행 순서로 흔들리면
-    /// 이 값이 사망마다 달라진다 — <b>그것이 가설 A의 지문이다.</b>
-    /// </summary>
-    /// <param name="worstBone">오차가 가장 큰 뼈 이름 — 없으면 빈 문자열.</param>
-    public float MaxJointAnchorError(out string worstBone)
-    {
-        worstBone = string.Empty;
-        if (m_joints == null)
-            return 0f;
-
-        float worst = 0f;
-        for (int i = 0; i < m_joints.Length; i++)
-        {
-            CharacterJoint joint = m_joints[i];
-            if (joint == null)
-                continue;
-
-            Vector3 mine = joint.transform.TransformPoint(joint.anchor);
-            Vector3 theirs = joint.connectedBody != null
-                ? joint.connectedBody.transform.TransformPoint(joint.connectedAnchor)
-                : joint.connectedAnchor;
-
-            float error = Vector3.Distance(mine, theirs);
-            if (error > worst)
-            {
-                worst = error;
-                worstBone = joint.name;
-            }
-        }
-        return worst;
-    }
-    */
 
     private bool m_collected;
 
@@ -471,57 +321,6 @@ public class RagdollRig : MonoBehaviour
         return false;
     }
 
-    // ---- 진단 보조 (임시 — NpcRagdoll의 진단 ⑨가 쓴다. 그 블록과 함께 지운다. docs §14) ----
-
-    /// <summary>스트림에 실리는 뼈 — <b>계층 순서</b>라 그대로 훑으면 체인이 풀린다. 진단 전용.</summary>
-    public Transform[] PoseBones => m_poseBones;
-
-    /// <summary>
-    /// <b>뼈마다</b>의 바인드 로컬 위치 드리프트(m) — 관절이 달린 뼈만 잰다.
-    /// 관절 없는 뼈(골반)를 세면 안 되는 이유는 docs §5.
-    /// </summary>
-    /// <returns>담은 개수.</returns>
-    public int CollectBindPositionDrift(System.Collections.Generic.List<(string Bone, float Drift)> into)
-    {
-        if (into == null)
-            return 0;
-
-        into.Clear();
-        if (m_bindBones == null)
-            return 0;
-
-        for (int i = 0; i < m_bindBones.Length; i++)
-        {
-            if (m_bindBones[i] == null || !m_bindJointed[i])
-                continue;
-
-            into.Add(
-                (m_bindBones[i].name, Vector3.Distance(m_bindBones[i].localPosition, m_bindPositions[i]))
-            );
-        }
-
-        return into.Count;
-    }
-
-    /// <summary>이 뼈의 <b>바인드 로컬 위치</b> — 리그의 뼈가 아니면 거짓.</summary>
-    public bool TryGetBindLocalPosition(Transform bone, out Vector3 bindLocal)
-    {
-        bindLocal = Vector3.zero;
-        if (m_bindBones == null || bone == null)
-            return false;
-
-        for (int i = 0; i < m_bindBones.Length; i++)
-        {
-            if (m_bindBones[i] != bone)
-                continue;
-
-            bindLocal = m_bindPositions[i];
-            return true;
-        }
-
-        return false;
-    }
-
     /// <summary>
     /// 리그를 프리팹의 바인드 포즈(위치 + 회전)로 되돌린다 — <b>뼈 길이 복원이 목적</b>이라
     /// 부활처럼 시체가 쉬는 시점에 부른다. ⚠ 키네마틱일 때만 의미가 있다 (docs §5).
@@ -568,17 +367,6 @@ public class RagdollRig : MonoBehaviour
             m_bodies[i].maxDepenetrationVelocity = m_maxDepenetrationVelocity;
             m_bodies[i].solverIterations = k_solverIterations;
             m_bodies[i].solverVelocityIterations = k_solverVelocityIterations;
-
-            // ⚠ #759 계측 — 원인이 닫혀 주석 처리했다(2026-08-20). 근거: docs/759-ragdoll-slowmotion-handoff.md
-            //    위 실험 스위치의 적용부. 프리팹 값(ContinuousSpeculative)이 그대로 산다.
-            /*
-            // #759 실험 — 프리팹 값(ContinuousSpeculative)을 덮는다. 둘 다 아니면 아무것도 안 한다.
-            // 실행 인자가 인스펙터를 이긴다 — 빌드에서 바꿀 수 있는 쪽이 그것뿐이라서다.
-            if (DiscreteRequestedByArgs())
-                m_bodies[i].collisionDetectionMode = CollisionDetectionMode.Discrete;
-            else if (m_overrideCollisionDetection)
-                m_bodies[i].collisionDetectionMode = m_collisionDetection;
-            */
         }
     }
 

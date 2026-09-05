@@ -159,27 +159,6 @@ public partial class PlayerRagdoll : MonoBehaviour
     private bool HasMoveAuthority =>
         m_netObject == null || !m_netObject.IsSpawned || m_netObject.IsOwner;
 
-    // ⚠ #759 계측 — 원인이 닫혀 주석 처리했다(2026-08-20). 근거: docs/759-ragdoll-slowmotion-handoff.md
-    //    계측 줄머리 TraceId — [리그물리]/[낙하속도]/[밧줄]만 쓰던 것이다.
-    /*
-    // 계측 줄머리 — <b>같은 시체를 피어마다 짝지으려면 이름만으로는 안 된다</b>(전부 Player(Clone)).
-    // 오브젝트 id로 시체를, 오너 id로 "누구의 몸인가"를, 로컬 id로 "이 줄을 찍은 피어"를 가른다.
-    private string TraceId
-    {
-        get
-        {
-            if (m_netObject == null || !m_netObject.IsSpawned)
-                return name;
-
-            ulong local = NetworkManager.Singleton != null
-                ? NetworkManager.Singleton.LocalClientId
-                : 0;
-
-            return $"시체#{m_netObject.NetworkObjectId} 오너{m_netObject.OwnerClientId} 나{local}";
-        }
-    }
-    */
-
     private void Awake()
     {
         // ⚠ 리그는 <b>자식</b>에 있다 — 비활성일 수 있으므로 includeInactive를 반드시 켠다.
@@ -252,7 +231,6 @@ public partial class PlayerRagdoll : MonoBehaviour
 
         // ⚠ 물리로 넘기기 <b>전에</b> 열어야 진입 프레임의 자세가 계측에 남는다.
         BeginEntryTrace();
-        // BeginFallRateTrace();
 
         ReleaseBonesToPhysics();
     }
@@ -402,8 +380,6 @@ public partial class PlayerRagdoll : MonoBehaviour
     /// <param name="carrier">운반자(밧줄을 쥔 쪽) — 이미 목록에 있으면 멱등.</param>
     public void BeginRopePull(Transform carrier)
     {
-        // BeginRopeTrace();
-
         // ⚠ 권위 가드보다 <b>앞</b>에 기억한다 — 이 호출은 전 피어에 오지만(운반 RPC가 SendTo.Everyone),
         // 사망 중 소유권이 넘어가면 지금 권위가 아닌 피어가 나중에 권위가 될 수 있다. (#614)
         if (carrier != null && !m_ropeCarriers.Contains(carrier))
@@ -637,7 +613,6 @@ public partial class PlayerRagdoll : MonoBehaviour
     /// </summary>
     private void ExitToAnimator(bool blend)
     {
-        // DumpFallRate("이탈"); // 창이 닫히기 전에 부활했다 — 남은 값으로라도 마감한다
         if (m_state == RagdollState.Animated || m_rig == null || !m_rig.IsValid)
             return;
 
@@ -961,10 +936,6 @@ public partial class PlayerRagdoll : MonoBehaviour
 
         // ⚠ <b>LateUpdate여야 한다</b> — PlayerHeadLook이 시선을 얻는 시점이 여기다.
         TickEntryTrace();
-
-        // // 물리가 실시간을 따라갔는지 적립한다 — 프레임 시간을 재는 계측이라 렌더 주기에 붙인다.
-        // TickFallRate();
-        // TickRopeTrace();
     }
 
     /// <summary>
@@ -1133,8 +1104,6 @@ public partial class PlayerRagdoll : MonoBehaviour
     {
         if (m_settled)
             return;
-
-        // DumpFallRate("정착");
 
         m_settled = true;
         m_yawFollowDone = true; // 한 번 정착하면 이 에피소드에서 다시 안 돈다 (필드 주석)

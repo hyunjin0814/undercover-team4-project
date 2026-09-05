@@ -369,16 +369,14 @@ sin이므로 0.7은 약 45°다.
 
 ---
 
-## 14. 진단 보조 (임시)
+## 14. 진단 보조 — 지웠다 (2026-09-05)
 
-`PoseBones`·`CollectBindPositionDrift`·`TryGetBindLocalPosition` 셋은 `NpcRagdoll`의 진단 ⑨가 쓴다.
-그 블록과 함께 지운다.
+`PoseBones`·`CollectBindPositionDrift`·`TryGetBindLocalPosition`·`MaxBindPositionDrift`·`AverageSpeed`가
+여기 있었다. 전부 `NpcRagdoll`의 진단(⑧⑨)과 `PlayerRagdoll`의 #759 계측 전용이었고, **그 계측을
+걷어내면서 독자가 0이 되어 함께 지웠다.**
 
-- `PoseBones` — 스트림에 실리는 뼈. **계층 순서**(부모가 자식보다 먼저)라 그대로 훑으면 체인이
-  풀린다. 원격의 재구성을 흉내 내는 진단에만 쓴다.
-- `CollectBindPositionDrift` — 관절이 달린 뼈의 바인드 대비 위치 드리프트를 **뼈 단위로** 담는다(§5).
-  최댓값만 주던 짝(`MaxBindPositionDrift`)은 호출부가 없어 2026-09-05에 지웠다.
-- `TryGetBindLocalPosition` — 원격이 자세를 입힐 때 실제로 쓰는 뼈 길이(스트림은 회전만 싣는다).
+되살릴 일이 있으면 무엇을 재던 것인지가 [npc-ragdoll.md §11](npc-ragdoll.md)과
+[759 문서 §6](759-ragdoll-slowmotion-handoff.md)에 남아 있다.
 
-진단 로그 전체의 현황은 [npc-ragdoll.md §11](npc-ragdoll.md) — 2026-08-20에 **호출부만 주석
-처리해 재워 뒀다.**
+⚠ `LowestBoneY`는 **남아 있다** — `PlayerRagdoll`의 진입 계측(`m_logEntryHeadTrace`)이 아직 쓴다.
+이 값이 `Rigidbody.position`이 아니라 트랜스폼을 읽는 이유는 §6에 있다.

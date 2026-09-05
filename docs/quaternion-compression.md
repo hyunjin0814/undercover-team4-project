@@ -146,8 +146,8 @@ QuaternionCompressor.DecompressQuaternion(ref m_unpackBuffer[i], packed[i]);
 
 ## 6. 다시 재는 법
 
-`RagdollPoseStreamer` 머리의 주석에 절차가 있다 — 계측 네 블록과 호출부의 주석을 풀고 프리팹에서
-`m_logBandwidth`를 켜면, 2초 창마다 이렇게 찍힌다:
+⚠ **대역폭 계측(`m_logBandwidth`)은 2026-09-05에 트리에서 지웠다** — 되살리는 법은
+[759 문서 §6](759-ragdoll-slowmotion-handoff.md). 되살려 켜면 2초 창마다 이렇게 찍힌다:
 
 ```
 [래그돌대역폭] 시체#140 종료=창 창=2.0s 패킷=51(25.5Hz) 페이로드=86B
@@ -157,4 +157,4 @@ QuaternionCompressor.DecompressQuaternion(ref m_unpackBuffer[i], packed[i]);
 `압축오차최대`는 `Pack`에서 압축→해제를 왕복시켜 `Quaternion.Angle`로 잰 값이고, 창마다
 리셋된다. **§3의 0.194°가 이 칸에서 나왔다.**
 
-> 계측은 평소 주석이다. 발표·릴리스 빌드에 켜둔 채로 나가지 않게 할 것.
+> 되살렸다면 발표·릴리스 빌드에 켜둔 채로 나가지 않게 할 것.
