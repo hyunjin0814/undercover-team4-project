@@ -25,9 +25,6 @@ using UnityEngine;
 /// </summary>
 public partial class PlayerRagdoll : MonoBehaviour
 {
-    // 지면을 못 찾아도 결국은 정착시키는 최후 배수 — 맵 밖으로 떨어진 시체가 Ragdoll에 갇히지 않게.
-    private const float k_lostBodyTimeoutFactor = 4f;
-
 
     // 사망·비행 원인 동기화를 기다려 주는 시간(초) — <b>안전망뿐</b>이다. 정상 경로에서는 걸리지 않는다 (docs §9).
     private const float k_causeSyncGraceSeconds = 1f;
@@ -112,7 +109,11 @@ public partial class PlayerRagdoll : MonoBehaviour
     // <b>정착은 상태가 아니라 국면을 적어 둔 깃발이다</b> — 뜻은 "물리가 잠들어 스트림을 끊었다"뿐이고
     // 뼈는 동적으로 남는다. 밟히거나 밀리면 Update의 깨어남 폴링이 스트림을 되살린다 (docs §3·§10).
     private bool m_settled;
-    private float m_elapsedInRagdoll;
+    // 언제 정착시킬 것인가 — 경과·타임아웃·공중 유예를 쥔다(NPC와 같은 절차).
+    private readonly RagdollSettlePolicy m_settle = new RagdollSettlePolicy();
+
+    // 정책에 넘길 지연 평가 — 매 프레임 메서드 그룹을 넘기면 호출마다 델리게이트가 할당된다.
+    private System.Func<bool> m_hasGroundUnderHips;
 
     // 늦게 접속했는데 대상이 이미 쓰러져(다운·사망) 있거나 비행 중이던 경우 — 이번 래그돌 원인은
     // 건너뛴다 (docs §9). ⚠ 다운→사망을 지나도 계속 참이다(!wantsRagdoll일 때만 내려간다) —
@@ -161,6 +162,8 @@ public partial class PlayerRagdoll : MonoBehaviour
 
     private void Awake()
     {
+        m_hasGroundUnderHips = HasGroundUnderHips;
+
         // ⚠ 리그는 <b>자식</b>에 있다 — 비활성일 수 있으므로 includeInactive를 반드시 켠다.
         m_rig = GetComponentInChildren<RagdollRig>(true);
         if (m_rig == null)
@@ -585,7 +588,7 @@ public partial class PlayerRagdoll : MonoBehaviour
         m_state = RagdollState.Ragdoll;
         m_settled = false;
         m_yawFollowDone = false; // 새 에피소드 — 몸이 기울면 다시 따라간다
-        m_elapsedInRagdoll = 0f;
+        m_settle.Reset();
 
         // 슬라이드 넉백과 이중으로 밀리지 않게 CharacterController 쪽 외력을 지운다.
         m_movement?.ClearExternalVelocity();
@@ -835,35 +838,21 @@ public partial class PlayerRagdoll : MonoBehaviour
         }
 
         // 끌리는 동안에는 재우지 않는다 — 놓는 순간부터 다시 센다. (NpcRagdoll과 같은 자리)
-        if (m_rope != null && m_rope.IsBeingCarried)
+        bool carried = m_rope != null && m_rope.IsBeingCarried;
+
+        switch (m_settle.Tick(m_rig.AllAsleep, carried, m_settleTimeoutSeconds, m_hasGroundUnderHips))
         {
-            m_elapsedInRagdoll = 0f;
-            return;
+            case ERagdollSettleStep.Settle:
+                Settle();
+                break;
+
+            // 타임아웃 — 지형에 물려 스스로 못 잠드는 몸이다. 대신 재운다.
+            // ⚠ 키네마틱 얼림이 아니라 <b>물리 수면</b>이라, 밟거나 밧줄을 걸면 깨어남 폴링이 그대로 받는다.
+            case ERagdollSettleStep.ForceSleepThenSettle:
+                m_rig.SleepAll();
+                Settle();
+                break;
         }
-
-        m_elapsedInRagdoll += Time.deltaTime;
-
-        // <b>정착은 물리가 정한다</b> — 전 뼈가 하나도 안 남고 잠들어야 참이다. 옛 평균속도 판정이
-        // "흔들거리다 갑자기 굳는" 어색함의 정체였다. (docs §10)
-        if (m_rig.AllAsleep)
-        {
-            Settle();
-            return;
-        }
-
-        if (m_elapsedInRagdoll < m_settleTimeoutSeconds)
-            return;
-
-        // 아직 공중이다 — 여기서 재우면 <b>떠 있는 시체</b>가 된다. 다만 맵 밖으로 떨어진 몸이
-        // 영원히 갇히지 않게 무한정 기다리지는 않는다.
-        if (!HasGroundUnderHips()
-            && m_elapsedInRagdoll < m_settleTimeoutSeconds * k_lostBodyTimeoutFactor)
-            return;
-
-        // 타임아웃 — 지형에 물려 스스로 못 잠드는 몸이다. 대신 재운다.
-        // ⚠ 키네마틱 얼림이 아니라 <b>물리 수면</b>이라, 밟거나 밧줄을 걸면 깨어남 폴링이 그대로 받는다.
-        m_rig.SleepAll();
-        Settle();
     }
 
 
@@ -960,10 +949,6 @@ public partial class PlayerRagdoll : MonoBehaviour
         m_rig.RestoreCapturedPose();
     }
 
-    // "몸이 바닥에 있다"로 보는 골반 높이(m) — 이 안이면 루트 높이를 골반이 아니라 <b>지면</b>이
-    // 준다(<see cref="TickCapsuleFollow"/>). NpcRagdoll의 같은 이름 상수와 같은 값이다.
-    private const float k_groundedHipsHeight = 0.5f;
-
     // ---- 캡슐 추종 (#506 — 이 설계의 중심) ----
 
     /// <summary>
@@ -987,7 +972,7 @@ public partial class PlayerRagdoll : MonoBehaviour
         bool haveGround = TryGroundUnder(m_rig.Hips.position, out Vector3 ground);
         bool bodyIsGrounded =
             m_settled
-            || (haveGround && m_rig.Hips.position.y - ground.y <= k_groundedHipsHeight);
+            || (haveGround && m_rig.Hips.position.y - ground.y <= RagdollGround.k_groundedHipsHeight);
 
         if (haveGround && bodyIsGrounded)
             target.y = ground.y - CapsuleBottomOffset;
@@ -1084,14 +1069,14 @@ public partial class PlayerRagdoll : MonoBehaviour
         // 새 권위가 물리로 정착을 다시 판정한다. yaw 래치는 건드리지 않는다 — 이미 정착한 몸이면
         // 그대로 두는 것이 맞다.
         m_settled = false;
-        m_elapsedInRagdoll = 0f;
+        m_settle.Reset();
     }
 
     // 잠든 몸이 다시 움직이기 시작했다 — 스트림을 되살린다. (NpcRagdoll.ServerResumeFromSleep와 짝)
     private void ResumeFromSleep()
     {
         m_settled = false;
-        m_elapsedInRagdoll = 0f;
+        m_settle.Reset();
         m_streamer?.ResumeStreaming();
     }
 

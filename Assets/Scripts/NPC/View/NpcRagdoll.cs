@@ -27,12 +27,6 @@ using UnityEngine.AI;
 /// </summary>
 public partial class NpcRagdoll : MonoBehaviour
 {
-    // 지면을 못 찾아도 결국 정착시키는 최후 배수 — 맵 밖으로 떨어진 시체가 Ragdoll에 갇히지 않게.
-    private const float k_lostBodyTimeoutFactor = 4f;
-
-    // "몸이 바닥에 있다"로 보는 골반 높이(m). 이 안이면 루트 높이를 골반이 아니라 지면이 준다.
-    private const float k_groundedHipsHeight = 0.5f;
-
     // 기상 시 NavMesh를 다시 찾는 반경(m) — "누운 자리 <b>바로</b> 밑"을 뜻하는 값이라 상수다.
     // 넓히면 구조물 위에 걸친 몸이 기상하면서 아래로 툭 떨어져 순간이동으로 보인다 (#913).
     private const float k_navMeshSampleDistance = 0.75f;
@@ -76,7 +70,11 @@ public partial class NpcRagdoll : MonoBehaviour
     private bool m_blending;
 
     private RagdollState m_state = RagdollState.Animated;
-    private float m_elapsedInRagdoll;
+    // 언제 정착시킬 것인가 — 경과·타임아웃·공중 유예를 쥔다(플레이어와 같은 절차).
+    private readonly RagdollSettlePolicy m_settle = new RagdollSettlePolicy();
+
+    // 정책에 넘길 지연 평가 — 매 프레임 메서드 그룹을 넘기면 호출마다 델리게이트가 할당된다.
+    private System.Func<bool> m_hasGroundUnderHips;
 
     // 물리가 잠들어 자세 스트림을 끊었는가 — <b>상태가 아니라 국면이다.</b>
     //
@@ -97,6 +95,8 @@ public partial class NpcRagdoll : MonoBehaviour
 
     private void Awake()
     {
+        m_hasGroundUnderHips = HasGroundUnderHips;
+
         m_owner = GetComponent<NpcController>();
         m_agent = GetComponent<NavMeshAgent>();
         m_driver = GetComponent<NpcAnimationDriver>();
@@ -198,43 +198,23 @@ public partial class NpcRagdoll : MonoBehaviour
             return;
         }
 
-        // 끌리는 동안에는 재우지 않는다 — 끌리는 몸은 계속 움직이니 어차피 안 잠들지만,
-        // 타임아웃까지 흐르면 끌고 가는 중에 Sleep()이 걸린다. 놓는 순간부터 다시 재야 하므로
-        // 경과 시간을 0으로 되돌린다.
         // ⚠ IsAttached가 아니라 IsBeingCarried다 — 운반자가 사라져도 관절은 남는다.
-        if (m_rope != null && m_rope.IsBeingCarried)
+        bool carried = m_rope != null && m_rope.IsBeingCarried;
+
+        switch (m_settle.Tick(m_rig.AllAsleep, carried, m_settleTimeoutSeconds, m_hasGroundUnderHips))
         {
-            m_elapsedInRagdoll = 0f;
-            return;
+            case ERagdollSettleStep.Settle:
+                ServerSettleInPlace();
+                break;
+
+            // 타임아웃 — 지형에 물려 스스로 못 잠드는 몸이다. 대신 재운다.
+            // ⚠ <b>키네마틱 얼림이 아니라 물리 수면이다.</b> 그래서 밟거나 밧줄을 걸면 위의
+            // <c>AllAsleep</c> 검사가 그대로 깨어남을 받는다 — 강제로 재운 몸도 예외가 아니다.
+            case ERagdollSettleStep.ForceSleepThenSettle:
+                m_rig.SleepAll();
+                ServerSettleInPlace();
+                break;
         }
-
-        m_elapsedInRagdoll += Time.deltaTime;
-
-        // <b>정착은 물리가 정한다.</b> 전 뼈가 하나도 안 남고 잠들어야 참이다 — 팔 하나가 아직
-        // 흔들리고 있으면 그 팔이 전체를 붙잡는다. 옛 구조는 뼈 <b>평균</b> 속도를 봐서, 몸통이
-        // 멈추면 흔들리는 팔을 키네마틱으로 한 프레임에 세워 버렸다(그것이 "갑자기 굳는" 어색함).
-        if (m_rig.AllAsleep)
-        {
-            ServerSettleInPlace();
-            return;
-        }
-
-        if (m_elapsedInRagdoll < m_settleTimeoutSeconds)
-            return;
-
-        // 아직 공중이다 — 여기서 재우면 <b>떠 있는 시체</b>가 된다. 폭발에 크게 날아간 몸은 5초
-        // 뒤에도 비행 중일 수 있다. 다만 맵 밖으로 떨어진 몸이 영원히 Ragdoll에 갇히지 않게
-        // 무한정 기다리지는 않는다.
-        if (!HasGroundUnderHips()
-            && m_elapsedInRagdoll < m_settleTimeoutSeconds * k_lostBodyTimeoutFactor)
-            return;
-
-        // 타임아웃 — 지형에 물려 스스로 못 잠드는 몸이다. 대신 재운다.
-        //
-        // ⚠ <b>키네마틱 얼림이 아니라 물리 수면이다.</b> 그래서 밟거나 밧줄을 걸면 위의
-        // <c>AllAsleep</c> 검사가 그대로 깨어남을 받는다 — 강제로 재운 몸도 예외가 아니다.
-        m_rig.SleepAll();
-        ServerSettleInPlace();
     }
 
     private void LateUpdate()
@@ -284,7 +264,7 @@ public partial class NpcRagdoll : MonoBehaviour
 
         // 몸이 바닥에 있으면 루트 높이는 지면이 준다 — 골반 높이를 쓰는 것은 공중에 있는 동안만이다.
         // 정착은 이제 아무것도 옮기지 않으므로, 루트가 지면에 있는 것은 <b>여기가 유일한 보장</b>이다.
-        if (TryGroundUnder(target, out Vector3 ground) && target.y - ground.y <= k_groundedHipsHeight)
+        if (TryGroundUnder(target, out Vector3 ground) && target.y - ground.y <= RagdollGround.k_groundedHipsHeight)
             target.y = ground.y;
 
         transform.position = target;
@@ -368,7 +348,7 @@ public partial class NpcRagdoll : MonoBehaviour
 
         m_state = RagdollState.Ragdoll;
         m_settled = false;
-        m_elapsedInRagdoll = 0f;
+        m_settle.Reset();
 
         // 블렌드 중에 다시 쓰러지면 섞던 것을 버린다 — 안 버리면 무너지는 몸을 애니메이터 자세로
         // 도로 끌어당긴다.
@@ -464,7 +444,7 @@ public partial class NpcRagdoll : MonoBehaviour
         m_state = RagdollState.Animated;
         m_blending = blending;
         m_settled = false;
-        m_elapsedInRagdoll = 0f;
+        m_settle.Reset();
 
         if (HasMoveAuthority)
             ServerReattachToNavMesh();
@@ -537,7 +517,7 @@ public partial class NpcRagdoll : MonoBehaviour
     private void ServerResumeFromSleep()
     {
         m_settled = false;
-        m_elapsedInRagdoll = 0f;
+        m_settle.Reset();
         m_streamer?.ResumeStreaming();
     }
 
