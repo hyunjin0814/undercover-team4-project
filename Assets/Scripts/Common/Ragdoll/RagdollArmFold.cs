@@ -65,6 +65,11 @@ public class RagdollArmFold
     }
 
     private readonly RagdollRig m_rig;
+
+    // "이 콜라이더가 사람인가" — 소유자가 준다. 여기서 판정하면 Common이 도메인 타입을 알게 된다
+    // (docs/architecture.md §1). 근거는 RagdollWallProbe.TryFindPinningWall의 인자 주석.
+    private readonly System.Func<Collider, bool> m_isCharacter;
+
     private readonly int[] m_arms = new int[8];
     private readonly int[] m_fold = new int[k_maxFoldBones]; // 접는 뼈 — 부모(어깨)가 앞이다
 
@@ -91,9 +96,11 @@ public class RagdollArmFold
     /// <summary>이번 에피소드에서 아직 볼 일이 있는가.</summary>
     public bool IsWindowOpen => m_open;
 
-    public RagdollArmFold(RagdollRig rig)
+    /// <param name="isCharacter">사람 판정 — 벽을 찾을 때 사람은 벽으로 세지 않는다.</param>
+    public RagdollArmFold(RagdollRig rig, System.Func<Collider, bool> isCharacter)
     {
         m_rig = rig;
+        m_isCharacter = isCharacter;
     }
 
     /// <summary>래그돌 진입 — 창을 열고 카운터를 되돌린다.</summary>
@@ -242,6 +249,7 @@ public class RagdollArmFold
                     hips,
                     m_rig.Bones.GetCollider(m_arms[i]),
                     k_probeClearance,
+                    m_isCharacter,
                     out RagdollWallProbe.Pin pin
                 )
             )
@@ -269,6 +277,7 @@ public class RagdollArmFold
                 m_rig.Hips.position,
                 m_rig.Bones.GetCollider(bone),
                 k_probeClearance,
+                m_isCharacter,
                 out RagdollWallProbe.Pin pin
             )
         )
