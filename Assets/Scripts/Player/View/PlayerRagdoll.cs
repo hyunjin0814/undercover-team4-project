@@ -143,11 +143,29 @@ public partial class PlayerRagdoll : MonoBehaviour
     /// </summary>
     public bool IsRagdollActive => m_state != RagdollState.Animated;
 
+    // ---- 지금 어떤 국면인가 — 사유를 묻는 자리는 전부 여기로 모은다 ----
+    //
+    // ⚠ <b>다섯이 서로 다른 질문이다.</b> 하나로 뭉치면 안 된다 — 근거가 각각 다르다
+    // (#819 회수 불가 · #865 §3-2 구조 채널링 · #506 §14 빔 · docs §9 부활 인과).
+    // 이름을 준 것은 <c>m_incapacitation != null &&</c>가 여섯 벌 복제돼 있었기 때문이다.
+
+    // 빔에 끌려 올라가는 중인가 — 이 구간만 <b>몸이 캡슐을 따라간다</b>(주종이 뒤집힌다).
+    private bool IsBeamed => m_incapacitation != null && m_incapacitation.IsBeamed;
+
+    // 회수 불가로 확정됐는가 — 전 피어가 각자 재우고 감춘다 (#775/#819).
+    private bool IsBodyLost => m_incapacitation != null && m_incapacitation.IsBodyLost;
+
+    // 구조 채널링을 받는 중인가 — 밟혀 밀려도 깨우지 않고 도로 재운다 (#865).
+    private bool IsBeingRevived => m_incapacitation != null && m_incapacitation.IsBeingRevived;
+
+    // 지금 이 몸이 래그돌이어야 하는가 — 사망·비행·다운·빔이 여기로 모인다.
+    // NPC의 <c>NpcRagdoll.WantsRagdoll</c>과 같은 자리다.
+    private bool WantsRagdoll => m_incapacitation != null && m_incapacitation.IsRagdollCause;
+
     /// <summary>
     /// 캡슐이 시체를 따라가야 하는 구간인가 — <see cref="PlayerMovement.Update"/>가 입력 이동을 접는 판정.
     /// </summary>
-    internal bool IsCapsuleFollowingBody =>
-        m_state == RagdollState.Ragdoll && (m_incapacitation == null || !m_incapacitation.IsBeamed);
+    internal bool IsCapsuleFollowingBody => m_state == RagdollState.Ragdoll && !IsBeamed;
 
     /// <summary>
     /// 물리가 정착했는가 — <see cref="PlayerIncapacitation.RequestLaunchSettled"/>가 비행(#815) 복구
@@ -580,7 +598,7 @@ public partial class PlayerRagdoll : MonoBehaviour
         // 판정을 <b>동기화된 사유</b>로 하는 것이 요점이다 — 늦게 도착한 옛 임펄스 RPC는 그 사이
         // 부활해 사유가 None이 되어 있으므로 그대로 걸러진다(이 가드의 원래 목적인 도착 순서 방어).
         if (m_state != RagdollState.Animated
-            && (m_incapacitation == null || !m_incapacitation.IsRagdollCause))
+            && !WantsRagdoll)
         {
             return;
         }
@@ -715,7 +733,7 @@ public partial class PlayerRagdoll : MonoBehaviour
 
         // 빔에 끌려 올라가는 동안은 <b>주종이 뒤집힌다</b> — 캡슐이 몸을 따라가는 것이 아니라
         // 몸이 캡슐을 따라간다. 근거는 아래 함수와 docs/506-explosion-ragdoll.md §14.
-        if (m_incapacitation != null && m_incapacitation.IsBeamed)
+        if (IsBeamed)
         {
             TickBeamedBodyFollow();
             return;
@@ -796,7 +814,7 @@ public partial class PlayerRagdoll : MonoBehaviour
 
         // 회수 불가로 확정된 몸은 권위와 무관하게 전 피어가 각자 즉시 재우고 감춘다 — 원격은
         // HasMoveAuthority 게이트에 걸려 이 자리에 못 오면 몸이 계속 남아 보인다. (#775/#819)
-        if (m_incapacitation != null && m_incapacitation.IsBodyLost)
+        if (IsBodyLost)
         {
             m_rig.SleepAll();
             HideLostBody();
@@ -812,7 +830,7 @@ public partial class PlayerRagdoll : MonoBehaviour
         // 빔에 끌려 올라가는 동안은 정착·수면·재부착을 통째로 건너뛴다 — 뼈가 키네마틱이라 속도가
         // 항상 0이라, 두면 <b>공중에서 정착으로 굳고</b> 그 뒤 기상 모션이 상공에서 나간다.
         // 몸을 옮기는 것은 FixedUpdate의 TickBeamedBodyFollow 하나다.
-        if (m_incapacitation != null && m_incapacitation.IsBeamed)
+        if (IsBeamed)
             return;
 
         // ⚠ <b>정착 게이트보다 앞이다</b> — 순간이동 뒤 줄이 끊긴 채 잠든 몸도 다시 매여야 하고,
@@ -828,7 +846,7 @@ public partial class PlayerRagdoll : MonoBehaviour
                 // 구조 채널링 중이면 <b>깨우지 않고 도로 재운다</b> — 밟혀 밀리면 게이지를 다 채운 뒤
                 // "범위를 벗어남"으로 실패한다. 스트림도 되살리지 않는 것이 의도다.
                 // (#865 · docs/865-down-ragdoll.md §3-2)
-                if (m_incapacitation != null && m_incapacitation.IsBeingRevived)
+                if (IsBeingRevived)
                     m_rig.SleepAll();
                 else
                     ResumeFromSleep();
@@ -875,7 +893,7 @@ public partial class PlayerRagdoll : MonoBehaviour
         // IsRagdollCause 하나를 쓰는 이유는 <b>조준 히트박스와 술어를 하나로 묶기 위해서</b>다 —
         // IsAimTargetable이 같은 술어를 보므로, 뼈가 물리로 넘어가는 순간과 히트박스가 켜지는 순간이
         // 같은 값을 본다. 갈라지면 "래그돌인데 조준이 안 잡히는" 방향으로 #857이 되살아난다.
-        bool wantsRagdoll = m_incapacitation.IsRagdollCause;
+        bool wantsRagdoll = WantsRagdoll;
 
         // 접속 직후 이미 사망·비행 중이었다면 이번 원인은 건너뛴다 — 낙하는 이미 끝난 과거다.
         if (!m_polledOnce)
@@ -958,7 +976,7 @@ public partial class PlayerRagdoll : MonoBehaviour
     /// 그 한 번의 늦은 점프가 이 기능의 거의 모든 버그의 뿌리였다. 매 스텝 따라가면 cm 단위 잔차로
     /// 줄고 원격은 점프 대신 연속 스트림을 받는다 — 실측과 옛 증상은 docs/player-ragdoll.md §4.
     /// </summary>
-    internal void TickCapsuleFollow()
+    private void TickCapsuleFollow()
     {
         if (m_movement == null || m_rig == null || m_rig.Hips == null)
             return;
