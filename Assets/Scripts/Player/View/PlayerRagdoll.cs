@@ -227,7 +227,7 @@ public partial class PlayerRagdoll : MonoBehaviour
             m_animator.enabled = false;
 
         // 컬링으로 사라지지 않게 — 무너진 뼈가 루트에서 멀어져도 그린다(NPC와 같다).
-        m_rig.SetSkinsAlwaysVisible(true);
+        m_rig.Skins.SetAlwaysVisible(true);
 
         // ⚠ 물리로 넘기기 <b>전에</b> 열어야 진입 프레임의 자세가 계측에 남는다.
         BeginEntryTrace();
@@ -242,7 +242,7 @@ public partial class PlayerRagdoll : MonoBehaviour
     /// </summary>
     private void ExitRagdollPose()
     {
-        m_rig.SetSkinsAlwaysVisible(false);
+        m_rig.Skins.SetAlwaysVisible(false);
         m_rig.RestoreBindPose();
     }
 

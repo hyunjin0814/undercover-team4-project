@@ -63,9 +63,9 @@ public class RagdollRig : MonoBehaviour
     private Rigidbody m_hipsBody;
     private Transform m_headBone; // 누운 방향(yaw) 계산용
 
-    // 몸통 스킨드 메시 — 래그돌 동안 컬링 바운즈를 매 프레임 재계산시켜야 한다(SetSkinsAlwaysVisible)
-    private SkinnedMeshRenderer[] m_skins;
-    private bool[] m_skinUpdateWhenOffscreen;
+    // 몸통 스킨드 메시 — 래그돌 동안 컬링 바운즈를 매 프레임 재계산시켜야 한다 (docs §7).
+    // 뼈와 필드를 공유하지 않아 <see cref="RagdollSkins"/>로 갈라냈다.
+    private RagdollSkins m_skins = RagdollSkins.Empty;
 
     private Vector3[] m_capturedPositions; // 캡처한 월드 포즈 (재정렬 전후를 잇는다)
     private Quaternion[] m_capturedRotations;
@@ -231,38 +231,9 @@ public class RagdollRig : MonoBehaviour
 
         CaptureBindPose(); // 아직 아무도 리그를 건드리지 않은 지금이 유일한 기회다
 
-        CollectSkins();
+        m_skins = RagdollSkins.Collect(transform, m_boneRoot);
         SetKinematic(true); // 평시는 애니메이터가 포즈를 쥔다
     }
-
-    // 이 리그가 구동하는 스킨드 메시를 모은다 — 계층·이름으로는 못 가른다(docs §3).
-    private void CollectSkins()
-    {
-        SkinnedMeshRenderer[] all = GetComponentsInChildren<SkinnedMeshRenderer>(true);
-        int count = 0;
-        for (int i = 0; i < all.Length; i++)
-        {
-            if (DrivenByBodyRig(all[i]))
-                count++;
-        }
-
-        m_skins = new SkinnedMeshRenderer[count];
-        m_skinUpdateWhenOffscreen = new bool[count];
-        int next = 0;
-        for (int i = 0; i < all.Length; i++)
-        {
-            if (!DrivenByBodyRig(all[i]))
-                continue;
-            m_skins[next] = all[i];
-            m_skinUpdateWhenOffscreen[next] = all[i].updateWhenOffscreen;
-            next++;
-        }
-    }
-
-    // rootBone이 몸통 리그 안에 있는 메시인가 — 이 리그가 구동하는가의 판정.
-    private bool DrivenByBodyRig(SkinnedMeshRenderer skin) =>
-        skin.rootBone != null
-        && (skin.rootBone == m_boneRoot || skin.rootBone.IsChildOf(m_boneRoot));
 
     // ---- 바인드 포즈 ----
 
@@ -429,17 +400,10 @@ public class RagdollRig : MonoBehaviour
     }
 
     /// <summary>
-    /// 래그돌 동안 컬링 바운즈를 매 프레임 재계산시킨다 — 안 하면 날아간 시체가 통째로 컬링돼
-    /// 화면에서 사라진다. 비용이 있어 래그돌이 켜진 동안만 올린다 (docs §7).
+    /// 이 리그가 구동하는 스킨드 메시 — 컬링을 다루는 자리다(<c>Skins.SetAlwaysVisible</c>).
+    /// 리그를 못 찾았으면 <see cref="RagdollSkins.Empty"/>라 호출이 무동작이다.
     /// </summary>
-    public void SetSkinsAlwaysVisible(bool always)
-    {
-        if (m_skins == null)
-            return;
-
-        for (int i = 0; i < m_skins.Length; i++)
-            m_skins[i].updateWhenOffscreen = always || m_skinUpdateWhenOffscreen[i];
-    }
+    public RagdollSkins Skins => m_skins;
 
     // ---- 힘·속도 ----
 

@@ -459,7 +459,7 @@ public partial class NpcRagdoll : MonoBehaviour
         if (m_animator != null)
             m_animator.enabled = true;
 
-        m_rig.SetSkinsAlwaysVisible(false);
+        m_rig.Skins.SetAlwaysVisible(false);
 
         m_state = RagdollState.Animated;
         m_blending = blending;
@@ -494,7 +494,7 @@ public partial class NpcRagdoll : MonoBehaviour
         if (m_animator != null)
             m_animator.enabled = false;
 
-        m_rig.SetSkinsAlwaysVisible(true);
+        m_rig.Skins.SetAlwaysVisible(true);
     }
 
     // ---- 정착 / 기상 ----
