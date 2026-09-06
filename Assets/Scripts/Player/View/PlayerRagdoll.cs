@@ -238,12 +238,12 @@ public partial class PlayerRagdoll : MonoBehaviour
     /// <summary>
     /// 리그를 애니메이터에게 돌려줄 준비 — 부활·라운드 리셋. <b>애니메이터를 켜는 것은 호출부가 한다</b>
     /// (블렌드 출발점을 잡는 순서 때문 — <see cref="ExitToAnimator"/>).
-    /// <c>RestoreBindPose</c>는 자세가 아니라 <b>뼈 길이</b>를 되돌린다 — 유일한 누적 방어다 (docs §8).
+    /// <c>BindPose.RestoreAll</c>은 자세가 아니라 <b>뼈 길이</b>를 되돌린다 — 유일한 누적 방어다 (docs §8).
     /// </summary>
     private void ExitRagdollPose()
     {
         m_rig.Skins.SetAlwaysVisible(false);
-        m_rig.RestoreBindPose();
+        m_rig.BindPose.RestoreAll();
     }
 
     /// <summary>
@@ -640,7 +640,7 @@ public partial class PlayerRagdoll : MonoBehaviour
         m_rig.SetKinematic(true);
 
         // ⚠ <b>블렌드 출발점은 지금 이 래그돌 자세다 — 뼈 길이 복원보다 반드시 먼저 잡는다.</b>
-        // 뒤에 잡으면 ExitRagdollPose의 RestoreBindPose가 누운 자세를 지워 몸이 툭 선다.
+        // 뒤에 잡으면 ExitRagdollPose의 BindPose.RestoreAll이 누운 자세를 지워 몸이 툭 선다.
         bool blending =
             blend
             && m_animator != null

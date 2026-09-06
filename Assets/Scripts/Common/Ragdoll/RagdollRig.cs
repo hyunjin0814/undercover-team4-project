@@ -76,11 +76,7 @@ public class RagdollRig : MonoBehaviour
     // ---- 바인드 포즈 (프리팹이 authoring한 자세) ----
     // 관절의 connectedAnchor가 여기 구워지므로 뼈 길이가 틀어지면 관절이 위반 상태로 출발한다 (docs §5).
     // 리지드바디 뼈만이 아니라 <b>리그 전체</b>를 담는다 — 포즈 복사가 훑는 범위와 같아야 한다.
-    private Transform[] m_bindBones;
-    private Vector3[] m_bindPositions;
-    private Quaternion[] m_bindRotations;
-    private bool[] m_bindJointed; // 관절이 달려 있는가 — 드리프트 판정을 이 뼈들로 좁힌다
-    private bool[] m_bindStreamed; // m_poseBones에 드는가 — 거짓인 말단 뼈는 바인드로 못박는다
+    private RagdollBindPose m_bindPose = RagdollBindPose.Empty;
 
     /// <summary>
     /// <b>자세 한 벌 — 복제되는 뼈 전부.</b> <see cref="m_bodies"/>에 그 사이를 잇는 <b>체인 뼈</b>를
@@ -232,108 +228,15 @@ public class RagdollRig : MonoBehaviour
 
         ApplyRuntimePhysics(); // 프리팹이 들고 있을 수 없는 값 (docs §2)
 
-        CaptureBindPose(); // 아직 아무도 리그를 건드리지 않은 지금이 유일한 기회다
+        // 아직 아무도 리그를 건드리지 않은 지금이 바인드를 담을 유일한 기회다.
+        m_bindPose = RagdollBindPose.Capture(m_boneRoot, m_bodies);
+        m_poseBones = m_bindPose.BuildPoseBones();
 
         // 뼈 계층 질의는 배열이 다 찬 뒤에 만든다 — 읽기만 하므로 배열의 주인은 계속 여기다.
         m_boneGraph = new RagdollBoneGraph(m_bodies, m_boneColliders, m_joints, m_hipsBody, m_headBone);
 
         m_skins = RagdollSkins.Collect(transform, m_boneRoot);
         SetKinematic(true); // 평시는 애니메이터가 포즈를 쥔다
-    }
-
-    // ---- 바인드 포즈 ----
-
-    // 프리팹이 authoring한 자세를 담아 둔다 — <see cref="Collect"/>에서만 부른다.
-    // 나중에 부르면 그때의 오염된 자세가 "바인드"가 된다.
-    private void CaptureBindPose()
-    {
-        m_bindBones = m_boneRoot.GetComponentsInChildren<Transform>(true);
-        m_bindPositions = new Vector3[m_bindBones.Length];
-        m_bindRotations = new Quaternion[m_bindBones.Length];
-        m_bindJointed = new bool[m_bindBones.Length];
-        m_bindStreamed = new bool[m_bindBones.Length];
-
-        for (int i = 0; i < m_bindBones.Length; i++)
-        {
-            m_bindPositions[i] = m_bindBones[i].localPosition;
-            m_bindRotations[i] = m_bindBones[i].localRotation;
-            m_bindJointed[i] = m_bindBones[i].GetComponent<Joint>() != null;
-
-            // ⚠ Rigidbody 유무가 아니라 m_bodies 소속으로 판정한다 — 수집이 레이어로도 거른다.
-            m_bindStreamed[i] = IsSelfOrAncestorOfBody(m_bindBones[i]);
-        }
-
-        CollectPoseBones();
-    }
-
-    // 자세 한 벌을 고른다 — 계층 순서 그대로라 피어마다 같고 부모가 자식보다 먼저 온다.
-    private void CollectPoseBones()
-    {
-        int count = 0;
-        for (int i = 0; i < m_bindBones.Length; i++)
-        {
-            if (m_bindStreamed[i])
-                count++;
-        }
-
-        m_poseBones = new Transform[count];
-        int next = 0;
-        for (int i = 0; i < m_bindBones.Length; i++)
-        {
-            if (m_bindStreamed[i])
-                m_poseBones[next++] = m_bindBones[i];
-        }
-    }
-
-    // 이 뼈가 리지드바디 뼈이거나 그 조상인가 — 즉 몸 모양을 결정하는 체인 위에 있는가.
-    private bool IsSelfOrAncestorOfBody(Transform bone)
-    {
-        for (int i = 0; i < m_bodies.Length; i++)
-        {
-            Transform body = m_bodies[i].transform;
-            if (body == bone || body.IsChildOf(bone))
-                return true;
-        }
-
-        return false;
-    }
-
-    /// <summary>
-    /// 리그를 프리팹의 바인드 포즈(위치 + 회전)로 되돌린다 — <b>뼈 길이 복원이 목적</b>이라
-    /// 부활처럼 시체가 쉬는 시점에 부른다. ⚠ 키네마틱일 때만 의미가 있다 (docs §5).
-    /// </summary>
-    public void RestoreBindPose()
-    {
-        if (m_bindBones == null)
-            return;
-
-        for (int i = 0; i < m_bindBones.Length; i++)
-        {
-            if (m_bindBones[i] == null)
-                continue;
-
-            m_bindBones[i].localPosition = m_bindPositions[i];
-            m_bindBones[i].localRotation = m_bindRotations[i];
-        }
-    }
-
-    /// <summary>
-    /// <b>말단 뼈</b>(손·발·손가락)의 회전을 바인드로 못박는다 — 아무도 값을 보내 주지 않는 뼈를
-    /// 전 피어가 같은 값으로 맞추는 것이다. 래그돌 <b>진입 시 모든 피어가</b> 부른다.
-    /// ⚠ 체인 뼈는 손대지 않는다 — 한때 못박았다가 시체가 바닥에 파묻혔다 (docs §5).
-    /// </summary>
-    public void RestoreUnstreamedBonesToBind()
-    {
-        if (m_bindBones == null)
-            return;
-
-        for (int i = 0; i < m_bindBones.Length; i++)
-        {
-            if (m_bindBones[i] == null || m_bindStreamed[i])
-                continue;
-
-            m_bindBones[i].localRotation = m_bindRotations[i];
-        }
     }
 
     // 직렬화되지 않는 Rigidbody 값을 인스턴스마다 다시 건다 (docs §2).
@@ -416,6 +319,12 @@ public class RagdollRig : MonoBehaviour
     /// 뼈를 못 찾았으면 <see cref="RagdollBoneGraph.Empty"/>라 질의가 비어 있는 답을 준다.
     /// </summary>
     public RagdollBoneGraph Bones => m_boneGraph;
+
+    /// <summary>
+    /// 프리팹이 authoring한 자세 — 되돌리는 자리다(<c>BindPose.RestoreAll</c>·
+    /// <c>RestoreUnstreamedRotations</c>). ⚠ 둘 다 키네마틱일 때만 의미가 있다 (docs §5).
+    /// </summary>
+    public RagdollBindPose BindPose => m_bindPose;
 
     // ---- 힘·속도 ----
 

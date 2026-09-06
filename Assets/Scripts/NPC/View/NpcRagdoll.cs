@@ -377,7 +377,7 @@ public partial class NpcRagdoll : MonoBehaviour
         // 말단 뼈(손·발·손가락)만 바인드로 못박는다 — 전 피어가 각자 부른다. 스트림이 안 싣는 뼈라
         // 그냥 두면 피어마다 애니메이터가 마지막에 놓은 손발 모양이 남는다.
         // ⚠ 몸 모양을 만드는 체인 뼈는 여기서 손대지 않는다 — 그쪽은 스트림이 싣는다(그쪽 주석의 사고).
-        m_rig.RestoreUnstreamedBonesToBind();
+        m_rig.BindPose.RestoreUnstreamedRotations();
 
         ReleaseAgentForRagdoll();
 
@@ -454,7 +454,7 @@ public partial class NpcRagdoll : MonoBehaviour
 
         // ⚠ 뼈 길이를 되돌린다 — 애니메이터는 회전만 쓰므로 물리가 늘려 놓은 localPosition을 고쳐
         // 주지 않는다. 안 되돌리면 기절할 때마다 누적되다 사지가 늘어나며 바닥을 뚫는다.
-        m_rig.RestoreBindPose();
+        m_rig.BindPose.RestoreAll();
 
         if (m_animator != null)
             m_animator.enabled = true;
@@ -521,7 +521,7 @@ public partial class NpcRagdoll : MonoBehaviour
 
         // 그 경로는 EnterRagdoll을 안 지나므로 말단을 여기서 한 번 더 못박는다. 이미 못박혀 있으면
         // 무동작이다. ⚠ 말단은 리지드바디가 없어 물리가 덮지 않으므로 이 대입은 남는다.
-        m_rig.RestoreUnstreamedBonesToBind();
+        m_rig.BindPose.RestoreUnstreamedRotations();
 
         m_settled = true;
 
@@ -579,7 +579,7 @@ public partial class NpcRagdoll : MonoBehaviour
         StopAnimator();
 
         // 권위 쪽 ServerSettleInPlace와 짝 — 이 피어가 EnterRagdoll을 안 지났어도 말단을 맞춘다.
-        m_rig.RestoreUnstreamedBonesToBind();
+        m_rig.BindPose.RestoreUnstreamedRotations();
 
         // 도착 순서가 뒤집힌 피어를 위한 보정 — 사망 폴링이 아직 안 왔으면 상태가 Animated다.
         m_state = RagdollState.Ragdoll;
