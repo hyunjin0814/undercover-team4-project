@@ -365,7 +365,7 @@ public class PlayerMovement : NetworkBehaviour
 
     /// <summary>
     /// 재배치 직전에 래그돌을 끝낸다 (#656). 죽어 있으면 몸의 주인이 캡슐이 아니라 시체라
-    /// <see cref="PlayerRagdoll.TickCapsuleFollow"/>가 매 프레임 루트를 골반으로 되돌린다 — 옮겨 놔도
+    /// <c>PlayerRagdoll</c>의 캡슐 추종이 매 프레임 루트를 골반으로 되돌린다 — 옮겨 놔도
     /// 끌려가고, 뼈는 리지드바디라 그 좌표가 <b>직전 맵에서 죽은 자리</b>다.
     ///
     /// <b>SetPose보다 먼저</b> 불러야 한다 — 일으키는 쪽이 캡슐을 켜며 시체 자리를 그대로 써서,

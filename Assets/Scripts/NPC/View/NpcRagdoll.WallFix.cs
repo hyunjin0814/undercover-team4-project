@@ -61,8 +61,28 @@ public partial class NpcRagdoll
 
     private void SetupWallFix()
     {
-        m_armFold = new RagdollArmFold(m_rig) { Label = name };
+        m_armFold = new RagdollArmFold(m_rig, IsCharacterCollider) { Label = name };
     }
+
+    /// <summary>
+    /// 사람인가 — 플레이어·NPC는 벽이 아니다.
+    ///
+    /// ⚠ <b>레이어 마스크로는 못 거른다.</b> 이 프로젝트에는 벽 전용 레이어가 없어 벽·바닥·플레이어
+    /// 캡슐·NPC 캡슐이 전부 <c>Default</c>에 산다. <b>자기 자신의 루트 캡슐도 여기서 걸린다</b> —
+    /// 안 거르면 모든 뼈가 "벽 뒤"로 판정된다(<c>NpcProneCollider</c>의 캡슐은 래그돌 중에도 켜져 있다).
+    ///
+    /// ⚠ <b>이 술어가 여기 있는 이유</b>: 쓰는 쪽(<see cref="RagdollWallProbe"/>)은 <c>Common/</c>이라
+    /// 도메인 타입을 알면 안 된다(<c>docs/architecture.md</c> §1 — "도메인에 속하지 않는 공유 부품").
+    /// 그래서 판정만 여기서 넘긴다.
+    ///
+    /// ⚠ 저장소에 비슷한 술어가 여럿 있으나 <b>같지 않다</b> — <c>AimOcclusion</c>은
+    /// <c>PlayerHealth</c>를 안 보고 <c>NpcController.SweepHitsObstacle</c>은
+    /// <c>CharacterController</c>를 안 본다. 합치면 동작이 바뀌므로 여기 것만 그대로 옮겼다.
+    /// </summary>
+    private static bool IsCharacterCollider(Collider collider) =>
+        collider.GetComponentInParent<CharacterController>() != null
+        || collider.GetComponentInParent<NpcController>() != null
+        || collider.GetComponentInParent<PlayerHealth>() != null;
 
     private void BeginWallFix() => m_armFold?.Begin();
 

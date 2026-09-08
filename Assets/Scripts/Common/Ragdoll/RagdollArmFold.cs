@@ -65,6 +65,11 @@ public class RagdollArmFold
     }
 
     private readonly RagdollRig m_rig;
+
+    // "이 콜라이더가 사람인가" — 소유자가 준다. 여기서 판정하면 Common이 도메인 타입을 알게 된다
+    // (docs/architecture.md §1). 근거는 RagdollWallProbe.TryFindPinningWall의 인자 주석.
+    private readonly System.Func<Collider, bool> m_isCharacter;
+
     private readonly int[] m_arms = new int[8];
     private readonly int[] m_fold = new int[k_maxFoldBones]; // 접는 뼈 — 부모(어깨)가 앞이다
 
@@ -91,9 +96,11 @@ public class RagdollArmFold
     /// <summary>이번 에피소드에서 아직 볼 일이 있는가.</summary>
     public bool IsWindowOpen => m_open;
 
-    public RagdollArmFold(RagdollRig rig)
+    /// <param name="isCharacter">사람 판정 — 벽을 찾을 때 사람은 벽으로 세지 않는다.</param>
+    public RagdollArmFold(RagdollRig rig, System.Func<Collider, bool> isCharacter)
     {
         m_rig = rig;
+        m_isCharacter = isCharacter;
     }
 
     /// <summary>래그돌 진입 — 창을 열고 카운터를 되돌린다.</summary>
@@ -139,7 +146,7 @@ public class RagdollArmFold
         FoldStep(1f);
 
         Debug.Log(
-            $"[래그돌팔접기] {Label} 진입 예방 — 뼈={m_rig.GetBoneName(bone)} 벽={pin.Wall.name} "
+            $"[래그돌팔접기] {Label} 진입 예방 — 뼈={m_rig.Bones.GetName(bone)} 벽={pin.Wall.name} "
                 + $"벽면 너머 {pin.PastSurface * 100f:F1}cm였다. 접은 채로 물리에 넘긴다"
         );
 
@@ -216,7 +223,7 @@ public class RagdollArmFold
             m_rig.SetBoneKinematic(m_fold[i], true);
 
         Debug.Log(
-            $"[래그돌팔접기] {Label} 접기 시작 — 뼈={m_rig.GetBoneName(bone)} 벽={pin.Wall.name} "
+            $"[래그돌팔접기] {Label} 접기 시작 — 뼈={m_rig.Bones.GetName(bone)} 벽={pin.Wall.name} "
                 + $"벽면 너머 {pin.PastSurface * 100f:F1}cm, 대상 {m_foldCount}뼈, "
                 + $"시도 {m_attempt}/{tuning.MaxAttempts}"
         );
@@ -231,7 +238,7 @@ public class RagdollArmFold
 
         // ⚠ 팔만 본다 — 다리·머리는 제외다. 실측상 끼는 것은 거의 팔이고, 대상을 좁힌 만큼
         // 레이 수(9발 → 4발)와 오탐(바닥에 잠긴 발) 둘 다 준다.
-        int armCount = m_rig.CollectArmBones(tuning.LimbMassMax, m_arms);
+        int armCount = m_rig.Bones.CollectArmBones(tuning.LimbMassMax, m_arms);
         Vector3 hips = m_rig.Hips.position;
 
         int worst = -1;
@@ -240,8 +247,9 @@ public class RagdollArmFold
             if (
                 !RagdollWallProbe.TryFindPinningWall(
                     hips,
-                    m_rig.GetBoneCollider(m_arms[i]),
+                    m_rig.Bones.GetCollider(m_arms[i]),
                     k_probeClearance,
+                    m_isCharacter,
                     out RagdollWallProbe.Pin pin
                 )
             )
@@ -267,8 +275,9 @@ public class RagdollArmFold
         if (
             !RagdollWallProbe.TryFindPinningWall(
                 m_rig.Hips.position,
-                m_rig.GetBoneCollider(bone),
+                m_rig.Bones.GetCollider(bone),
                 k_probeClearance,
+                m_isCharacter,
                 out RagdollWallProbe.Pin pin
             )
         )
@@ -281,7 +290,7 @@ public class RagdollArmFold
     // 접을 뼈 — 박힌 뼈와 그 위쪽 사지 뼈(어깨). 몸통에 닿으면 멈춘다. 부모가 앞에 오게 뒤집는다.
     private int CollectFoldChain(int bone, in Tuning tuning)
     {
-        int count = m_rig.CollectBoneChainUpward(bone, k_maxFoldBones - 1, tuning.LimbMassMax, m_fold);
+        int count = m_rig.Bones.CollectChainUpward(bone, k_maxFoldBones - 1, tuning.LimbMassMax, m_fold);
 
         for (int i = 0; i < count / 2; i++)
         {
@@ -320,7 +329,7 @@ public class RagdollArmFold
         if (!pinned)
         {
             Debug.Log(
-                $"[래그돌팔접기] {Label} 빠져나옴 — 뼈={m_rig.GetBoneName(m_boneIndex)} "
+                $"[래그돌팔접기] {Label} 빠져나옴 — 뼈={m_rig.Bones.GetName(m_boneIndex)} "
                     + $"벽면 너머 {m_startPastSurface * 100f:F1}cm → 0 ({m_foldElapsed:F2}s)"
             );
             m_holdLeft = k_holdSteps;
@@ -335,7 +344,7 @@ public class RagdollArmFold
         {
             Debug.LogWarning(
                 $"[래그돌팔접기] {Label} {m_attempt}회 실패 — 팔이 벽에 박힌 채 남는다. "
-                    + $"뼈={m_rig.GetBoneName(m_boneIndex)} 벽면 너머 "
+                    + $"뼈={m_rig.Bones.GetName(m_boneIndex)} 벽면 너머 "
                     + $"{m_startPastSurface * 100f:F1} → {pastSurface * 100f:F1}cm"
             );
             Release();
@@ -360,7 +369,7 @@ public class RagdollArmFold
 
         for (int i = 0; i < m_foldCount; i++)
         {
-            Transform bone = m_rig.GetBoneTransform(m_fold[i]);
+            Transform bone = m_rig.Bones.GetTransform(m_fold[i]);
             Transform child = ChildTransform(m_fold[i]);
             if (bone == null || child == null)
                 continue;
@@ -384,11 +393,11 @@ public class RagdollArmFold
     // 방향을 재는 데 쓸 자식 — 리지드바디 자식이 있으면 그쪽, 없으면(말단) 계층의 첫 자식.
     private Transform ChildTransform(int index)
     {
-        int child = m_rig.ChildBoneIndex(index);
+        int child = m_rig.Bones.ChildIndex(index);
         if (child >= 0)
-            return m_rig.GetBoneTransform(child);
+            return m_rig.Bones.GetTransform(child);
 
-        Transform bone = m_rig.GetBoneTransform(index);
+        Transform bone = m_rig.Bones.GetTransform(index);
         return bone != null && bone.childCount > 0 ? bone.GetChild(0) : null;
     }
 

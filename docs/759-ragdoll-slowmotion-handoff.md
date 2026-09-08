@@ -249,13 +249,23 @@ speculative CCD · 밧줄 스프링은 전부 근거와 함께 배제됐다.
 
 ---
 
-## 6. 계측 사용법 (⚠ 지금은 전부 주석 상태다)
+## 6. 계측 사용법 (⚠ 지금은 트리에 없다 — 되살려야 쓴다)
 
-⚠ **아래 계측은 2026-08-20에 전부 주석 처리됐다**(678줄, 5개 파일 — `PlayerRagdoll` ·
-`RagdollPoseStreamer` · `RagdollRig` · `PlayerIncapacitation` · `PlayerTowedMotion`).
-지우지 않고 `/* */`로 막아 뒀으니 **되살리려면 블록의 두 줄과 호출부 주석을 푼다** — 블록마다
-머리에 이유와 이 문서 참조가 달려 있다. 프리팹 플래그(`m_logFallRate` 등 5개)는 켜진 채 남겨 뒀다.
-§4-B 실험 스위치(`-ragdollDiscrete` · `Override Collision Detection`)도 같이 막혀 있다.
+⚠ **아래 계측은 2026-09-05에 트리에서 지웠다.** 2026-08-20에 주석으로 막아 뒀던 678줄(5개 파일 —
+`PlayerRagdoll` · `RagdollPoseStreamer` · `RagdollRig` · `PlayerIncapacitation` · `PlayerTowedMotion`)이고,
+§4-B 실험 스위치(`-ragdollDiscrete` · `Override Collision Detection`)도 함께 갔다.
+
+**되살리는 법** — 지운 커밋을 찾아 그 파일들의 해당 블록을 되돌린다:
+
+```bash
+git log --oneline -S "DumpFallRate" -- Assets/Scripts/Player/View/PlayerRagdoll.Diagnostics.cs
+```
+
+되살린 뒤에는 프리팹에서 스위치를 켠다(`m_logFallRate` · `m_logRopePull`은 삭제 시점에 프리팹에
+직렬화돼 있지 않았으므로 필드가 돌아오면 기본값 `false`에서 시작한다).
+
+**아래 표와 판정 기준은 지우지 않는다** — 다시 잴 때 무엇을 어떻게 읽는지가 여기 있고, §9가 남긴
+두 건(원격 밧줄 격차 · §3-2)을 재려면 이 계측이 출발점이다.
 
 | 태그 | 어디서 | 무엇을 |
 |---|---|---|
@@ -311,11 +321,14 @@ grep -E "리그물리|낙하속도|밧줄|자세도착|소유권" \
 
 ### `Player.prefab`은 커밋되어 있다
 
-래그돌 리그(`CharacterJoint` 10개 · 뼈 레이어 11개 · `RagdollRig`)와 **계측 플래그
-`m_logFallRate: 1` · `m_logRopePull: 1`이 전부 커밋된 상태다** — clone만 해도 §6의 로그가 나온다.
+래그돌 리그(`CharacterJoint` 10개 · 뼈 레이어 11개 · `RagdollRig`)가 커밋되어 있다.
 `Max Depenetration Velocity`는 필드 기본값 **0.5**로 되돌아와 있다(§4-A가 죽었으므로).
 
-⚠ **§9의 계측 제거는 이 플래그와 프리팹 값까지 걷어내야 끝난다.**
+⚠ **2026-09-05 정정.** 이 절은 한때 `m_logFallRate: 1` · `m_logRopePull: 1`이 프리팹에 커밋돼
+"clone만 해도 로그가 나온다"고 적고 있었는데 **사실이 아니었다** — 두 필드는 2026-08-20에 주석
+블록 안으로 들어가면서 애초에 직렬화 대상이 아니게 됐다. 프리팹에 실제로 있던 계측 플래그는
+`m_logRevivalYaw` · `m_logSettleTrace` · `m_logEntryHeadTrace` 셋뿐이고 **전부 `0`이다.**
+계측 본체를 지운 지금 남은 것은 그 셋(§9의 "범위 밖" 항목)이다.
 
 ### 3판이 경고했던 워킹트리 변경은 해소됐다
 
@@ -358,12 +371,16 @@ grep -E "리그물리|낙하속도|밧줄|자세도착|소유권" \
 
 ## 9. 남은 항목
 
-- ~~**계측 전체 제거**~~ — 2026-08-20에 **주석 처리로 내렸다**(§6). 지운 것이 아니라 막은 것이라,
-  완전히 걷어낼지는 아래 두 건이 닫힌 뒤에 정한다
-- **범위 밖으로 남긴 계측** — `m_logEntryHeadTrace` · `m_logSettleTrace` · `m_logRevivalYaw`와
-  `RagdollRig`의 NpcRagdoll 진단 ⑨ 보조 블록. 다른 이슈 것이고 프리팹에서 이미 꺼져 있다
-- **`RagdollRig.AverageSpeed`가 죽었다** — 계측이 내려가며 참조가 사라졌는데 docstring은 아직
-  "정착 판정에 쓴다"고 한다. 정착은 `a2444639`에서 물리 수면으로 옮겨졌다 — §5와 같은 계열이다
+- ~~**계측 전체 제거**~~ — **끝났다 (2026-09-05).** 2026-08-20에 주석으로 내려 뒀던 것을 트리에서
+  지웠다. 되살리는 법과 판정 기준은 §6에 그대로 있다.
+  ⚠ **아래 두 건(원격 밧줄 격차 · §3-2)은 여전히 열려 있다** — 그것을 재려면 §6으로 계측을 먼저
+  되살려야 한다는 뜻이다
+- ~~**범위 밖으로 남긴 계측**~~ — `m_logEntryHeadTrace` · `m_logSettleTrace` · `m_logRevivalYaw`는
+  **그대로 남아 있다.** 직렬화 토글이 있어 성격이 다르고(프리팹에서 전부 꺼짐) 다른 이슈 것이다.
+  함께 묶여 있던 `RagdollRig`의 진단 ⑨ 보조(`PoseBones`·`CollectBindPositionDrift`·
+  `TryGetBindLocalPosition`)는 NpcRagdoll 진단과 함께 지웠다
+- ~~**`RagdollRig.AverageSpeed`가 죽었다**~~ — 지웠다 (2026-09-05). 유일한 참조가 주석 안의
+  `[밧줄]`·`[낙하속도]`뿐이었다
 - **§3-2** — `RestoreCapturedPose` 주석 정정 · `AutoConfigureConnectedAnchor` · `EnablePreprocessing`
 - **§5 회귀 정리** — 스테일 주석과 실제 호출부를 맞춘다
 - **원격 밧줄 격차** — 4판에서 새로 관측됐다(§3-1). 원격에서 골반-루트가 최대 0.54m 벌어진다.
