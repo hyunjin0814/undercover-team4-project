@@ -77990,7 +77990,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AppearanceAssigner
   m_appearanceDatabase: {fileID: 11400000, guid: 57bb736c337156747a8246abdf3cab42, type: 2}
-  m_revealedAxisCount: 5
+  m_revealedAxisCount: 6
   m_femaleFacialHairChance: 0.03
   m_montageMatchCount: 3
 --- !u!1 &1165603911
