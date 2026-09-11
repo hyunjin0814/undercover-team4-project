@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 1221493720291979380}
   - component: {fileID: 8642798545583791299}
   - component: {fileID: 6541411516237415457}
+  - component: {fileID: 1045102204300195325}
   m_Layer: 7
   m_Name: ReviveKit
   m_TagString: Untagged
@@ -95,6 +96,9 @@ MonoBehaviour:
   m_heldModelPrefab: {fileID: 1136368065188656574, guid: 97ccc75820ed6bf4198d83c80db92579, type: 3}
   m_heldPositionOffset: {x: 0.13, y: 0.03, z: 0}
   m_heldRotationOffset: {x: 0, y: 0, z: 0}
+  m_overrideThirdPersonGrip: 0
+  m_thirdPersonPositionOffset: {x: 0, y: 0, z: 0}
+  m_thirdPersonRotationOffset: {x: 0, y: 0, z: 0}
   m_handGrip: 2
   m_targetOutlineColor: {r: 0.35, g: 1, b: 0.55, a: 1}
   m_shopPrice: 5000
@@ -114,3 +118,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6708c43a2175d914ea50ce6a610d3cb6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WorldItemPickup
+--- !u!114 &1045102204300195325
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7466166629014580582}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d55f7c1e622ceb24aa080ac9ec4e842a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ChannelGauge
+  ShowTopMostFoldoutHeaderGroup: 1

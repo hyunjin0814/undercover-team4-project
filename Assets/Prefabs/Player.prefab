@@ -6838,6 +6838,7 @@ GameObject:
   - component: {fileID: 7829046604217022194}
   - component: {fileID: 8081961614526810824}
   - component: {fileID: 6563192310571307439}
+  - component: {fileID: 1598749821895528571}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -7696,6 +7697,7 @@ MonoBehaviour:
   m_dragSlowPerWeight: 0.25
   m_minDragSpeedFactor: 0.35
   m_carriedPlayerWeight: 1
+  m_heavyDragSpeedFactor: 0.04
 --- !u!114 &115275667145390572
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -7846,6 +7848,7 @@ MonoBehaviour:
   m_pivotHeight: 0.6
   m_teammatePivotHeight: 1.4
   m_followRate: 6
+  m_followYawRate: 4
   m_distance: 3.5
   m_minPitch: -10
   m_maxPitch: 70
@@ -7976,6 +7979,7 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   m_authority: 1
   m_sendEveryFixedSteps: 2
+  m_lengthEveryFixedSteps: 25
   m_interpolationDelay: 0.08
 --- !u!114 &9186688055930901132
 MonoBehaviour:
@@ -8070,6 +8074,19 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ac7b5d74171e7e049b5e72ec63c04a81, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerAssistCredit
+--- !u!114 &1598749821895528571
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5466483465133727208}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d55f7c1e622ceb24aa080ac9ec4e842a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ChannelGauge
+  ShowTopMostFoldoutHeaderGroup: 1
 --- !u!1 &5517047033924982284
 GameObject:
   m_ObjectHideFlags: 0

@@ -13,9 +13,32 @@ using UnityEngine.Localization;
 /// 플레이어 오브젝트에 붙은 컴포넌트의 SendTo.Owner(게이지·NotifyOwner)는 쓰러진 본인에게 닿지
 /// 않는다. 반면 소지품(이 아이템)의 소유권은 사망 중에도 그대로 남는다(사망 경로에 ChangeOwnership이
 /// 없다) — 그래서 채널링·게이지·피드백을 플레이어가 아니라 이 아이템에 둔다.
+/// (합성 전환 후에도 같다: <see cref="ChannelGauge"/>가 이 아이템 프리팹에 붙으므로 오너 라우팅이
+/// 아이템의 소유권을 따른다.)
 /// </summary>
+[RequireComponent(typeof(ChannelGauge))]
 public class ReviveKit : ItemBase
 {
+    private ChannelGauge m_gauge;
+
+    // 프리팹 직렬화에 의존하므로 lazy로 잡는다 — RequireComponent는 기존 프리팹 자산을 소급 보정하지 않는다.
+    private ChannelGauge Gauge
+    {
+        get
+        {
+            if (m_gauge == null)
+            {
+                m_gauge = GetComponent<ChannelGauge>();
+                if (m_gauge == null)
+                    Debug.LogError(
+                        "ReviveKit: ChannelGauge가 프리팹에 없다 — 프리팹을 열어 추가하고 저장할 것",
+                        this
+                    );
+            }
+            return m_gauge;
+        }
+    }
+
     // 사거리는 조준·윤곽선과 같은 기준 — PlayerInteractor.Range를 재사용 (#147 패턴, #184).
     private const float k_fallbackRange = 3f; // 테스트 구성 등 PlayerInteractor가 없을 때
 
@@ -26,9 +49,6 @@ public class ReviveKit : ItemBase
 
     // 자가 부활 채널링 생명주기(CTS 소유·재진입 가드)는 ServerChannel에 위임 (#109, Scanner 관례)
     private readonly ServerChannel m_selfChannel = new();
-
-    // 자가 부활 채널링 중 루프음 — 동료 구조(PlayerReviver)와 같은 소리로 통일한다.
-    protected override EAudioClip ChannelLoopSound => EAudioClip.ReviveLoop;
 
     /// <summary>
     /// 이 키트로 일으킬 수 있는 대상을 조준 중인지 — 윤곽선·크로스헤어 게이트. (#184)
@@ -242,7 +262,8 @@ public class ReviveKit : ItemBase
     private async UniTaskVoid ServerSelfChannelAsync(PlayerInteractor holder, PlayerIncapacitation incap)
     {
         NotifyOwner($"자가 부활 채널링 시작 ({m_selfReviveSeconds}초)");
-        NotifyChannelGaugeStart(m_selfReviveSeconds);
+        // 루프음은 동료 구조(PlayerReviver)와 같은 소리로 통일한다
+        Gauge?.Begin(m_selfReviveSeconds, EAudioClip.ReviveLoop);
 
         // Down 유예 시계를 얼린다 — Die 중이면 IsDowned가 아니라 무동작으로 넘어간다 (#725)
         incap.ServerSetBeingRevived(true, m_selfReviveSeconds);
@@ -260,7 +281,7 @@ public class ReviveKit : ItemBase
         finally
         {
             // 완료·취소·예외 어떤 경로로 끝나도 게이지 숨김과 유예 시계 해동을 보장한다 (#184, #725)
-            NotifyChannelGaugeEnd();
+            Gauge?.End();
             incap.ServerSetBeingRevived(false);
         }
 

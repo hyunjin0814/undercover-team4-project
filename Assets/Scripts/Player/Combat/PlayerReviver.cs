@@ -16,8 +16,30 @@ using UnityEngine;
 /// 시계를 얼리고 되살린다 — 자세한 근거는 그쪽 문서에 있다.
 /// </summary>
 [RequireComponent(typeof(PlayerInputHandler))]
+[RequireComponent(typeof(ChannelGauge))]
 public class PlayerReviver : ChanneledInteractionBehaviour
 {
+    private ChannelGauge m_gauge;
+
+    // 프리팹 직렬화에 의존하므로 lazy로 잡는다 — RequireComponent는 기존 프리팹 자산을 소급 보정하지 않는다.
+    // 같은 플레이어 오브젝트의 PlayerEscortCommands와 이 컴포넌트를 공유한다 (게이지 토큰 주의 — 후속 이슈).
+    private ChannelGauge Gauge
+    {
+        get
+        {
+            if (m_gauge == null)
+            {
+                m_gauge = GetComponent<ChannelGauge>();
+                if (m_gauge == null)
+                    Debug.LogError(
+                        "PlayerReviver: ChannelGauge가 프리팹에 없다 — 프리팹을 열어 추가하고 저장할 것",
+                        this
+                    );
+            }
+            return m_gauge;
+        }
+    }
+
     [Header("구조 채널링 (서버 권위)")]
     [Tooltip("구조 채널링 시간(초)")]
     [SerializeField]
@@ -33,10 +55,6 @@ public class PlayerReviver : ChanneledInteractionBehaviour
 
     // 서버 채널링 생명주기(CTS 소유·재진입 가드)는 ServerChannel에 위임 (#109)
     private readonly ServerChannel m_channel = new();
-
-    // 채널링 중 루프음 — 기반 클래스가 게이지 표시/숨김과 같은 경로에 태워 재생/정지한다.
-    // "취소했는데 소리가 계속 난다"가 구조적으로 생기지 않는다 (#725).
-    protected override EAudioClip ChannelLoopSound => EAudioClip.ReviveLoop;
 
     // 오너 로컬 상태 — "지금 내가 구조 채널링 중인가". 서버 m_channel.IsActive는 원격 오너에게는
     // 항상 false라(채널링이 서버 인스턴스에서만 돈다) E 재입력의 토글 여부를 이걸로 판단한다.
@@ -265,7 +283,8 @@ public class PlayerReviver : ChanneledInteractionBehaviour
     )
     {
         NotifyOwner($"구조 채널링 시작: {target.name} ({m_reviveSeconds}초)");
-        NotifyChannelGaugeStart(m_reviveSeconds);
+        // 루프음이 게이지와 같은 경로라 "취소했는데 소리가 계속 난다"가 구조적으로 생기지 않는다 (#725)
+        Gauge?.Begin(m_reviveSeconds, EAudioClip.ReviveLoop);
         ServerNotifyChannelStarted();
 
         // 다운 유예 시계를 얼린다 — 채널링 중에는 셧다운이 멈추고, 아래 finally에서 항상 되살린다 (#725)
@@ -287,7 +306,7 @@ public class PlayerReviver : ChanneledInteractionBehaviour
         finally
         {
             // 완료·취소·예외 어떤 경로로 끝나도 게이지 숨김과 유예 시계 해동을 보장한다 (#184, #725)
-            NotifyChannelGaugeEnd();
+            Gauge?.End();
             targetIncap.ServerSetBeingRevived(false);
             ServerNotifyChannelEnded();
         }
@@ -337,7 +356,7 @@ public class PlayerReviver : ChanneledInteractionBehaviour
     private void ServerCancelRevive() => m_channel.Cancel();
 
     // m_isChanneling은 오너 로컬 상태라, 원격 오너에게는 서버가 확정 시점에만 RPC로 알려 바꾼다
-    // (NotifyOwner·NotifyChannelGaugeStart와 동일 관례). 호스트 오너·오프라인은 직접 대입. (#725)
+    // (NotifyOwner·ChannelGauge.Begin과 동일 관례). 호스트 오너·오프라인은 직접 대입. (#725)
     // 동기화 NetworkVariable은 전 피어가 보므로 여기서 함께 쓴다 — 서버 컨텍스트에서만 호출되니 안전하다.
     private void ServerNotifyChannelStarted()
     {

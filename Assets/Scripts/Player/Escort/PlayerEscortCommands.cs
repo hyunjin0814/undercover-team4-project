@@ -24,11 +24,33 @@ public enum EEscortCommand
 /// 저쪽은 매 프레임 도는, 구동 주체가 다른 관심사다. 의존은 <c>Commands → Escorter</c> 한 방향뿐이며
 /// 목록을 직접 만지지 않고 <c>AddTether</c>/<c>RemoveTether</c>/<c>ReleaseDrag</c>로 위임한다.
 ///
-/// 채널링 게이지 피드백(#184)은 공통 기반 <see cref="ChanneledInteractionBehaviour"/>가 제공한다.
+/// 채널링 게이지 피드백(#184)은 같은 오브젝트의 <see cref="ChannelGauge"/> 컴포넌트가 제공한다.
 /// </summary>
 [RequireComponent(typeof(PlayerEscorter))]
+[RequireComponent(typeof(ChannelGauge))]
 public class PlayerEscortCommands : ChanneledInteractionBehaviour
 {
+    private ChannelGauge m_gauge;
+
+    // 프리팹 직렬화에 의존하므로 lazy로 잡는다 — RequireComponent는 기존 프리팹 자산을 소급 보정하지 않는다.
+    // 같은 플레이어 오브젝트의 PlayerReviver와 이 컴포넌트를 공유한다 (게이지 토큰 주의 — 후속 이슈).
+    private ChannelGauge Gauge
+    {
+        get
+        {
+            if (m_gauge == null)
+            {
+                m_gauge = GetComponent<ChannelGauge>();
+                if (m_gauge == null)
+                    Debug.LogError(
+                        "PlayerEscortCommands: ChannelGauge가 프리팹에 없다 — 프리팹을 열어 추가하고 저장할 것",
+                        this
+                    );
+            }
+            return m_gauge;
+        }
+    }
+
     [Header("밧줄 채널링 (서버 권위)")]
     [Tooltip(
         "줄다리기 합류 채널링 시간(초). 0이면 좌클릭 한 번에 즉시 합류한다 (#608). "
@@ -358,7 +380,7 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
     private async UniTaskVoid ServerRopeJoinChannelAsync(NpcController target)
     {
         NotifyOwner($"줄다리기 합류 채널링 시작: {target.name} ({m_channelSeconds}초)");
-        NotifyChannelGaugeStart(m_channelSeconds);
+        Gauge?.Begin(m_channelSeconds, EAudioClip.None);
 
         // 수갑 체포와 동일한 keepAlive — 도중 거리 이탈은 즉시 실패시킨다 (#91)
         ServerChannel.Result result;
@@ -369,7 +391,7 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         }
         finally
         {
-            NotifyChannelGaugeEnd(); // 어떤 경로로 끝나도 게이지 숨김 보장 (#184)
+            Gauge?.End(); // 어떤 경로로 끝나도 게이지 숨김 보장 (#184)
         }
 
         switch (result)

@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 1531626333630570081}
   - component: {fileID: 6588843841137046898}
   - component: {fileID: -6396881021767209465}
+  - component: {fileID: 795768077531382692}
   m_Layer: 7
   m_Name: Taser
   m_TagString: Untagged
@@ -95,6 +96,9 @@ MonoBehaviour:
   m_heldModelPrefab: {fileID: 4839429111455078644, guid: 795ae67a105c6ae428a56d86768fc150, type: 3}
   m_heldPositionOffset: {x: 0.12, y: 0.04, z: -0.03}
   m_heldRotationOffset: {x: 185, y: -88, z: 95}
+  m_overrideThirdPersonGrip: 0
+  m_thirdPersonPositionOffset: {x: 0, y: 0, z: 0}
+  m_thirdPersonRotationOffset: {x: 0, y: 0, z: 0}
   m_handGrip: 1
   m_targetOutlineColor: {r: 1, g: 0.85, b: 0.2, a: 1}
   m_shopPrice: 7500
@@ -118,3 +122,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6708c43a2175d914ea50ce6a610d3cb6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WorldItemPickup
+--- !u!114 &795768077531382692
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7581991311652755793}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d55f7c1e622ceb24aa080ac9ec4e842a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ChannelGauge
+  ShowTopMostFoldoutHeaderGroup: 1

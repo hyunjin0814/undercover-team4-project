@@ -22,10 +22,31 @@ using UnityEngine;
 /// 채널링이 없는 즉발 아이템이라 CancelUse는 기본 구현(무동작)을 그대로 쓴다.
 /// 다만 <b>발사 후 충전(쿨다운)은 채널링과 같은 원형 게이지로 표시한다</b> (#455) —
 /// 진행 방향이 같아서(0→100%로 차오르고 가득 차는 순간 재발사 가능) 같은 UI가 그대로 맞는다.
-/// 게이지 인프라는 ItemBase가 물려주는 ChanneledInteractionBehaviour의 것을 쓴다.
+/// 게이지 인프라는 같은 오브젝트의 <see cref="ChannelGauge"/> 컴포넌트를 쓴다.
 /// </summary>
+[RequireComponent(typeof(ChannelGauge))]
 public class Taser : ItemBase, IAimedWeapon
 {
+    private ChannelGauge m_gauge;
+
+    // 프리팹 직렬화에 의존하므로 lazy로 잡는다 — RequireComponent는 기존 프리팹 자산을 소급 보정하지 않는다.
+    private ChannelGauge Gauge
+    {
+        get
+        {
+            if (m_gauge == null)
+            {
+                m_gauge = GetComponent<ChannelGauge>();
+                if (m_gauge == null)
+                    Debug.LogError(
+                        "Taser: ChannelGauge가 프리팹에 없다 — 프리팹을 열어 추가하고 저장할 것",
+                        this
+                    );
+            }
+            return m_gauge;
+        }
+    }
+
     [Header("테이저 설정")]
     [Tooltip("전극이 날아가는 최대 사거리(m). 상호작용 레이(PlayerInteractor.Range)와 무관하게 이 값이 기준이다")]
     [SerializeField]
@@ -158,7 +179,8 @@ public class Taser : ItemBase, IAimedWeapon
         // 충전 게이지 — 쏜 사람 화면에만 (#455). 유효성 검사를 모두 통과한 뒤라 여기가
         // "실제로 발사했다"가 확정되는 지점이고, 거부된 요청에는 충전도 게이지도 걸리지 않는다.
         // 명중 판정보다 앞에 두는 이유: 빗나가도 충전은 소모되므로 게이지도 같이 떠야 한다.
-        NotifyChannelGaugeStart(m_cooldownSeconds);
+        // 충전 표시에는 루프음이 없다 — 발사음(아래)이 한 번 울리는 것으로 끝난다
+        Gauge?.Begin(m_cooldownSeconds, EAudioClip.None);
 
         // 발사음도 같은 이유로 명중 판정보다 앞이다 — 빗나가도 쏜 소리는 나야 한다 (#549).
         // 총구(조준 원점)에서 3D로 울리므로 주변 사람에게는 '저기서 누가 쐈다'가 된다.
@@ -434,7 +456,7 @@ public class Taser : ItemBase, IAimedWeapon
     /// 버리기 등 소유권 이전 경로에서 서버가 직접 충전 게이지를 내린다 (ItemBase 훅, #455).
     /// 손에 없는 아이템의 충전이 화면에 남지 않게 하는 것뿐이다 — 충전 자체(m_nextFireTime)는
     /// 아이템 인스턴스에 남아 다시 주웠을 때 그대로 이어진다.
-    /// 오너 라우팅은 기반(ChanneledInteractionBehaviour)이 처리하므로 여기서는 그냥 부르면 된다:
+    /// 오너 라우팅은 <see cref="ChannelGauge"/>가 처리하므로 여기서는 그냥 부르면 된다:
     /// 호스트 오너는 로컬로, 원격 오너에게는 SendTo.Owner RPC로 나간다.
     ///
     /// 슬롯을 바꿔 손에서 내리는 경우는 이 훅이 아니라 <c>PlayerLoadout.EquipSlot</c>이 게이지를 내린다 —
@@ -442,7 +464,7 @@ public class Taser : ItemBase, IAimedWeapon
     /// <c>CancelUse</c>를 쓰지 않는 이유도 같은 맥락이다: 그건 <b>좌클릭 뗌</b>에도 불려서,
     /// 발사 직후 버튼을 떼는 순간 충전 게이지가 사라져 버린다.
     /// </summary>
-    public override void ServerCancelActiveUse() => NotifyChannelGaugeEnd();
+    public override void ServerCancelActiveUse() => Gauge?.End();
 
     /// <summary>
     /// 다시 장착됐다 — 아직 충전 중이면 남은 만큼 게이지를 이어 띄운다 (#455).
@@ -475,6 +497,6 @@ public class Taser : ItemBase, IAimedWeapon
 
         // 남은 시간을 duration으로 주면 게이지가 0%에서 다시 차오른다 —
         // 전체 쿨다운과 경과분을 함께 넘겨 중간부터 잇는다.
-        NotifyChannelGaugeStart(m_cooldownSeconds, m_cooldownSeconds - remaining);
+        Gauge?.Begin(m_cooldownSeconds, m_cooldownSeconds - remaining, EAudioClip.None);
     }
 }

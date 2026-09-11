@@ -11,8 +11,29 @@ using UnityEngine.Localization;
 /// 채널링 경로는 <b>지우지 않고 남겨 뒀다</b> — <see cref="m_channelSeconds"/>가 0보다 크면 예전처럼
 /// 홀드 채널링으로 동작한다. 플레이테스트로 되돌릴 수 있게 하기 위한 것이다(#608 본문).</summary>
 [RequireComponent(typeof(ItemBattery))]
+[RequireComponent(typeof(ChannelGauge))]
 public class Scanner : ItemBase
 {
+    private ChannelGauge m_gauge;
+
+    // 프리팹 직렬화에 의존하므로 lazy로 잡는다 — RequireComponent는 기존 프리팹 자산을 소급 보정하지 않는다.
+    private ChannelGauge Gauge
+    {
+        get
+        {
+            if (m_gauge == null)
+            {
+                m_gauge = GetComponent<ChannelGauge>();
+                if (m_gauge == null)
+                    Debug.LogError(
+                        "Scanner: ChannelGauge가 프리팹에 없다 — 프리팹을 열어 추가하고 저장할 것",
+                        this
+                    );
+            }
+            return m_gauge;
+        }
+    }
+
     [Header("스캐너 설정")]
     [Tooltip("스캔 채널링 시간(초). 0이면 즉시 스캔 — 게이지·판독음 없이 겨냥 즉시 결과가 나온다 (#608). "
         + "0보다 크면 예전 홀드 채널링으로 돌아간다(되돌리기용)")]
@@ -52,11 +73,6 @@ public class Scanner : ItemBase
     /// <summary>기반 ToastOwner가 오너 로컬에서 부르는 발행 지점. (#309)</summary>
     // 스캐너는 줍기 시 소유권이 홀더로 이전되므로(#88) 기반의 SendTo.Owner가 정확히 든 사람에게 간다.
     protected override void RaiseOwnerToast(EItemFeedback feedback) => OnScanFeedback?.Invoke(feedback);
-
-    // 즉시 스캔에는 "읽는 중" 구간이 없어 루프 판독음이 울릴 자리가 없다 — 결과가 나오는 순간
-    // 1회 울린다(#608). 채널링을 되살리면(m_channelSeconds > 0) 그때만 루프도 함께 돌아온다. (#483)
-    protected override EAudioClip ChannelLoopSound =>
-        m_channelSeconds > 0f ? EAudioClip.ScannerScan : EAudioClip.None;
 
     private void Awake()
     {
@@ -294,7 +310,9 @@ public class Scanner : ItemBase
         else
         {
             NotifyOwner($"스캔 채널링 시작: {identity.name} ({m_channelSeconds}초)");
-            NotifyChannelGaugeStart(m_channelSeconds);
+            // 루프 판독음은 채널링 경로에만 있다 — 즉시 스캔(위 분기)에는 "읽는 중" 구간이 없어
+            // 결과가 나오는 순간 1회만 울린다 (#608 · #483)
+            Gauge?.Begin(m_channelSeconds, EAudioClip.ScannerScan);
 
             ServerChannel.Result result;
             try
@@ -309,7 +327,7 @@ public class Scanner : ItemBase
             finally
             {
                 // 완료·뗌·거리이탈·예외 어떤 경로로 끝나도 게이지 숨김을 보장한다 (#184)
-                NotifyChannelGaugeEnd();
+                Gauge?.End();
             }
 
             // 실패로 끝나도 오너의 in-flight 플래그를 풀어야 재시도가 된다 (#91)

@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 6465765157232573796}
   - component: {fileID: 7887068396476588369}
   - component: {fileID: 3448176560008718407}
+  - component: {fileID: 5647492676828411337}
   m_Layer: 7
   m_Name: Scanner
   m_TagString: Untagged
@@ -96,6 +97,9 @@ MonoBehaviour:
   m_heldModelPrefab: {fileID: 1603617425342002, guid: d4b0d3b273b187c4696240caebff3f7a, type: 3}
   m_heldPositionOffset: {x: 0.13, y: 0.04, z: -0.01}
   m_heldRotationOffset: {x: 90, y: 180, z: 0}
+  m_overrideThirdPersonGrip: 0
+  m_thirdPersonPositionOffset: {x: 0, y: 0, z: 0}
+  m_thirdPersonRotationOffset: {x: 0, y: 0, z: 0}
   m_handGrip: 2
   m_targetOutlineColor: {r: 0, g: 0.25335073, b: 1, a: 1}
   m_shopPrice: 0
@@ -131,3 +135,16 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ItemBattery
   ShowTopMostFoldoutHeaderGroup: 1
   m_maxBattery: 5
+--- !u!114 &5647492676828411337
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8609137422397610967}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d55f7c1e622ceb24aa080ac9ec4e842a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ChannelGauge
+  ShowTopMostFoldoutHeaderGroup: 1

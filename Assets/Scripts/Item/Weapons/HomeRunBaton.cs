@@ -10,8 +10,29 @@ using UnityEngine;
 /// <b>누르는 순간이 아니라 떼는 순간이 타격이다</b> (#998) — 오래 모을수록 멀리 날린다. 부모는 즉발이므로
 /// <see cref="Use"/>는 충전만 시작하고 실제 스윙(<c>base.Use</c>)은 <see cref="CancelUse"/>가 낸다.
 /// </summary>
+[RequireComponent(typeof(ChannelGauge))]
 public class HomeRunBaton : Baton
 {
+    private ChannelGauge m_gauge;
+
+    // 프리팹 직렬화에 의존하므로 lazy로 잡는다 — RequireComponent는 기존 프리팹 자산을 소급 보정하지 않는다.
+    private ChannelGauge Gauge
+    {
+        get
+        {
+            if (m_gauge == null)
+            {
+                m_gauge = GetComponent<ChannelGauge>();
+                if (m_gauge == null)
+                    Debug.LogError(
+                        "HomeRunBaton: ChannelGauge가 프리팹에 없다 — 프리팹을 열어 추가하고 저장할 것",
+                        this
+                    );
+            }
+            return m_gauge;
+        }
+    }
+
     [Header("홈런 진압봉 (#815)")]
     [Tooltip("최대 충전 시 발사 수평 속도(m/s)")]
     [SerializeField]
@@ -61,12 +82,6 @@ public class HomeRunBaton : Baton
 
     protected override string WeaponLogName => "홈런 진압봉";
 
-    /// <summary>
-    /// 모으는 동안 계속 나는 소리 — 게이지와 같은 경로라 시작·종료가 이미 짝지어져 있다 (#998).
-    /// 모으는 본인에게만 들리는 2D 루프다. 카탈로그에 클립이 아직 없으면 조용히 넘어간다.
-    /// </summary>
-    protected override EAudioClip ChannelLoopSound => EAudioClip.HomeRunCharge;
-
     // ---- 차지 (#998) ----
 
     /// <summary>
@@ -76,7 +91,8 @@ public class HomeRunBaton : Baton
     public override void Use(GameObject aimTarget)
     {
         m_chargeStartTime = Time.time;
-        NotifyChannelGaugeStart(m_maxChargeSeconds);
+        // 모으는 본인에게만 들리는 2D 루프 — 게이지와 같은 경로라 시작·종료가 이미 짝지어져 있다 (#998)
+        Gauge?.Begin(m_maxChargeSeconds, EAudioClip.HomeRunCharge);
     }
 
     /// <summary>
@@ -96,7 +112,7 @@ public class HomeRunBaton : Baton
 
         float charge = Mathf.Clamp01((Time.time - m_chargeStartTime) / m_maxChargeSeconds);
         m_chargeStartTime = -1f;
-        NotifyChannelGaugeEnd();
+        Gauge?.End();
 
         // 모으는 도중 다운되면 모은 것은 버린다 — PlayerItemUser는 누름(HandleUseItem)만 무력화로
         // 막고 뗌은 막지 않으므로, 여기서 보지 않으면 쓰러진 채로 스윙이 나간다. 즉발이던 시절에는
