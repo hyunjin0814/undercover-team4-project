@@ -107,7 +107,7 @@
 
 |  |  |
 |:--:|:--:|
-| <img src="docs/images/ragdoll-sync.gif" width="400"> | <img src="docs/images/ragdoll-sync-2.gif" width="400"> |
+| <img src="docs/images/ragdoll-sync-1.gif" width="400"> | <img src="docs/images/ragdoll-sync-2.gif" width="400"> |
 | **클라이언트 A** | **같은 순간, 클라이언트 B** |
 
 *호스트가 계산한 자세를 받아 양쪽이 같은 모양으로 무너지고 같은 자리에 정착한다.*
