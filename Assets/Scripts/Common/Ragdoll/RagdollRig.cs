@@ -24,11 +24,11 @@ public class RagdollRig : MonoBehaviour
     // ---- 프리팹에 저장되지 않는 Rigidbody 값 — 런타임에 다시 건다 (docs §2) ----
 
     // 겹침 탈출 속도 상한. 이 값이 곧 시체가 튀어오르는 높이다(0.5m/s = 1.3cm).
+    // 엔진·프로젝트 기본값은 10이라 이 값은 그 1/20이다.
     //
-    // ⚠ <b>지금 이 값이 낙하 속도를 지배하고 있는지 재는 중이다</b> (#759). 실측: 골반 0.66m가
-    // 떨어지는 데 약 2.5초(자유낙하 0.36초)이고, 구간 속도가 0.16~0.72m/s로 <b>이 상한 근처를
-    // 넘지 못한다</b>. 엔진·프로젝트 기본값은 10이라 이 값은 그 1/20이다.
-    // 그래서 인스펙터로 빼 두었다 — 아래 필드가 정본이고 이 상수는 기본값이다.
+    // ⚠ <b>한때 이 값을 슬로모션(#759)의 용의자로 봤으나 무죄로 끝났다</b> — 원인은 루트 추종이
+    // 프레임마다 돌던 것이었다(docs/759 §2·§4-A). 인스펙터로 빼 둔 것은 그때의 A/B 실험 잔재이고,
+    // 아래 필드가 정본·이 상수가 기본값인 구성은 그대로 둔다.
     private const float k_maxDepenetrationVelocity = 0.5f;
 
     // 관절 projection을 껐으므로 관절을 붙드는 일은 전부 solver 반복이 맡는다 (기본 6/1로는 늘어난다).
@@ -44,72 +44,18 @@ public class RagdollRig : MonoBehaviour
              "다시 건다.</b>\n\n" +
              "<b>0.5는 엔진 기본값(10)의 1/20이다.</b> 튀어오름을 막으려고 조인 값인데(0.5m/s = 1.3cm), " +
              "그 대가로 <b>접촉 해소가 느려진다</b> — 겹친 상태로 있는 몸은 초당 이 값만큼만 빠져나온다.\n\n" +
-             "⚠ <b>#759 계측 중</b>: 시체가 천천히 쓰러지는 구간 속도(0.16~0.72m/s)가 이 상한 근처를 " +
-             "넘지 못한다. 10(기본값)으로 올려 낙하 곡선이 정상이 되는지 보는 실험용으로 뺐다. " +
-             "올리면 겹침에서 <b>튀어오름</b>이 커지므로(10m/s면 수십 cm) 확정되면 중간값을 찾는다.")]
+             "⚠ 올리면 겹침에서 <b>튀어오름</b>이 커진다(10m/s면 수십 cm). 슬로모션(#759)의 원인이 " +
+             "아님은 실측으로 확인됐으므로(docs/759 §4-A) 바꿀 이유가 있을 때만 건드릴 것.")]
     [SerializeField] private float m_maxDepenetrationVelocity = k_maxDepenetrationVelocity;
 
     [Tooltip("골반보다 높은 뼈에 얹는 추가 속도 비율(1/m) — 상체가 더 빨라 다리가 끌리는 텀블이 생긴다")]
     [SerializeField] private float m_tumbleBias = 0.8f;
 
-    // ⚠ #759 계측 — 원인이 닫혀 주석 처리했다(2026-08-20). 근거: docs/759-ragdoll-slowmotion-handoff.md
-    //    §4-B 충돌검출 실험 스위치 — 인스펙터 필드 둘과 -ragdollDiscrete 인자.
-    /*
-    // ---- #759 A/B 실험용 (원인이 잡히면 이 둘은 지운다 — docs/759 §6) ----
-
-    [Tooltip("⚠ <b>#759 실험용.</b> 켜면 아래 값으로 뼈 Rigidbody의 충돌 검출 방식을 런타임에 덮는다.\n\n" +
-             "프리팹은 전 뼈가 <b>ContinuousSpeculative</b>다. speculative CCD는 겹치기 <b>전에</b> " +
-             "접촉을 만들어 미리 제동을 걸고, 그렇게 잡힌 접촉이 침투로 취급되면 해소 속도가 " +
-             "<b>침투해소상한(0.5m/s)</b>에 묶인다 — 관측된 구간 속도 0.16~0.72m/s가 그 스케일이다.\n\n" +
-             "Discrete로 덮었을 때 <c>[낙하속도]</c>의 <b>낙하곡선 0.25s 칸</b>이 올라오면 가설 B 확정.")]
-    [SerializeField] private bool m_overrideCollisionDetection;
-
-    [Tooltip("위를 켰을 때 걸 값 — 실험의 기본은 Discrete다.\n\n" +
-             "⚠ 이 둘은 <b>직렬화 필드라 빌드 안에서는 못 바꾼다.</b> 빌드로 재려면 실행 인자 " +
-             "<b>-ragdollDiscrete</b>를 쓴다 — 그쪽이 이 필드를 이긴다.")]
-    [SerializeField] private CollisionDetectionMode m_collisionDetection = CollisionDetectionMode.Discrete;
-
-    // 인스펙터 필드는 직렬화라 <b>빌드 안에서는 못 바꾼다</b> — 한 빌드로 두 조건을 다 보려고
-    // 실행 인자를 하나 받는다. 결과를 만드는 것은 <b>권위 피어의 물리뿐</b>이므로
-    // <b>호스트 PC만</b> 이 인자로 띄우면 된다:
-    //
-    //     undercover-team4-project.exe -ragdollDiscrete
-    //
-    // 실제로 무엇이 걸렸는지는 <c>[리그물리]</c>의 <c>충돌검출=</c>가 말해 준다 — 그쪽이 정본이다.
-    // #759가 닫히면 이 블록과 위 두 필드를 함께 지운다.
-    private const string k_discreteArg = "-ragdollDiscrete";
-
-    private static bool? s_discreteArgPresent; // 한 번만 훑는다 — 인자는 실행 중 안 바뀐다
-
-    private static bool DiscreteRequestedByArgs()
-    {
-        if (s_discreteArgPresent.HasValue)
-            return s_discreteArgPresent.Value;
-
-        bool found = false;
-        string[] args = System.Environment.GetCommandLineArgs();
-        for (int i = 0; i < args.Length; i++)
-        {
-            if (string.Equals(args[i], k_discreteArg, System.StringComparison.OrdinalIgnoreCase))
-            {
-                found = true;
-                break;
-            }
-        }
-
-        s_discreteArgPresent = found;
-        if (found)
-            Debug.Log($"[리그물리] 실행 인자 {k_discreteArg} — 뼈 충돌 검출을 Discrete로 덮는다 (#759)");
-
-        return found;
-    }
-    */
-
     private Transform m_boneRoot; // 리그 최상단 — 뼈·스킨 수집 범위를 여기로 못박는다
 
     private Rigidbody[] m_bodies; // 래그돌 레이어의 뼈 Rigidbody만 (손에 든 아이템의 rb가 섞이지 않게)
     private Collider[] m_boneColliders; // 위와 같은 순서 — 뼈마다 하나 (위저드가 그렇게 만든다)
-    private CharacterJoint[] m_joints; // 위와 같은 순서 — 골반만 null (#759 앵커 오차 계측)
+    private CharacterJoint[] m_joints; // 위와 같은 순서 — 골반만 null. 뼈 체인 질의(#980)가 쓴다
     private float[] m_baseLinearDamping; // 감쇠를 풀 때 되돌릴 평시 값 — 프리팹이 진실이라 상수로 박지 않는다
     private float[] m_baseAngularDamping;
 
@@ -117,9 +63,12 @@ public class RagdollRig : MonoBehaviour
     private Rigidbody m_hipsBody;
     private Transform m_headBone; // 누운 방향(yaw) 계산용
 
-    // 몸통 스킨드 메시 — 래그돌 동안 컬링 바운즈를 매 프레임 재계산시켜야 한다(SetSkinsAlwaysVisible)
-    private SkinnedMeshRenderer[] m_skins;
-    private bool[] m_skinUpdateWhenOffscreen;
+    // 몸통 스킨드 메시 — 래그돌 동안 컬링 바운즈를 매 프레임 재계산시켜야 한다 (docs §7).
+    // 뼈와 필드를 공유하지 않아 <see cref="RagdollSkins"/>로 갈라냈다.
+    private RagdollSkins m_skins = RagdollSkins.Empty;
+
+    // "i번째 뼈가 무엇이며 누구에게 매달렸나" — 위 배열들을 읽기만 하는 질의 묶음 (#980).
+    private RagdollBoneGraph m_boneGraph = RagdollBoneGraph.Empty;
 
     private Vector3[] m_capturedPositions; // 캡처한 월드 포즈 (재정렬 전후를 잇는다)
     private Quaternion[] m_capturedRotations;
@@ -127,11 +76,7 @@ public class RagdollRig : MonoBehaviour
     // ---- 바인드 포즈 (프리팹이 authoring한 자세) ----
     // 관절의 connectedAnchor가 여기 구워지므로 뼈 길이가 틀어지면 관절이 위반 상태로 출발한다 (docs §5).
     // 리지드바디 뼈만이 아니라 <b>리그 전체</b>를 담는다 — 포즈 복사가 훑는 범위와 같아야 한다.
-    private Transform[] m_bindBones;
-    private Vector3[] m_bindPositions;
-    private Quaternion[] m_bindRotations;
-    private bool[] m_bindJointed; // 관절이 달려 있는가 — 드리프트 판정을 이 뼈들로 좁힌다
-    private bool[] m_bindStreamed; // m_poseBones에 드는가 — 거짓인 말단 뼈는 바인드로 못박는다
+    private RagdollBindPose m_bindPose = RagdollBindPose.Empty;
 
     /// <summary>
     /// <b>자세 한 벌 — 복제되는 뼈 전부.</b> <see cref="m_bodies"/>에 그 사이를 잇는 <b>체인 뼈</b>를
@@ -178,102 +123,6 @@ public class RagdollRig : MonoBehaviour
             return lowest;
         }
     }
-
-    /// <summary>뼈 평균 속도(m/s) — 정착 판정에 쓴다.</summary>
-    public float AverageSpeed
-    {
-        get
-        {
-            if (m_bodies == null || m_bodies.Length == 0)
-                return 0f;
-
-            float total = 0f;
-            for (int i = 0; i < m_bodies.Length; i++)
-                total += m_bodies[i].linearVelocity.magnitude;
-            return total / m_bodies.Length;
-        }
-    }
-
-    // ⚠ #759 계측 — 원인이 닫혀 주석 처리했다(2026-08-20). 근거: docs/759-ragdoll-slowmotion-handoff.md
-    //    관절 앵커 계측 API — JointCount / HasAutoConfiguredAnchors / MaxJointAnchorError.
-    /*
-    // ---- #759 A/B 계측 — 관절 앵커 (원인이 잡히면 지운다, docs/759 §6) ----
-
-    /// <summary>관절 수 — 골반은 관절이 없으므로 뼈 수보다 하나 적다.</summary>
-    public int JointCount
-    {
-        get
-        {
-            if (m_joints == null)
-                return 0;
-
-            int n = 0;
-            for (int i = 0; i < m_joints.Length; i++)
-            {
-                if (m_joints[i] != null)
-                    n++;
-            }
-            return n;
-        }
-    }
-
-    /// <summary>관절이 <c>connectedAnchor</c>를 자동으로 굽는가 — 하나라도 켜져 있으면 참.</summary>
-    public bool HasAutoConfiguredAnchors
-    {
-        get
-        {
-            if (m_joints == null)
-                return false;
-
-            for (int i = 0; i < m_joints.Length; i++)
-            {
-                if (m_joints[i] != null && m_joints[i].autoConfigureConnectedAnchor)
-                    return true;
-            }
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// <b>관절 앵커 오차(m) — 지금 이 순간 솔버가 풀어야 하는 위치 오차의 최댓값.</b> (#759 가설 A)
-    ///
-    /// 관절의 두 앵커점(내 바디 기준 <c>anchor</c>, 상대 바디 기준 <c>connectedAnchor</c>)을 각각
-    /// 월드로 옮겨 그 거리를 잰다. 관절이 성립하면 이 둘은 <b>같은 점</b>이어야 하므로 0에 수렴한다.
-    ///
-    /// <b>0이 아닌 채로 출발하면 솔버는 매 스텝 중력이 아니라 이 오차를 푼다</b> — 그것이
-    /// "뼈는 떠는데 몸은 안 나가는" 그림이다. <c>autoConfigureConnectedAnchor</c>가 켜져 있으면
-    /// 앵커가 <b>관절이 활성화된 순간의 자세</b>로 구워지므로, 그 순간이 실행 순서로 흔들리면
-    /// 이 값이 사망마다 달라진다 — <b>그것이 가설 A의 지문이다.</b>
-    /// </summary>
-    /// <param name="worstBone">오차가 가장 큰 뼈 이름 — 없으면 빈 문자열.</param>
-    public float MaxJointAnchorError(out string worstBone)
-    {
-        worstBone = string.Empty;
-        if (m_joints == null)
-            return 0f;
-
-        float worst = 0f;
-        for (int i = 0; i < m_joints.Length; i++)
-        {
-            CharacterJoint joint = m_joints[i];
-            if (joint == null)
-                continue;
-
-            Vector3 mine = joint.transform.TransformPoint(joint.anchor);
-            Vector3 theirs = joint.connectedBody != null
-                ? joint.connectedBody.transform.TransformPoint(joint.connectedAnchor)
-                : joint.connectedAnchor;
-
-            float error = Vector3.Distance(mine, theirs);
-            if (error > worst)
-            {
-                worst = error;
-                worstBone = joint.name;
-            }
-        }
-        return worst;
-    }
-    */
 
     private bool m_collected;
 
@@ -379,228 +228,15 @@ public class RagdollRig : MonoBehaviour
 
         ApplyRuntimePhysics(); // 프리팹이 들고 있을 수 없는 값 (docs §2)
 
-        CaptureBindPose(); // 아직 아무도 리그를 건드리지 않은 지금이 유일한 기회다
+        // 아직 아무도 리그를 건드리지 않은 지금이 바인드를 담을 유일한 기회다.
+        m_bindPose = RagdollBindPose.Capture(m_boneRoot, m_bodies);
+        m_poseBones = m_bindPose.BuildPoseBones();
 
-        CollectSkins();
+        // 뼈 계층 질의는 배열이 다 찬 뒤에 만든다 — 읽기만 하므로 배열의 주인은 계속 여기다.
+        m_boneGraph = new RagdollBoneGraph(m_bodies, m_boneColliders, m_joints, m_hipsBody, m_headBone);
+
+        m_skins = RagdollSkins.Collect(transform, m_boneRoot);
         SetKinematic(true); // 평시는 애니메이터가 포즈를 쥔다
-    }
-
-    // 이 리그가 구동하는 스킨드 메시를 모은다 — 계층·이름으로는 못 가른다(docs §3).
-    private void CollectSkins()
-    {
-        SkinnedMeshRenderer[] all = GetComponentsInChildren<SkinnedMeshRenderer>(true);
-        int count = 0;
-        for (int i = 0; i < all.Length; i++)
-        {
-            if (DrivenByBodyRig(all[i]))
-                count++;
-        }
-
-        m_skins = new SkinnedMeshRenderer[count];
-        m_skinUpdateWhenOffscreen = new bool[count];
-        int next = 0;
-        for (int i = 0; i < all.Length; i++)
-        {
-            if (!DrivenByBodyRig(all[i]))
-                continue;
-            m_skins[next] = all[i];
-            m_skinUpdateWhenOffscreen[next] = all[i].updateWhenOffscreen;
-            next++;
-        }
-    }
-
-    // rootBone이 몸통 리그 안에 있는 메시인가 — 이 리그가 구동하는가의 판정.
-    private bool DrivenByBodyRig(SkinnedMeshRenderer skin) =>
-        skin.rootBone != null
-        && (skin.rootBone == m_boneRoot || skin.rootBone.IsChildOf(m_boneRoot));
-
-    // ---- 바인드 포즈 ----
-
-    // 프리팹이 authoring한 자세를 담아 둔다 — <see cref="Collect"/>에서만 부른다.
-    // 나중에 부르면 그때의 오염된 자세가 "바인드"가 된다.
-    private void CaptureBindPose()
-    {
-        m_bindBones = m_boneRoot.GetComponentsInChildren<Transform>(true);
-        m_bindPositions = new Vector3[m_bindBones.Length];
-        m_bindRotations = new Quaternion[m_bindBones.Length];
-        m_bindJointed = new bool[m_bindBones.Length];
-        m_bindStreamed = new bool[m_bindBones.Length];
-
-        for (int i = 0; i < m_bindBones.Length; i++)
-        {
-            m_bindPositions[i] = m_bindBones[i].localPosition;
-            m_bindRotations[i] = m_bindBones[i].localRotation;
-            m_bindJointed[i] = m_bindBones[i].GetComponent<Joint>() != null;
-
-            // ⚠ Rigidbody 유무가 아니라 m_bodies 소속으로 판정한다 — 수집이 레이어로도 거른다.
-            m_bindStreamed[i] = IsSelfOrAncestorOfBody(m_bindBones[i]);
-        }
-
-        CollectPoseBones();
-    }
-
-    // 자세 한 벌을 고른다 — 계층 순서 그대로라 피어마다 같고 부모가 자식보다 먼저 온다.
-    private void CollectPoseBones()
-    {
-        int count = 0;
-        for (int i = 0; i < m_bindBones.Length; i++)
-        {
-            if (m_bindStreamed[i])
-                count++;
-        }
-
-        m_poseBones = new Transform[count];
-        int next = 0;
-        for (int i = 0; i < m_bindBones.Length; i++)
-        {
-            if (m_bindStreamed[i])
-                m_poseBones[next++] = m_bindBones[i];
-        }
-    }
-
-    // 이 뼈가 리지드바디 뼈이거나 그 조상인가 — 즉 몸 모양을 결정하는 체인 위에 있는가.
-    private bool IsSelfOrAncestorOfBody(Transform bone)
-    {
-        for (int i = 0; i < m_bodies.Length; i++)
-        {
-            Transform body = m_bodies[i].transform;
-            if (body == bone || body.IsChildOf(bone))
-                return true;
-        }
-
-        return false;
-    }
-
-    /// <summary>
-    /// <b>관절이 달린 뼈</b>의 로컬 위치가 바인드에서 얼마나 벗어났는지(m) — 최댓값. 진단용.
-    /// 이것이 관절이 보는 "뼈 길이"다. 관절 없는 뼈(골반)를 세면 안 되는 이유는 docs §5.
-    /// </summary>
-    public float MaxBindPositionDrift
-    {
-        get
-        {
-            if (m_bindBones == null)
-                return 0f;
-
-            float worst = 0f;
-            for (int i = 0; i < m_bindBones.Length; i++)
-            {
-                if (m_bindBones[i] == null || !m_bindJointed[i])
-                    continue;
-
-                float drift = Vector3.Distance(m_bindBones[i].localPosition, m_bindPositions[i]);
-                if (drift > worst)
-                    worst = drift;
-            }
-            return worst;
-        }
-    }
-
-    // ---- 진단 보조 (임시 — NpcRagdoll의 진단 ⑨가 쓴다. 그 블록과 함께 지운다. docs §14) ----
-
-    /// <summary>스트림에 실리는 뼈 — <b>계층 순서</b>라 그대로 훑으면 체인이 풀린다. 진단 전용.</summary>
-    public Transform[] PoseBones => m_poseBones;
-
-    /// <summary>
-    /// <b>뼈마다</b>의 바인드 로컬 위치 드리프트(m) — <see cref="MaxBindPositionDrift"/>를
-    /// "어느 뼈인지"까지 벌려 놓은 것. 대상은 같다(관절이 달린 뼈만).
-    /// </summary>
-    /// <returns>담은 개수.</returns>
-    public int CollectBindPositionDrift(System.Collections.Generic.List<(string Bone, float Drift)> into)
-    {
-        if (into == null)
-            return 0;
-
-        into.Clear();
-        if (m_bindBones == null)
-            return 0;
-
-        for (int i = 0; i < m_bindBones.Length; i++)
-        {
-            if (m_bindBones[i] == null || !m_bindJointed[i])
-                continue;
-
-            into.Add(
-                (m_bindBones[i].name, Vector3.Distance(m_bindBones[i].localPosition, m_bindPositions[i]))
-            );
-        }
-
-        return into.Count;
-    }
-
-    /// <summary>이 뼈의 <b>바인드 로컬 위치</b> — 리그의 뼈가 아니면 거짓.</summary>
-    public bool TryGetBindLocalPosition(Transform bone, out Vector3 bindLocal)
-    {
-        bindLocal = Vector3.zero;
-        if (m_bindBones == null || bone == null)
-            return false;
-
-        for (int i = 0; i < m_bindBones.Length; i++)
-        {
-            if (m_bindBones[i] != bone)
-                continue;
-
-            bindLocal = m_bindPositions[i];
-            return true;
-        }
-
-        return false;
-    }
-
-    /// <summary>
-    /// 리그를 프리팹의 바인드 포즈(위치 + 회전)로 되돌린다 — <b>뼈 길이 복원이 목적</b>이라
-    /// 부활처럼 시체가 쉬는 시점에 부른다. ⚠ 키네마틱일 때만 의미가 있다 (docs §5).
-    /// </summary>
-    public void RestoreBindPose()
-    {
-        if (m_bindBones == null)
-            return;
-
-        for (int i = 0; i < m_bindBones.Length; i++)
-        {
-            if (m_bindBones[i] == null)
-                continue;
-
-            m_bindBones[i].localPosition = m_bindPositions[i];
-            m_bindBones[i].localRotation = m_bindRotations[i];
-        }
-    }
-
-    /// <summary>
-    /// <b>뼈 길이만</b>(관절이 달린 뼈의 위치) 바인드로 되돌린다 — 자세는 손대지 않는다.
-    /// 원격이 받은 회전을 입히기 직전에 쓴다. ⚠ 키네마틱일 때만 의미가 있다 (docs §5).
-    /// </summary>
-    public void RestoreBindBoneLengths()
-    {
-        if (m_bindBones == null)
-            return;
-
-        for (int i = 0; i < m_bindBones.Length; i++)
-        {
-            if (m_bindBones[i] == null || !m_bindJointed[i])
-                continue;
-
-            m_bindBones[i].localPosition = m_bindPositions[i];
-        }
-    }
-
-    /// <summary>
-    /// <b>말단 뼈</b>(손·발·손가락)의 회전을 바인드로 못박는다 — 아무도 값을 보내 주지 않는 뼈를
-    /// 전 피어가 같은 값으로 맞추는 것이다. 래그돌 <b>진입 시 모든 피어가</b> 부른다.
-    /// ⚠ 체인 뼈는 손대지 않는다 — 한때 못박았다가 시체가 바닥에 파묻혔다 (docs §5).
-    /// </summary>
-    public void RestoreUnstreamedBonesToBind()
-    {
-        if (m_bindBones == null)
-            return;
-
-        for (int i = 0; i < m_bindBones.Length; i++)
-        {
-            if (m_bindBones[i] == null || m_bindStreamed[i])
-                continue;
-
-            m_bindBones[i].localRotation = m_bindRotations[i];
-        }
     }
 
     // 직렬화되지 않는 Rigidbody 값을 인스턴스마다 다시 건다 (docs §2).
@@ -611,17 +247,6 @@ public class RagdollRig : MonoBehaviour
             m_bodies[i].maxDepenetrationVelocity = m_maxDepenetrationVelocity;
             m_bodies[i].solverIterations = k_solverIterations;
             m_bodies[i].solverVelocityIterations = k_solverVelocityIterations;
-
-            // ⚠ #759 계측 — 원인이 닫혀 주석 처리했다(2026-08-20). 근거: docs/759-ragdoll-slowmotion-handoff.md
-            //    위 실험 스위치의 적용부. 프리팹 값(ContinuousSpeculative)이 그대로 산다.
-            /*
-            // #759 실험 — 프리팹 값(ContinuousSpeculative)을 덮는다. 둘 다 아니면 아무것도 안 한다.
-            // 실행 인자가 인스펙터를 이긴다 — 빌드에서 바꿀 수 있는 쪽이 그것뿐이라서다.
-            if (DiscreteRequestedByArgs())
-                m_bodies[i].collisionDetectionMode = CollisionDetectionMode.Discrete;
-            else if (m_overrideCollisionDetection)
-                m_bodies[i].collisionDetectionMode = m_collisionDetection;
-            */
         }
     }
 
@@ -684,47 +309,22 @@ public class RagdollRig : MonoBehaviour
     }
 
     /// <summary>
-    /// 뼈 콜라이더를 켜고 끈다 — 시체 오브젝트는 항상 활성이어야 해서(NGO 사양) 숨기는 일을
-    /// 렌더러·콜라이더가 맡는다 (docs §7).
-    /// ⚠ 껐다 켜면 <see cref="IgnoreCollisionWith"/> 상태가 초기화된다.
+    /// 이 리그가 구동하는 스킨드 메시 — 컬링을 다루는 자리다(<c>Skins.SetAlwaysVisible</c>).
+    /// 리그를 못 찾았으면 <see cref="RagdollSkins.Empty"/>라 호출이 무동작이다.
     /// </summary>
-    public void SetBoneCollidersEnabled(bool value)
-    {
-        if (m_boneColliders == null)
-            return;
-
-        for (int i = 0; i < m_boneColliders.Length; i++)
-        {
-            if (m_boneColliders[i] != null)
-                m_boneColliders[i].enabled = value;
-        }
-    }
-
-    /// <summary>이 리그가 구동하는 스킨드 메시를 켜고 끈다 — 시체를 보이거나 숨긴다.</summary>
-    public void SetSkinsEnabled(bool value)
-    {
-        if (m_skins == null)
-            return;
-
-        for (int i = 0; i < m_skins.Length; i++)
-        {
-            if (m_skins[i] != null)
-                m_skins[i].enabled = value;
-        }
-    }
+    public RagdollSkins Skins => m_skins;
 
     /// <summary>
-    /// 래그돌 동안 컬링 바운즈를 매 프레임 재계산시킨다 — 안 하면 날아간 시체가 통째로 컬링돼
-    /// 화면에서 사라진다. 비용이 있어 래그돌이 켜진 동안만 올린다 (docs §7).
+    /// 뼈를 <b>하나씩·계층으로</b> 묻는 자리 — "i번째 뼈가 무엇이며 누구에게 매달렸나"(#980).
+    /// 뼈를 못 찾았으면 <see cref="RagdollBoneGraph.Empty"/>라 질의가 비어 있는 답을 준다.
     /// </summary>
-    public void SetSkinsAlwaysVisible(bool always)
-    {
-        if (m_skins == null)
-            return;
+    public RagdollBoneGraph Bones => m_boneGraph;
 
-        for (int i = 0; i < m_skins.Length; i++)
-            m_skins[i].updateWhenOffscreen = always || m_skinUpdateWhenOffscreen[i];
-    }
+    /// <summary>
+    /// 프리팹이 authoring한 자세 — 되돌리는 자리다(<c>BindPose.RestoreAll</c>·
+    /// <c>RestoreUnstreamedRotations</c>). ⚠ 둘 다 키네마틱일 때만 의미가 있다 (docs §5).
+    /// </summary>
+    public RagdollBindPose BindPose => m_bindPose;
 
     // ---- 힘·속도 ----
 
@@ -750,22 +350,18 @@ public class RagdollRig : MonoBehaviour
     }
 
     /// <summary>
-    /// 직전 <see cref="ApplyImpulse"/>에서 실제로 힘이 <b>들어간</b> 뼈 수 — 0이면 통째로 버려졌다.
-    /// 계측으로 넣었다가 <b>영구 가드로 남겼다</b>: 이 실패는 #768·#957에서 세 번 났고 매번
-    /// 조용했다(경고 하나 없이 "안 날아간다"로만 보인다). 근거는 docs/865-down-ragdoll.md §9-7.
-    /// </summary>
-    public int LastImpulseAppliedCount { get; private set; }
-
-    /// <summary>
     /// 전 뼈에 같은 속도를 주고, 골반보다 높은 뼈에만 조금 더 얹어 텀블을 만든다.
     /// 폭심 기준 <c>AddExplosionForce</c>를 쓰지 않는 이유는 결정론이다 (docs §8).
     /// </summary>
     public void ApplyImpulse(Vector3 velocity)
     {
-        LastImpulseAppliedCount = 0;
-
         if (velocity == Vector3.zero || m_bodies == null || m_hipsBone == null)
             return;
+
+        // 실제로 힘이 들어간 뼈 수 — 0이면 통째로 버려졌다는 뜻이고, 아래 경고가 그것을 잡는다.
+        // 계측으로 넣었다가 <b>영구 가드로 남겼다</b>: 이 실패는 #768·#957에서 세 번 났고 매번
+        // 조용했다(경고 하나 없이 "안 날아간다"로만 보인다). 근거는 docs/865-down-ragdoll.md §9-7.
+        int applied = 0;
 
         float hipsHeight = m_hipsBone.position.y;
         for (int i = 0; i < m_bodies.Length; i++)
@@ -777,7 +373,7 @@ public class RagdollRig : MonoBehaviour
 
             float lift = m_bodies[i].worldCenterOfMass.y - hipsHeight;
             m_bodies[i].linearVelocity += velocity * (1f + m_tumbleBias * lift);
-            LastImpulseAppliedCount++;
+            applied++;
         }
 
         // ⚠ <b>힘을 실을 뼈가 하나도 없었다.</b> 뼈가 전부 키네마틱이라는 뜻이고, 그러면 임펄스가
@@ -786,7 +382,7 @@ public class RagdollRig : MonoBehaviour
         //  · 소유권이 방금 넘어와 뼈가 아직 원격 시절 키네마틱인 것 (§15)
         //  · 권위가 아닌 피어에 임펄스를 보낸 것 (§9-7)
         // 셋 다 "안 날아간다"로만 보였다. 조용히 넘기지 않는다.
-        if (LastImpulseAppliedCount == 0)
+        if (applied == 0)
         {
             Debug.LogWarning(
                 $"RagdollRig: 임펄스({velocity.magnitude:0.00})가 통째로 버려졌다 — 뼈가 전부 "
@@ -1053,140 +649,17 @@ public class RagdollRig : MonoBehaviour
         return true;
     }
 
-    // ---- 뼈 단위 접근 (#980 — 벽에 박힌 팔 접기) ----
+    // ---- 뼈 하나만 물리에서 떼기 (#980 — 벽에 박힌 팔 접기) ----
     //
-    // ⚠ 인덱스는 m_bodies / m_boneColliders / m_joints가 <b>공유</b>한다(같은 길이·같은 순서).
-    // 리그는 여기서도 물리만 안다 — "언제 접을지"는 소유자(RagdollArmFold)가 정한다.
+    // ⚠ 인덱스는 <see cref="Bones"/>가 주는 것과 <b>같다</b>(m_bodies / m_boneColliders / m_joints가
+    // 같은 길이·같은 순서). "무엇이 몇 번 뼈인가"를 묻는 질의는 전부 그쪽에 있다.
+    //
+    // ⚠ <b>이 둘만 리그에 남긴 이유</b>: 아래 전이가 <see cref="SetKinematic"/>과 같은 헬퍼를 쓴다 —
+    // "전이 양쪽에서 속도를 지운다"(docs §6)는 규칙이 두 클래스에 복제되면 한쪽만 고쳐진다.
 
-    /// <summary>i번째 뼈의 Rigidbody — 범위 밖이면 null.</summary>
-    public Rigidbody GetBody(int index) =>
+    // i번째 뼈의 Rigidbody — 범위 밖이면 null. 아래 둘만 쓴다.
+    private Rigidbody GetBody(int index) =>
         m_bodies != null && index >= 0 && index < m_bodies.Length ? m_bodies[index] : null;
-
-    /// <summary>i번째 뼈의 콜라이더 — 위와 같은 인덱스.</summary>
-    public Collider GetBoneCollider(int index) =>
-        m_boneColliders != null && index >= 0 && index < m_boneColliders.Length
-            ? m_boneColliders[index]
-            : null;
-
-    /// <summary>i번째 뼈의 이름 — 로그가 "어느 뼈인지"를 말할 수 있어야 판정을 읽는다.</summary>
-    public string GetBoneName(int index)
-    {
-        Rigidbody body = GetBody(index);
-        return body != null ? body.name : "?";
-    }
-
-    /// <summary>
-    /// <b>팔 뼈</b>의 인덱스를 담는다 — 사지 뼈 중 <b>다리와 머리를 뺀</b> 것.
-    /// 실제로 벽에 끼는 것은 거의 팔이다(docs/980 §1-2: 팔만 "가장 얇고 + 가장 가볍고 + 지렛대가
-    /// 가장 길다"를 동시에 만족한다).
-    ///
-    /// 이름 목록이 아니라 <b>계층</b>으로 가른다: 다리는 골반에 <b>직접</b> 매달리고 팔은 상체에
-    /// 매달린다. 머리만 이름으로 알아본 뼈를 뺀다.
-    /// </summary>
-    /// <returns>담은 개수.</returns>
-    public int CollectArmBones(float maxMass, int[] into)
-    {
-        if (m_bodies == null || into == null)
-            return 0;
-
-        int hips = HipsBodyIndex();
-        int count = 0;
-
-        for (int i = 0; i < m_bodies.Length && count < into.Length; i++)
-        {
-            if (m_bodies[i] == null || m_bodies[i] == m_hipsBody || m_bodies[i].mass > maxMass)
-                continue;
-
-            if (m_headBone != null && m_bodies[i].transform == m_headBone)
-                continue;
-
-            if (ParentBoneIndex(i) == hips)
-                continue; // 골반에 직접 매달렸다 = 다리(또는 척추)
-
-            into[count++] = i;
-        }
-
-        return count;
-    }
-
-    /// <summary>골반 뼈의 인덱스 — 못 찾으면 -1.</summary>
-    public int HipsBodyIndex()
-    {
-        if (m_bodies == null)
-            return -1;
-
-        for (int i = 0; i < m_bodies.Length; i++)
-            if (m_bodies[i] == m_hipsBody)
-                return i;
-
-        return -1;
-    }
-
-    /// <summary>
-    /// <paramref name="index"/>에서 <b>부모 쪽으로</b> 뼈를 최대 <paramref name="depth"/>개 더한
-    /// 체인을 담는다(자기 자신 포함). 질량이 <paramref name="maxMass"/>를 넘는 뼈에서 <b>멈춘다</b> —
-    /// 몸통을 끌어들이면 사실상 전신이 되고, 그러면 방향이 틀렸을 때의 피해가 커진다.
-    /// 부모는 <c>CharacterJoint.connectedBody</c>가 준다.
-    /// </summary>
-    /// <returns>담은 개수 — 1 이상.</returns>
-    public int CollectBoneChainUpward(int index, int depth, float maxMass, int[] into)
-    {
-        if (into == null || into.Length == 0 || GetBody(index) == null)
-            return 0;
-
-        into[0] = index;
-        int count = 1;
-
-        int current = index;
-        for (int step = 0; step < depth && count < into.Length; step++)
-        {
-            int parent = ParentBoneIndex(current);
-            if (parent < 0 || m_bodies[parent].mass > maxMass)
-                break; // 몸통에 닿았다 — 여기서 끊는 것이 이 함수의 요점이다
-
-            into[count++] = parent;
-            current = parent;
-        }
-
-        return count;
-    }
-
-    /// <summary>관절이 매달린 부모 뼈의 인덱스 — 골반이거나 못 찾으면 -1.</summary>
-    public int ParentBoneIndex(int index)
-    {
-        if (m_joints == null || index < 0 || index >= m_joints.Length || m_joints[index] == null)
-            return -1;
-
-        Rigidbody parent = m_joints[index].connectedBody;
-        if (parent == null)
-            return -1;
-
-        for (int i = 0; i < m_bodies.Length; i++)
-            if (m_bodies[i] == parent)
-                return i;
-
-        return -1;
-    }
-
-    /// <summary>i번째 뼈의 트랜스폼 — 회전으로 자세를 고칠 때 쓴다(위치 대입은 관절 앵커를 깬다).</summary>
-    public Transform GetBoneTransform(int index)
-    {
-        Rigidbody body = GetBody(index);
-        return body != null ? body.transform : null;
-    }
-
-    /// <summary>이 뼈를 부모로 삼는 첫 자식 뼈 — 없으면 -1(말단). 뼈가 향한 방향을 재는 데 쓴다.</summary>
-    public int ChildBoneIndex(int index)
-    {
-        if (m_bodies == null || index < 0)
-            return -1;
-
-        for (int i = 0; i < m_bodies.Length; i++)
-            if (ParentBoneIndex(i) == index)
-                return i;
-
-        return -1;
-    }
 
     /// <summary>
     /// 그 뼈 <b>하나만</b> 물리에서 떼거나 돌려준다 — 전이 양쪽에서 속도를 지운다

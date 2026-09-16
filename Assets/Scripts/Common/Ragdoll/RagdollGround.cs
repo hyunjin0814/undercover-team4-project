@@ -6,6 +6,18 @@ using UnityEngine;
 /// </summary>
 public static class RagdollGround
 {
+    /// <summary>
+    /// "몸이 바닥에 있다"로 보는 골반 높이(m) — 이 안이면 대리값(루트·캡슐)의 높이를 골반이 아니라
+    /// <b>지면</b>이 준다. 골반 높이를 쓰는 것은 공중에 있는 동안만이다.
+    ///
+    /// 누운 시체의 골반은 약 0.15~0.25m이고 서 있거나 날아가는 몸은 그보다 훨씬 높다. 정확한 경계가
+    /// 필요한 값이 아니라 <b>그 둘을 가르기만</b> 하면 되는 값이다.
+    ///
+    /// ⚠ NPC와 플레이어가 <b>같은 값이어야 한다</b> — 예전에는 양쪽에 상수가 한 벌씩 있고 주석이
+    /// "같은 값이다"로 계약을 유지하고 있었다.
+    /// </summary>
+    public const float k_groundedHipsHeight = 0.5f;
+
     private const float k_probeLift = 0.5f; // 골반이 바닥에 파묻혀 있어도 레이가 지면 위에서 출발하게
 
     public static bool TryGroundUnder(

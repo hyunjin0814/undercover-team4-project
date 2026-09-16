@@ -64,10 +64,23 @@ public static class RagdollWallProbe
     /// 서 있을 때 판정이 통째로 죽는다.
     /// </summary>
     /// <param name="clearance">뼈 표면을 스치는 히트를 버릴 여유(m).</param>
+    /// <param name="isCharacter">
+    /// 이 콜라이더가 <b>사람</b>인가 — 참이면 벽으로 세지 않는다.
+    ///
+    /// ⚠ <b>레이어 마스크로는 못 거른다.</b> 이 프로젝트에는 벽 전용 레이어가 없어 벽·바닥·플레이어
+    /// 캡슐·NPC 캡슐이 전부 <c>Default</c>에 산다. <b>자기 자신의 루트 캡슐도 여기서 걸린다</b> —
+    /// 안 거르면 모든 뼈가 "벽 뒤"로 판정된다(<c>NpcProneCollider</c>의 캡슐은 래그돌 중에도 켜져 있다).
+    ///
+    /// ⚠ <b>판정을 여기서 하지 않고 받는 이유</b>: 사람인지 아는 것은 도메인 타입
+    /// (<c>NpcController</c>·<c>PlayerHealth</c>)인데 이 파일은 <c>Common/</c>에 있다 —
+    /// "도메인에 속하지 않는 공유 부품"(<c>docs/architecture.md</c> §1)이 도메인을 알면 안 된다.
+    /// 넘기는 쪽은 <c>NpcRagdoll</c>이다.
+    /// </param>
     public static bool TryFindPinningWall(
         Vector3 from,
         Collider boneCollider,
         float clearance,
+        System.Func<Collider, bool> isCharacter,
         out Pin pin
     )
     {
@@ -101,8 +114,8 @@ public static class RagdollWallProbe
             if (Mathf.Abs(s_hits[i].normal.y) > k_maxNormalY)
                 continue; // 바닥·천장 — 이 판정이 다룰 것이 아니다
 
-            if (IsCharacter(s_hits[i].collider))
-                continue; // 사람은 벽이 아니다 — 레이어로는 못 가른다(아래 주석)
+            if (isCharacter != null && isCharacter(s_hits[i].collider))
+                continue; // 사람은 벽이 아니다 — 판정은 넘겨받는다(인자 주석)
 
             if (best < 0 || s_hits[i].distance < s_hits[best].distance)
                 best = i;
@@ -120,19 +133,6 @@ public static class RagdollWallProbe
         );
         return true;
     }
-
-    /// <summary>
-    /// 사람인가 — 플레이어·NPC는 벽이 아니다.
-    ///
-    /// ⚠ <b>레이어 마스크로는 못 거른다.</b> 이 프로젝트에는 벽 전용 레이어가 없어 벽·바닥·플레이어
-    /// 캡슐·NPC 캡슐이 전부 <c>Default</c>에 산다. 규칙은 <c>NpcController.SweepHitsObstacle</c>·
-    /// <c>AimOcclusion.IsCharacter</c>와 같다. <b>자기 자신의 루트 캡슐도 여기서 걸린다</b> —
-    /// 안 거르면 모든 뼈가 "벽 뒤"로 판정된다(NpcProneCollider의 캡슐은 래그돌 중에도 켜져 있다).
-    /// </summary>
-    public static bool IsCharacter(Collider collider) =>
-        collider.GetComponentInParent<CharacterController>() != null
-        || collider.GetComponentInParent<NpcController>() != null
-        || collider.GetComponentInParent<PlayerHealth>() != null;
 
     // 자기 뼈만 뺀다 — 같은 리그의 다른 뼈가 벽으로 잡히면 몸이 스스로를 막은 것이 된다.
     private static int QueryMask()
