@@ -1,4 +1,4 @@
-using Unity.Netcode;
+﻿using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
@@ -35,17 +35,6 @@ public class PlayerTowedMotion : MonoBehaviour
 
     [Tooltip("끌리는 몸이 목표 위치를 따라잡는 데 걸리는 시간(초) — 클수록 늦게, 크게 휘며 따라온다")]
     [SerializeField] private float m_dragSmoothTime = 0.14f;
-
-    // ⚠ #759 계측 — 원인이 닫혀 주석 처리했다(2026-08-20). 아래 [운반경로] 호출부와 한 쌍이다.
-    /*
-    [Tooltip("운반 시작 시 <b>어느 경로를 탔는지</b> 피어마다 찍는다 — 밧줄(몸을 물리로 끈다) 대 " +
-             "캡슐추종(캡슐만 목표 위치로 옮긴다).\n\n" +
-             "<b>#763 판정용이다.</b> 시체가 원격에서 제자리에 남고 루트만 따라오는 그림은, 시체를 " +
-             "쥔 피어들은 밧줄인데 오너만 캡슐추종을 탔을 때 정확히 그렇게 보인다 — 루트는 운반자를 " +
-             "향해 옮겨지고 몸은 아무도 끌지 않는다.\n\n" +
-             "확정되면 끈다")]
-    [SerializeField] private bool m_logDragPath;
-    */
 
     [Tooltip("몸이 끌리는 방향으로 도는 민감도(1/초)")]
     [SerializeField] private float m_dragTurnSharpness = 6f;
@@ -264,24 +253,6 @@ public class PlayerTowedMotion : MonoBehaviour
         // 따라올 수단이 없다(동적 리지드바디는 부모 트랜스폼을 따르지 않는다). 그래서 시체를 물리로
         // 끌고, 캡슐은 PlayerMovement.Update의 래그돌 분기가 시체를 따라가게 둔다.
         bool ropePath = m_ragdoll != null && m_ragdoll.IsRagdollActive;
-
-        // ⚠ #759 계측 — 원인이 닫혀 주석 처리했다(2026-08-20). 근거: docs/759-ragdoll-slowmotion-handoff.md
-        /*
-        // ⚠ 임시 계측 (#763) — 이 분기가 피어마다 갈리면 그것이 증상의 정체다.
-        if (m_logDragPath)
-        {
-            NetworkObject self = GetComponent<NetworkObject>();
-            ulong local = NetworkManager.Singleton != null ? NetworkManager.Singleton.LocalClientId : 0;
-            Debug.Log(
-                $"[운반경로] 시체#{(self != null ? self.NetworkObjectId : 0)} "
-                    + $"오너{(self != null ? self.OwnerClientId : 0)} 나{local} "
-                    + $"경로={(ropePath ? "밧줄" : "캡슐추종")} "
-                    + $"래그돌={(m_ragdoll != null ? m_ragdoll.IsRagdollActive.ToString() : "없음")} "
-                    + $"운반자={(carrier != null ? carrier.name : "없음")}",
-                this
-            );
-        }
-        */
 
         if (ropePath)
         {

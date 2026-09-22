@@ -137,7 +137,7 @@ Hips(rb) → Spine_01 → Spine_02(rb) → Spine_03 → Neck → Head(rb)
 ⚠ `CaptureBindPose`는 **`Collect`에서만** 부른다(Awake 시점이라 아직 아무도 리그를 건드리지 않았다).
 나중에 부르면 그때의 오염된 자세가 "바인드"가 된다.
 
-### `MaxBindPositionDrift`가 **관절이 달린 뼈만** 재는 이유
+### 드리프트를 **관절이 달린 뼈만** 재는 이유
 
 처음엔 리그 전체를 쟀는데, 거기에는 **골반**이 들어 있다 — 골반은 래그돌 루트라 로컬 위치가 자세의
 일부이고 애니메이션에 따라 정당하게 변한다. 그래서 아무 문제가 없는데도 2cm대 값이 상시로 찍혀
@@ -145,25 +145,30 @@ Hips(rb) → Spine_01 → Spine_02(rb) → Spine_03 → Neck → Head(rb)
 
 회전은 보지 않는다. 자세는 매번 새로 복사되므로 문제가 되는 것은 **길이**뿐이다.
 
-### 되돌리는 메서드가 셋인 이유
+### 되돌리는 메서드가 둘인 이유
 
 | 메서드 | 대상 | 되돌리는 것 | 부르는 자리 |
 |---|---|---|---|
 | `RestoreBindPose` | 리그 전체 | 위치 + 회전 | 부활 등 "시체가 다음 사망까지 쉬는" 시점 |
-| `RestoreBindBoneLengths` | 관절이 달린 뼈 | 위치만 | 원격이 받은 자세를 입히기 직전 |
 | `RestoreUnstreamedBonesToBind` | 말단 뼈 | 회전만 | 래그돌 **진입 시 모든 피어가** |
 
 **`RestoreBindPose`** — 물리가 늘려 놓은 `localPosition`을 지워 다음 사망이 **1차 사망과 같은
 조건**에서 출발하게 한다.
 
-**`RestoreBindBoneLengths`** — `RestoreBindPose`를 쓸 수 없는 자리를 위한 것이다. 저쪽은 회전까지
-되돌리므로 **물리를 안 받는 뼈**(목·손가락·발)가 T자 방향으로 튀는데, 원격이 받는 자세에는 그 뼈들이
-들어 있지 않아 되돌릴 짝이 없다.
-
-왜 원격에 필요한가: 시체는 `ExitRagdoll`을 영영 타지 않아 `RestoreBindPose`가 한 번도 돌지 않는다 —
-물리가 관절을 늘려 놓으면 그 길이가 **영구히 남는다.** 그런데 받는 자세는 로컬 **회전**뿐이라
-(길이는 관절이 유지한다는 전제) 늘어난 리그에 입히면 보낸 쪽과 다른 몸이 나온다. 갈아끼우기 직전에
-길이를 되돌려 그 전제를 실제로 참으로 만든다. 대상이 관절 달린 뼈뿐인 것은 위 §5와 같은 이유다.
+> ### ⚠ 셋째였던 `RestoreBindBoneLengths`는 지웠다 — 되살리지 말 것 (2026-09-05)
+>
+> 관절이 달린 뼈의 위치만 되돌리는 메서드가 하나 더 있었다. 목적은 **원격**이었다: 시체는
+> `ExitRagdoll`을 영영 타지 않아 `RestoreBindPose`가 한 번도 돌지 않으므로 늘어난 뼈 길이가 영구히
+> 남는데, 받는 자세는 로컬 **회전**뿐이라(길이는 관절이 유지한다는 전제) 늘어난 리그에 입히면 보낸
+> 쪽과 다른 몸이 나온다. 그래서 **갈아끼우기 직전에 길이를 바인드로 되돌려** 그 전제를 참으로
+> 만들려 했다.
+>
+> **그 전제 자체를 버리는 쪽으로 해결됐다** — `02f4505b`(#728 후속 5)부터 권위 피어가 **실제 뼈
+> 길이를 패킷에 실어 보내고** 원격은 `ApplyBoneLengths`로 그것을 입는다(§11 · `npc-ragdoll.md` §8).
+> 바인드로 되돌리는 것보다 정확하다. 그 커밋 이후 호출부가 0이 되어 죽은 코드로 남아 있었고
+> 2026-09-05에 지웠다.
+>
+> **다시 필요해 보인다면 §11을 먼저 읽을 것** — 원격의 골격을 맞추는 자리는 이제 거기 하나다.
 
 **`RestoreUnstreamedBonesToBind`** — 말단 뼈는 아무도 값을 보내 주지 않아 각 피어의 애니메이터가
 마지막에 놓은 자세에 멈추는데, 기상 클립처럼 피어마다 클립 시간이 어긋나는 구간에서 죽으면 손발
@@ -180,7 +185,7 @@ Hips(rb) → Spine_01 → Spine_02(rb) → Spine_03 → Neck → Head(rb)
 덮인다. 부르는 쪽이 순서를 맞출 것.
 
 ⚠ `RestoreUnstreamedBonesToBind`는 **위치를 건드리지 않는다** — 그쪽은 뼈 길이이고, 애니메이터도
-물리도 이 뼈들의 `localPosition`은 쓰지 않는다. 되돌릴 짝은 `RestoreBindBoneLengths`다.
+물리도 이 뼈들의 `localPosition`은 쓰지 않는다. 뼈 길이를 맞추는 짝은 원격의 `ApplyBoneLengths`다(§11).
 
 ---
 
@@ -202,7 +207,7 @@ Hips(rb) → Spine_01 → Spine_02(rb) → Spine_03 → Neck → Head(rb)
 반대 방향(동적 → 키네마틱)에는 필요 없다 — 그때는 물리가 트랜스폼을 쓰고 있었으므로 이미 맞다.
 
 같은 이유로 `LowestBoneY`는 `Rigidbody.position`이 **아니라 트랜스폼**을 읽는다. 이 값을 재는 자리는
-전부 **뼈를 방금 대입한 직후**라(`RestoreCapturedPose`·`RestoreBindBoneLengths` 뒤) 물리 포즈를
+전부 **뼈를 방금 대입한 직후**라(`RestoreCapturedPose` 뒤) 물리 포즈를
 읽으면 **대입 전 골격을 재고 조용히 0을 돌려준다.** 물리가 굴러가는 동안에도 트랜스폼이 곧 화면에
 보이는 것이라 이쪽이 맞다 — 파고들었는지는 보이는 몸으로 판정해야 한다.
 
@@ -238,12 +243,17 @@ Hips(rb) → Spine_01 → Spine_02(rb) → Spine_03 → Neck → Head(rb)
 
 ⚠ **이 상태는 콜라이더를 껐다 켜면 초기화된다**(Unity 사양) — 다시 거는 책임은 소유자에게 있다.
 
-### `SetBoneCollidersEnabled` — 왜 GameObject를 끄지 않는가
+### 리그를 GameObject 째로 끄지 않는다 (NGO 제약)
 
 NGO는 **비활성 GameObject의 `NetworkBehaviour`를 스폰에서 제외하고**
 (`NetworkObject.InvokeBehaviourNetworkSpawn`), 나중에 활성화돼도 만회하지 않는다 — 소스 주석이
-"not supported"라고 못박는다. 그래서 골반에 `NetworkTransform`을 얹는 구성에서는 시체 오브젝트가
-**항상 활성**이어야 하고, 숨기는 일은 렌더러와 콜라이더가 맡는다.
+"not supported"라고 못박는다. 그래서 `NetworkBehaviour`를 든 오브젝트는 **항상 활성**이어야 한다.
+`RagdollPoseStreamer`가 리그가 아니라 **프리팹 루트**에 붙는 이유가 이것이다.
+
+> **`SetBoneCollidersEnabled`·`SetSkinsEnabled`는 지웠다 (2026-09-05).** 시체 전용 모델을 켜고 끄던
+> 시절에 "GameObject를 못 끄니 렌더러와 콜라이더로 숨긴다"를 하던 짝이었는데, `c6a73971`(#763 2단계)이
+> **리그를 한 벌로 통합**하며 숨길 시체 오브젝트 자체가 사라져 호출부가 0이 됐다. 위 NGO 제약은
+> 그대로 유효하므로 남긴다.
 
 ### `SetSkinsAlwaysVisible` — 안 하면 시체가 화면에서 사라진다
 
@@ -359,16 +369,14 @@ sin이므로 0.7은 약 45°다.
 
 ---
 
-## 14. 진단 보조 (임시)
+## 14. 진단 보조 — 지웠다 (2026-09-05)
 
-`PoseBones`·`CollectBindPositionDrift`·`TryGetBindLocalPosition` 셋은 `NpcRagdoll`의 진단 ⑨가 쓴다.
-그 블록과 함께 지운다.
+`PoseBones`·`CollectBindPositionDrift`·`TryGetBindLocalPosition`·`MaxBindPositionDrift`·`AverageSpeed`가
+여기 있었다. 전부 `NpcRagdoll`의 진단(⑧⑨)과 `PlayerRagdoll`의 #759 계측 전용이었고, **그 계측을
+걷어내면서 독자가 0이 되어 함께 지웠다.**
 
-- `PoseBones` — 스트림에 실리는 뼈. **계층 순서**(부모가 자식보다 먼저)라 그대로 훑으면 체인이
-  풀린다. 원격의 재구성을 흉내 내는 진단에만 쓴다.
-- `CollectBindPositionDrift` — `MaxBindPositionDrift`가 최댓값만 주는 자리를 **어느 뼈인지**까지
-  벌려 놓은 것. 대상은 같다(관절이 달린 뼈만).
-- `TryGetBindLocalPosition` — 원격이 자세를 입힐 때 실제로 쓰는 뼈 길이(스트림은 회전만 싣는다).
+되살릴 일이 있으면 무엇을 재던 것인지가 [npc-ragdoll.md §11](npc-ragdoll.md)과
+[759 문서 §6](759-ragdoll-slowmotion-handoff.md)에 남아 있다.
 
-진단 로그 전체의 현황은 [npc-ragdoll.md §11](npc-ragdoll.md) — 2026-08-20에 **호출부만 주석
-처리해 재워 뒀다.**
+⚠ `LowestBoneY`는 **남아 있다** — `PlayerRagdoll`의 진입 계측(`m_logEntryHeadTrace`)이 아직 쓴다.
+이 값이 `Rigidbody.position`이 아니라 트랜스폼을 읽는 이유는 §6에 있다.
