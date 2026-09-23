@@ -8,16 +8,28 @@ using UnityEngine;
 /// 완료 시 대상의 HP를 일부 회복시켜 무력화를 해제한다(PlayerHealth.ServerRevive).
 /// 서버 권위·RPC 구조는 PlayerEscorter를 본뜬다.
 ///
-/// <b>채널링 중 취소 조건</b>(<see cref="HandleCancelTrigger"/>)은 이동 입력·아이템 사용·버리기·E
-/// 재입력(토글)이다. 사거리 이탈·대상의 유예 만료·나 자신의 무력화는 서버 keepAlive
+/// <b>채널링 중 취소 조건</b>(<see cref="HandleCancelTrigger"/>)은 이동 입력·아이템 사용·버리기·
+/// 슬롯 전환·E 재입력(토글)이다. 사거리 이탈·대상의 유예 만료·나 자신의 무력화는 서버 keepAlive
 /// (<see cref="ServerChannelAsync"/>)가 이미 본다 — 오너 쪽은 입력 감시만 하면 된다.
 ///
 /// 채널링 시작/종료마다 대상의 <c>PlayerIncapacitation.ServerSetBeingRevived</c>를 불러 다운 유예
 /// 시계를 얼리고 되살린다 — 자세한 근거는 그쪽 문서에 있다.
 /// </summary>
 [RequireComponent(typeof(PlayerInputHandler))]
-public class PlayerReviver : ChanneledInteractionBehaviour
+[RequireComponent(typeof(ChannelGauge))]
+[RequireComponent(typeof(OwnerFeedback))]
+public class PlayerReviver : NetworkBehaviour
 {
+    private OwnerFeedback m_feedback;
+
+    private OwnerFeedback Feedback => this.ResolveCapability(ref m_feedback);
+
+    private ChannelGauge m_gauge;
+
+    // 프리팹 직렬화에 의존하므로 lazy로 잡는다 — RequireComponent는 기존 프리팹 자산을 소급 보정하지 않는다.
+    // 같은 플레이어 오브젝트의 PlayerEscortCommands와 이 컴포넌트를 공유한다 (게이지 토큰 주의 — 후속 이슈).
+    private ChannelGauge Gauge => this.ResolveCapability(ref m_gauge);
+
     [Header("구조 채널링 (서버 권위)")]
     [Tooltip("구조 채널링 시간(초)")]
     [SerializeField]
@@ -33,10 +45,6 @@ public class PlayerReviver : ChanneledInteractionBehaviour
 
     // 서버 채널링 생명주기(CTS 소유·재진입 가드)는 ServerChannel에 위임 (#109)
     private readonly ServerChannel m_channel = new();
-
-    // 채널링 중 루프음 — 기반 클래스가 게이지 표시/숨김과 같은 경로에 태워 재생/정지한다.
-    // "취소했는데 소리가 계속 난다"가 구조적으로 생기지 않는다 (#725).
-    protected override EAudioClip ChannelLoopSound => EAudioClip.ReviveLoop;
 
     // 오너 로컬 상태 — "지금 내가 구조 채널링 중인가". 서버 m_channel.IsActive는 원격 오너에게는
     // 항상 false라(채널링이 서버 인스턴스에서만 돈다) E 재입력의 토글 여부를 이걸로 판단한다.
@@ -78,6 +86,12 @@ public class PlayerReviver : ChanneledInteractionBehaviour
             m_inputHandler.OnInteractStarted += HandleInteractStarted;
             m_inputHandler.OnUseItemStarted += HandleCancelTrigger;
             m_inputHandler.OnDropItem += HandleCancelTrigger;
+            // 슬롯 전환도 "다른 입력"이라 취소다 (GDD 7장 구조). 막지 않고 취소하는 이유 — 막으면 키가
+            // 씹힌 것처럼 보이고, 구조를 계속하면 이전 아이템의 게이지 정리(PlayerLoadout.EquipSlot)가
+            // 하나뿐인 루프 슬롯을 끊어 구조음이 사라진다.
+            m_inputHandler.OnPreviousItem += HandleCancelTrigger;
+            m_inputHandler.OnNextItem += HandleCancelTrigger;
+            m_inputHandler.OnSelectSlot += HandleSelectSlot;
         }
     }
 
@@ -88,6 +102,9 @@ public class PlayerReviver : ChanneledInteractionBehaviour
             m_inputHandler.OnInteractStarted -= HandleInteractStarted;
             m_inputHandler.OnUseItemStarted -= HandleCancelTrigger;
             m_inputHandler.OnDropItem -= HandleCancelTrigger;
+            m_inputHandler.OnPreviousItem -= HandleCancelTrigger;
+            m_inputHandler.OnNextItem -= HandleCancelTrigger;
+            m_inputHandler.OnSelectSlot -= HandleSelectSlot;
         }
         ServerCancelRevive();
     }
@@ -123,12 +140,15 @@ public class PlayerReviver : ChanneledInteractionBehaviour
             RequestBeginRevive(target);
     }
 
-    // 이동·아이템 사용·버리기 — 채널링 중일 때만 취소로 이어진다. (#725)
+    // 이동·아이템 사용·버리기·슬롯 전환 — 채널링 중일 때만 취소로 이어진다. (#725)
     private void HandleCancelTrigger()
     {
         if (m_isChanneling)
             RequestCancelRevive();
     }
+
+    // 숫자키 슬롯 선택 — 인덱스는 볼 필요가 없다. 같은 칸을 다시 눌러도 취소다(다른 입력이므로).
+    private void HandleSelectSlot(int index) => HandleCancelTrigger();
 
     // 조준 중인 대상이 지정한 무력화 원인의 아군이면 그 PlayerHealth를, 아니면 null을 반환한다. (#105, #364)
     private PlayerHealth FindAllyTarget(IncapacitationCause cause)
@@ -248,7 +268,7 @@ public class PlayerReviver : ChanneledInteractionBehaviour
             // (둘 다 히트박스가 꺼져 조준도 안 되지만 위조 RPC 방어로 여기서도 본다)
             // Die는 히트박스가 켜져 있어 실제로 여기까지 온다 — 조준·홀드가 되는데 침묵하면 버그로 보인다 (#364)
             if (targetIncap != null && targetIncap.IsDead)
-                NotifyOwner(
+                Feedback?.NotifyOwner(
                     $"구조 불가 — {target.name}은 기능 정지 상태다. 부활 키트로 일으켜야 한다 (#613)"
                 );
             return;
@@ -264,8 +284,9 @@ public class PlayerReviver : ChanneledInteractionBehaviour
         PlayerIncapacitation targetIncap
     )
     {
-        NotifyOwner($"구조 채널링 시작: {target.name} ({m_reviveSeconds}초)");
-        NotifyChannelGaugeStart(m_reviveSeconds);
+        Feedback?.NotifyOwner($"구조 채널링 시작: {target.name} ({m_reviveSeconds}초)");
+        // 루프음이 게이지와 같은 경로라 "취소했는데 소리가 계속 난다"가 구조적으로 생기지 않는다 (#725)
+        Gauge?.Begin(m_reviveSeconds, EAudioClip.ReviveLoop);
         ServerNotifyChannelStarted();
 
         // 다운 유예 시계를 얼린다 — 채널링 중에는 셧다운이 멈추고, 아래 finally에서 항상 되살린다 (#725)
@@ -287,7 +308,7 @@ public class PlayerReviver : ChanneledInteractionBehaviour
         finally
         {
             // 완료·취소·예외 어떤 경로로 끝나도 게이지 숨김과 유예 시계 해동을 보장한다 (#184, #725)
-            NotifyChannelGaugeEnd();
+            Gauge?.End();
             targetIncap.ServerSetBeingRevived(false);
             ServerNotifyChannelEnded();
         }
@@ -295,12 +316,12 @@ public class PlayerReviver : ChanneledInteractionBehaviour
         switch (result)
         {
             case ServerChannel.Result.Canceled:
-                NotifyOwner("구조 취소됨");
+                Feedback?.NotifyOwner("구조 취소됨");
                 return;
 
             case ServerChannel.Result.OutOfRange:
                 // 여기서는 '거리 이탈'이 아니라 대상이 구조 대상에서 벗어난 것이다 (keepAlive, #364).
-                NotifyOwner(
+                Feedback?.NotifyOwner(
                     target != null && targetIncap.IsDead
                         ? $"구조 중단 — 제한시간 초과로 기능 정지됨: {target.name} (본부 이송 필요)"
                         : "구조 중단 — 대상이 구조 대상이 아니게 됨"
@@ -314,14 +335,14 @@ public class PlayerReviver : ChanneledInteractionBehaviour
         // 채널링 동안 대상이 파괴됐거나 사거리를 벗어났으면 실패
         if (target == null || !IsInRange(target))
         {
-            NotifyOwner("구조 실패 — 대상이 범위를 벗어남");
+            Feedback?.NotifyOwner("구조 실패 — 대상이 범위를 벗어남");
             return;
         }
         // 다른 동료가 먼저 살렸다면 중복 구조 방지.
         // 채널링(3초) 도중 구조 제한시간이 끝나 Die로 떨어졌을 수도 있다 — 한 발 늦은 구조는 실패다 (#364)
         if (!targetIncap.IsDowned)
         {
-            NotifyOwner(
+            Feedback?.NotifyOwner(
                 targetIncap.IsDead
                     ? $"구조 실패 — 제한시간 초과로 기능 정지됨: {target.name} (본부 이송 필요)"
                     : "구조 취소 — 대상이 이미 복구됨"
@@ -329,7 +350,7 @@ public class PlayerReviver : ChanneledInteractionBehaviour
             return;
         }
 
-        NotifyOwner($"구조 완료: {target.name}");
+        Feedback?.NotifyOwner($"구조 완료: {target.name}");
         target.ServerRevive();
         GetComponent<PlayerAssistCredit>()?.ServerCreditRescue(); // 정산 "최다 팀원 구조" 집계 (#739)
     }
@@ -337,7 +358,7 @@ public class PlayerReviver : ChanneledInteractionBehaviour
     private void ServerCancelRevive() => m_channel.Cancel();
 
     // m_isChanneling은 오너 로컬 상태라, 원격 오너에게는 서버가 확정 시점에만 RPC로 알려 바꾼다
-    // (NotifyOwner·NotifyChannelGaugeStart와 동일 관례). 호스트 오너·오프라인은 직접 대입. (#725)
+    // (NotifyOwner·ChannelGauge.Begin과 동일 관례). 호스트 오너·오프라인은 직접 대입. (#725)
     // 동기화 NetworkVariable은 전 피어가 보므로 여기서 함께 쓴다 — 서버 컨텍스트에서만 호출되니 안전하다.
     private void ServerNotifyChannelStarted()
     {
@@ -379,7 +400,7 @@ public class PlayerReviver : ChanneledInteractionBehaviour
             transform.position
         );
 
-    // 채널링 게이지와 오너 피드백(NotifyOwner)은 기반 ChanneledInteractionBehaviour가 제공한다. (#184/#91)
+    // 채널링 게이지와 오너 피드백은 같은 오브젝트의 ChannelGauge·OwnerFeedback 컴포넌트가 제공한다. (#184/#91)
 
     public override void OnDestroy()
     {

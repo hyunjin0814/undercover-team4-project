@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 1896902269743218172}
   - component: {fileID: 9191439955366297747}
   - component: {fileID: 7679794720558980840}
+  - component: {fileID: 7134354516750909033}
   m_Layer: 7
   m_Name: AreaScanner
   m_TagString: Untagged
@@ -95,6 +96,9 @@ MonoBehaviour:
   m_heldModelPrefab: {fileID: 9165171215913758722, guid: f3fa43e03b509be4db69a5be7803fd91, type: 3}
   m_heldPositionOffset: {x: 0.13, y: 0.04, z: -0.01}
   m_heldRotationOffset: {x: 185, y: -88, z: 95}
+  m_overrideThirdPersonGrip: 0
+  m_thirdPersonPositionOffset: {x: 0, y: 0, z: 0}
+  m_thirdPersonRotationOffset: {x: 0, y: 0, z: 0}
   m_handGrip: 2
   m_targetOutlineColor: {r: 0.2, g: 0.9, b: 0.6, a: 1}
   m_shopPrice: 3000
@@ -119,3 +123,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6708c43a2175d914ea50ce6a610d3cb6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WorldItemPickup
+--- !u!114 &7134354516750909033
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3548487367736433955}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b5fda882ea123be45b99560663b41a94, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::OwnerFeedback
+  ShowTopMostFoldoutHeaderGroup: 1

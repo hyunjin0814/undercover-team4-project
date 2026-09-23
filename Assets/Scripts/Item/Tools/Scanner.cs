@@ -11,8 +11,22 @@ using UnityEngine.Localization;
 /// 채널링 경로는 <b>지우지 않고 남겨 뒀다</b> — <see cref="m_channelSeconds"/>가 0보다 크면 예전처럼
 /// 홀드 채널링으로 동작한다. 플레이테스트로 되돌릴 수 있게 하기 위한 것이다(#608 본문).</summary>
 [RequireComponent(typeof(ItemBattery))]
+[RequireComponent(typeof(ChannelGauge))]
+[RequireComponent(typeof(ToastFeedback))]
+[RequireComponent(typeof(OwnerFeedback))]
 public class Scanner : ItemBase
 {
+    private OwnerFeedback m_feedback;
+
+    private OwnerFeedback Feedback => this.ResolveCapability(ref m_feedback);
+
+    private ChannelGauge m_gauge;
+    private ToastFeedback m_toast;
+
+    private ChannelGauge Gauge => this.ResolveCapability(ref m_gauge);
+
+    private ToastFeedback Toast => this.ResolveCapability(ref m_toast);
+
     [Header("스캐너 설정")]
     [Tooltip("스캔 채널링 시간(초). 0이면 즉시 스캔 — 게이지·판독음 없이 겨냥 즉시 결과가 나온다 (#608). "
         + "0보다 크면 예전 홀드 채널링으로 돌아간다(되돌리기용)")]
@@ -49,17 +63,17 @@ public class Scanner : ItemBase
     /// 주인이 UI 쪽이기 때문이다(#525가 지향하는 방향).</summary>
     public event Action OnDepletedUseAttempt;
 
-    /// <summary>기반 ToastOwner가 오너 로컬에서 부르는 발행 지점. (#309)</summary>
-    // 스캐너는 줍기 시 소유권이 홀더로 이전되므로(#88) 기반의 SendTo.Owner가 정확히 든 사람에게 간다.
-    protected override void RaiseOwnerToast(EItemFeedback feedback) => OnScanFeedback?.Invoke(feedback);
-
-    // 즉시 스캔에는 "읽는 중" 구간이 없어 루프 판독음이 울릴 자리가 없다 — 결과가 나오는 순간
-    // 1회 울린다(#608). 채널링을 되살리면(m_channelSeconds > 0) 그때만 루프도 함께 돌아온다. (#483)
-    protected override EAudioClip ChannelLoopSound =>
-        m_channelSeconds > 0f ? EAudioClip.ScannerScan : EAudioClip.None;
-
     private void Awake()
     {
+        // 토스트 채널을 여기서 잇는다 — ToastFeedback이 오너 로컬에서 발행한 사유를 스캐너 이벤트로
+        // 흘려보낸다(구독자는 ScanResultPresenter). 스캐너는 줍기 시 소유권이 홀더로 이전되므로(#88)
+        // ToastFeedback의 SendTo.Owner가 정확히 든 사람에게 간다.
+        //
+        // ⚠ <b>lazy로 미루면 안 된다</b> — 아래 배터리가 먼저 토스트를 발행하면 구독 전이라 놓친다.
+        ToastFeedback toast = Toast;
+        if (toast != null)
+            toast.OnToast += RaiseScanFeedback;
+
         m_battery = GetComponent<ItemBattery>();
         if (m_battery == null)
         {
@@ -72,8 +86,12 @@ public class Scanner : ItemBase
         m_battery.CanCharge = () => !m_channel.IsActive;
         m_battery.ChargeBlockedReason = "충전 실패 — 스캔 채널링 중";
         m_battery.FullyChargedFeedback = EItemFeedback.ScannerBatteryFull;
-        m_battery.OnChargeToast += RaiseOwnerToast; // 배터리 토스트를 스캐너 토스트 채널로 중계
+        // 배터리 토스트 중계는 없앴다 — 배터리와 스캐너가 같은 루트의 ToastFeedback 하나를 공유하므로
+        // 배터리가 띄운 토스트도 위 구독으로 그대로 들어온다.
     }
+
+    // ToastFeedback이 오너 로컬에서 발행한 사유를 스캐너의 공개 채널로 넘긴다.
+    private void RaiseScanFeedback(EItemFeedback feedback) => OnScanFeedback?.Invoke(feedback);
 
     // ---- 전자기기 먹통 게이트 (#372) ----
     // 구역 스캔(#490)과 판정 로직이 같아 공용 게이트로 뽑았다 — 두 아이템이 각자 캐시·재해석을
@@ -151,7 +169,7 @@ public class Scanner : ItemBase
         if (!CanUse())
         {
             if (IsBlackout)
-                ToastOwner(EItemFeedback.ScannerBlackout);
+                Toast?.ToastOwner(EItemFeedback.ScannerBlackout);
             else if (m_battery != null && m_battery.IsDepleted)
             {
                 // 소진 안내는 여기서만 낸다 — 들고만 있을 때가 아니라 쓰려 했을 때다 (#810)
@@ -168,7 +186,7 @@ public class Scanner : ItemBase
             target != null ? target.GetComponentInParent<CitizenIdentity>() : null;
         if (aimed != null && IsAlreadyScanned(aimed))
         {
-            ToastOwner(EItemFeedback.AlreadyScanned);
+            Toast?.ToastOwner(EItemFeedback.AlreadyScanned);
             return;
         }
 
@@ -177,7 +195,7 @@ public class Scanner : ItemBase
 
         m_pendingScan = true;
 
-        if (HasServerAuthority)
+        if (this.HasServerAuthority())
         {
             ServerBeginScan(npcRef);
             return;
@@ -249,7 +267,7 @@ public class Scanner : ItemBase
     /// 클라 CanUse는 신뢰할 수 없으므로 스캔 중복·배터리·먹통·대상을 전부 재검증한다.</summary>
     private void ServerBeginScan(NetworkObjectReference npcRef)
     {
-        if (!HasServerAuthority)
+        if (!this.HasServerAuthority())
             return;
 
         if (m_channel.IsActive || m_battery.IsDepleted)
@@ -261,7 +279,7 @@ public class Scanner : ItemBase
         // 먹통을 서버가 다시 보지 않으면 위조 RPC로 먹통 중 스캔이 뚫린다 (#372)
         if (IsBlackout)
         {
-            ToastOwner(EItemFeedback.ScanFailedBlackout);
+            Toast?.ToastOwner(EItemFeedback.ScanFailedBlackout);
             ClearPendingRpc();
             return;
         }
@@ -293,8 +311,10 @@ public class Scanner : ItemBase
         }
         else
         {
-            NotifyOwner($"스캔 채널링 시작: {identity.name} ({m_channelSeconds}초)");
-            NotifyChannelGaugeStart(m_channelSeconds);
+            Feedback?.NotifyOwner($"스캔 채널링 시작: {identity.name} ({m_channelSeconds}초)");
+            // 루프 판독음은 채널링 경로에만 있다 — 즉시 스캔(위 분기)에는 "읽는 중" 구간이 없어
+            // 결과가 나오는 순간 1회만 울린다 (#608 · #483)
+            Gauge?.Begin(m_channelSeconds, EAudioClip.ScannerScan);
 
             ServerChannel.Result result;
             try
@@ -309,7 +329,7 @@ public class Scanner : ItemBase
             finally
             {
                 // 완료·뗌·거리이탈·예외 어떤 경로로 끝나도 게이지 숨김을 보장한다 (#184)
-                NotifyChannelGaugeEnd();
+                Gauge?.End();
             }
 
             // 실패로 끝나도 오너의 in-flight 플래그를 풀어야 재시도가 된다 (#91)
@@ -318,7 +338,7 @@ public class Scanner : ItemBase
                 case ServerChannel.Result.OutOfRange:
                     // 공용 ServerChannel.Result는 이탈 사유를 하나로 묶어 주므로, 먹통 여부를 여기서 갈라
                     // "먹통으로 끊겼는데 범위 이탈로 표시되는" 어긋남을 막는다 (#372).
-                    ToastOwner(
+                    Toast?.ToastOwner(
                         IsBlackout
                             ? EItemFeedback.ScanStoppedBlackout
                             : EItemFeedback.ScanFailedOutOfRange);
@@ -326,7 +346,7 @@ public class Scanner : ItemBase
                     return;
 
                 case ServerChannel.Result.Canceled:
-                    NotifyOwner("스캔 취소됨 (홀드 뗌)");
+                    Feedback?.NotifyOwner("스캔 취소됨 (홀드 뗌)");
                     ClearPendingRpc();
                     return;
             }
@@ -398,7 +418,7 @@ public class Scanner : ItemBase
         if (m_channelSeconds <= 0f)
             return;
 
-        if (HasServerAuthority)
+        if (this.HasServerAuthority())
         {
             m_channel.Cancel();
             return;

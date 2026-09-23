@@ -18,8 +18,13 @@ using UnityEngine;
 /// 따른다 — 채널링 끊기 → 소유권 이전 → 부착 → <b>양쪽</b> 오너에게 목록 동기화.
 /// 배터리 잔량 같은 아이템 상태는 아이템 NetworkObject에 실려 있어 저절로 따라온다(<see cref="ItemBattery"/>).
 /// </summary>
-public class PlayerLooter : ChanneledInteractionBehaviour
+[RequireComponent(typeof(OwnerFeedback))]
+public class PlayerLooter : NetworkBehaviour
 {
+    private OwnerFeedback m_feedback;
+
+    private OwnerFeedback Feedback => this.ResolveCapability(ref m_feedback);
+
     // 사거리는 조준·윤곽선과 같은 기준 — PlayerInteractor.Range 재사용 (#147 패턴, #184)
     private const float k_fallbackRange = 3f; // 테스트 구성 등 PlayerInteractor가 없을 때
 
@@ -101,7 +106,7 @@ public class PlayerLooter : ChanneledInteractionBehaviour
             return;
 
         // 서버(호스트 포함)·오프라인은 로컬 참조로 바로 실행 (PlayerCarrier.RequestCarry 관례)
-        if (HasServerAuthority)
+        if (this.HasServerAuthority())
         {
             ServerOpenLoot(victim);
             return;
@@ -126,7 +131,7 @@ public class PlayerLooter : ChanneledInteractionBehaviour
         if (victim == null)
             return;
 
-        if (HasServerAuthority)
+        if (this.HasServerAuthority())
         {
             ServerTakeFunds(victim);
             return;
@@ -149,7 +154,7 @@ public class PlayerLooter : ChanneledInteractionBehaviour
         if (itemObject == null)
             return;
 
-        if (HasServerAuthority)
+        if (this.HasServerAuthority())
         {
             ServerTakeItem(victim, itemObject);
             return;
@@ -236,7 +241,7 @@ public class PlayerLooter : ChanneledInteractionBehaviour
 
     private void ServerOpenLoot(PlayerLootable victim)
     {
-        if (!HasServerAuthority)
+        if (!this.HasServerAuthority())
             return;
         if (!CanLoot(victim))
             return;
@@ -255,7 +260,7 @@ public class PlayerLooter : ChanneledInteractionBehaviour
     /// </summary>
     private void ServerTakeFunds(PlayerLootable victim)
     {
-        if (!HasServerAuthority)
+        if (!this.HasServerAuthority())
             return;
         if (!CanLoot(victim))
         {
@@ -277,7 +282,7 @@ public class PlayerLooter : ChanneledInteractionBehaviour
 
     private void ServerTakeItem(PlayerLootable victim, NetworkObject itemObject)
     {
-        if (!HasServerAuthority)
+        if (!this.HasServerAuthority())
             return;
         if (!CanLoot(victim))
         {
@@ -305,7 +310,7 @@ public class PlayerLooter : ChanneledInteractionBehaviour
         if (m_loadout.Held.Count >= PlayerLoadout.k_maxHeldItems)
         {
             // 화면 표시가 아니라 로그인 이유는 NotifyOwnerLootRejected 주석 참고 (#525와 함께 붙인다)
-            NotifyOwner("약탈 실패 — 소지 슬롯이 꽉 찼다 (먼저 버릴 것)");
+            Feedback?.NotifyOwner("약탈 실패 — 소지 슬롯이 꽉 찼다 (먼저 버릴 것)");
             return;
         }
 
@@ -324,7 +329,7 @@ public class PlayerLooter : ChanneledInteractionBehaviour
         m_loadout.ServerNotifyHeldItemsChanged();
 
         victim.ServerNotifyRobbedItem();
-        NotifyOwner(
+        Feedback?.NotifyOwner(
             $"[약탈] 소지품 확보 — {(item != null ? item.name : itemObject.name)} ({victim.name})"
         );
     }
@@ -356,14 +361,13 @@ public class PlayerLooter : ChanneledInteractionBehaviour
     /// 전부 거부되는 구간이 실제로 존재한다 — 스스로는 못 움직여도 <b>남이 대상을 밧줄로 끌어갈 수
     /// 있다</b>(#365). 자금 0 케이스를 굳이 알리는 것(<see cref="ServerTakeFunds"/>)과 같은 이유다.
     ///
-    /// <b>지금은 로그뿐이다.</b> 토스트로 띄우려면 <c>ToastOwner</c>를 부르는 것만으로는 안 된다 —
-    /// <see cref="ChanneledInteractionBehaviour.RaiseOwnerToast"/>의 기반 구현이 무동작이라
-    /// 하위가 자기 토스트 채널을 갖고 재정의해야 하고(<see cref="Scanner"/>·<see cref="ItemBattery"/>가 그렇다),
+    /// <b>지금은 로그뿐이다.</b> 토스트로 띄우려면 <see cref="ToastFeedback"/>를 프리팹에 붙이고
+    /// 그 <c>OnToast</c>를 받아 띄울 UI 채널이 있어야 하며(<see cref="Scanner"/>가 그렇다),
     /// 사유는 <see cref="EItemFeedback"/> 값과 <c>Item.Feedback.*</c> 키가 함께 필요하다 (#525).
     /// 이 클래스에는 아직 그 채널이 없다.
     /// </summary>
     private void NotifyOwnerLootRejected() =>
-        NotifyOwner("약탈 실패 — 대상에 손이 닿지 않는다 (거리·가시선·대상 상태)");
+        Feedback?.NotifyOwner("약탈 실패 — 대상에 손이 닿지 않는다 (거리·가시선·대상 상태)");
 
     // ---- 약탈자 쪽 결과 (서버 → 오너) ----
 
