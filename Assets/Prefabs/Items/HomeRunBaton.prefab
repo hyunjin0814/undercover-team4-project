@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 1048637736484071511}
   - component: {fileID: 2797442434866279411}
   - component: {fileID: 2988146469719859958}
+  - component: {fileID: 716291894348296909}
   m_Layer: 7
   m_Name: HomeRunBaton
   m_TagString: Untagged
@@ -144,4 +145,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d55f7c1e622ceb24aa080ac9ec4e842a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ChannelGauge
+  ShowTopMostFoldoutHeaderGroup: 1
+--- !u!114 &716291894348296909
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3742205529984326766}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b5fda882ea123be45b99560663b41a94, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::OwnerFeedback
   ShowTopMostFoldoutHeaderGroup: 1

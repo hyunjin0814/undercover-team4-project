@@ -68,6 +68,20 @@ Unity는 기존 프리팹을 열 때 빠진 필수 컴포넌트를 **메모리�
 
 `Awake`에서 캐싱하지 않는다. `Scanner`가 이미 `private void Awake()`를 갖고 있어, 기반에 `Awake`를 새로 넣으면 조용히 가려지기 때문이다. 또 `ReviveKit`의 오프라인 자가 부활처럼 스폰 전에 처음 평가되는 경로가 있다. lazy + `Debug.LogError` 폴백이면 두 경우 모두 안전하다.
 
+## 능력 컴포넌트 해석은 한 곳으로
+
+소비자마다 lazy 프로퍼티(널 검사 + 프리팹 누락 `LogError`)를 복제하면 세 능력 × 소비자 수로 18벌까지
+늘어난다. `CapabilityComponent.ResolveCapability`(확장 메서드) 하나로 모았고, 소비자는 한 줄이다:
+
+```csharp
+private OwnerFeedback m_feedback;
+private OwnerFeedback Feedback => this.ResolveCapability(ref m_feedback);
+```
+
+`HasServerAuthority`만은 컴포넌트가 아니라 `NetworkBehaviourExtensions`의 확장 메서드다 —
+`!IsSpawned || IsServer` 한 줄이라 붙일 상태가 없고, `GetComponent` 의존이 없어 스폰 전 경로
+(`HealPack`·`ReviveKit`의 오프라인 사용)에서도 안전하다. 덕분에 `HealPack`은 능력 컴포넌트가 0개다.
+
 ## 게이지 토큰 — 남은 문제
 
 `ChannelingGaugeUI`의 소유 토큰은 참조 동일성만 보는 `object`고, `Hide`는 토큰이 다르면 무시한다. 분리 전에는 채널링 클래스마다 토큰이 달랐지만, 분리 후 플레이어 오브젝트에서는 `PlayerReviver`와 `PlayerEscortCommands`가 **`ChannelGauge` 하나를 공유**한다.
@@ -85,9 +99,9 @@ Unity는 기존 프리팹을 열 때 빠진 필수 컴포넌트를 **메모리�
 
 | 단계 | 내용 | 상태 |
 |---|---|---|
-| ① | `ChannelGauge` 분리 — 소비자 6개, 프리팹 5개 | 완료 (Play 테스트 대기) |
-| ② | `ToastFeedback` 분리 — 소비자 2개(Scanner·ItemBattery), 프리팹 1개 | 미착수 |
-| ③ | `OwnerFeedback` 분리 + `HasServerAuthority` 확장 메서드화 + 기반 삭제, `ItemBase : NetworkBehaviour` | 미착수 |
+| ① | `ChannelGauge` 분리 — 소비자 6개, 프리팹 5개 | 완료 (커밋 `9422e095`, Play 검증 통과) |
+| ② | `ToastFeedback` 분리 — 소비자 2개(Scanner·ItemBattery), 프리팹 1개 | 완료 (커밋 전, Play 테스트 대기) |
+| ③ | `OwnerFeedback` 분리 + `HasServerAuthority` 확장 메서드화 + 기반 삭제, `ItemBase : NetworkBehaviour` | 완료 (커밋 전, Play 테스트 대기) |
 
 **남은 작업의 구체적인 절차·호출부 목록·확인 항목은
 [channeled-interaction-split-handoff.md](channeled-interaction-split-handoff.md)에 있다.**

@@ -17,27 +17,16 @@ using UnityEngine.Localization;
 /// 아이템의 소유권을 따른다.)
 /// </summary>
 [RequireComponent(typeof(ChannelGauge))]
+[RequireComponent(typeof(OwnerFeedback))]
 public class ReviveKit : ItemBase
 {
+    private OwnerFeedback m_feedback;
+
+    private OwnerFeedback Feedback => this.ResolveCapability(ref m_feedback);
+
     private ChannelGauge m_gauge;
 
-    // 프리팹 직렬화에 의존하므로 lazy로 잡는다 — RequireComponent는 기존 프리팹 자산을 소급 보정하지 않는다.
-    private ChannelGauge Gauge
-    {
-        get
-        {
-            if (m_gauge == null)
-            {
-                m_gauge = GetComponent<ChannelGauge>();
-                if (m_gauge == null)
-                    Debug.LogError(
-                        "ReviveKit: ChannelGauge가 프리팹에 없다 — 프리팹을 열어 추가하고 저장할 것",
-                        this
-                    );
-            }
-            return m_gauge;
-        }
-    }
+    private ChannelGauge Gauge => this.ResolveCapability(ref m_gauge);
 
     // 사거리는 조준·윤곽선과 같은 기준 — PlayerInteractor.Range를 재사용 (#147 패턴, #184).
     private const float k_fallbackRange = 3f; // 테스트 구성 등 PlayerInteractor가 없을 때
@@ -73,7 +62,7 @@ public class ReviveKit : ItemBase
         }
 
         // 서버(호스트 포함)·오프라인은 로컬 참조로 바로 실행 (PlayerReviver.RequestBeginRevive 관례)
-        if (HasServerAuthority)
+        if (this.HasServerAuthority())
         {
             ServerTryRevive(revivable);
             return;
@@ -137,7 +126,7 @@ public class ReviveKit : ItemBase
     /// </summary>
     private void ServerTryRevive(PlayerHealth target)
     {
-        if (!HasServerAuthority || target == null)
+        if (!this.HasServerAuthority() || target == null)
             return;
 
         PlayerInteractor holder = Holder;
@@ -158,7 +147,7 @@ public class ReviveKit : ItemBase
         PlayerIncapacitation userIncapacitation = holder.GetComponent<PlayerIncapacitation>();
         if (userIncapacitation != null && userIncapacitation.IsIncapacitated)
         {
-            NotifyOwner("부활 실패 — 무력화 상태에서는 키트를 쓸 수 없다");
+            Feedback?.NotifyOwner("부활 실패 — 무력화 상태에서는 키트를 쓸 수 없다");
             return;
         }
 
@@ -167,7 +156,7 @@ public class ReviveKit : ItemBase
         {
             // 살아 있는 동료, 이미 일어난 대상, 또는 몸이 회수 불가능한 곳으로 사라진 대상(#775) —
             // 어느 경우든 키트는 소모하지 않는다
-            NotifyOwner($"부활 실패 — {target.name}은 부활 대상이 아니다");
+            Feedback?.NotifyOwner($"부활 실패 — {target.name}은 부활 대상이 아니다");
             return;
         }
 
@@ -178,14 +167,14 @@ public class ReviveKit : ItemBase
                 PlayerInteractor.RangeOf(holder, k_fallbackRange),
                 transform.position))
         {
-            NotifyOwner($"부활 실패 — {target.name}이 사거리를 벗어났다");
+            Feedback?.NotifyOwner($"부활 실패 — {target.name}이 사거리를 벗어났다");
             return;
         }
 
         // 부활은 본부 장치와 같은 경로 — HP 부분 회복 + 무력화 해제 (#365와 동일)
         target.ServerRevive();
         holder.GetComponent<PlayerAssistCredit>()?.ServerCreditRescue(); // 정산 "최다 팀원 구조" 집계 (#739)
-        NotifyOwner($"부활 완료: {target.name} (부활 키트 소모)");
+        Feedback?.NotifyOwner($"부활 완료: {target.name} (부활 키트 소모)");
 
         // 성공했을 때만 소모한다 — 거부된 사용으로 키트가 사라지면 산 값을 그냥 잃는다
         ServerConsume();
@@ -199,7 +188,7 @@ public class ReviveKit : ItemBase
     /// </summary>
     public void RequestSelfRevive()
     {
-        if (HasServerAuthority)
+        if (this.HasServerAuthority())
         {
             ServerBeginSelfRevive();
             return;
@@ -233,7 +222,7 @@ public class ReviveKit : ItemBase
 
     private void ServerBeginSelfRevive()
     {
-        if (!HasServerAuthority || m_selfChannel.IsActive)
+        if (!this.HasServerAuthority() || m_selfChannel.IsActive)
             return;
 
         PlayerInteractor holder = Holder;
@@ -261,7 +250,7 @@ public class ReviveKit : ItemBase
 
     private async UniTaskVoid ServerSelfChannelAsync(PlayerInteractor holder, PlayerIncapacitation incap)
     {
-        NotifyOwner($"자가 부활 채널링 시작 ({m_selfReviveSeconds}초)");
+        Feedback?.NotifyOwner($"자가 부활 채널링 시작 ({m_selfReviveSeconds}초)");
         // 루프음은 동료 구조(PlayerReviver)와 같은 소리로 통일한다
         Gauge?.Begin(m_selfReviveSeconds, EAudioClip.ReviveLoop);
 
@@ -288,11 +277,11 @@ public class ReviveKit : ItemBase
         switch (result)
         {
             case ServerChannel.Result.Canceled:
-                NotifyOwner("자가 부활 취소됨");
+                Feedback?.NotifyOwner("자가 부활 취소됨");
                 return;
 
             case ServerChannel.Result.OutOfRange:
-                NotifyOwner("자가 부활 중단 — 대상이 부활 대상이 아니게 됨");
+                Feedback?.NotifyOwner("자가 부활 중단 — 대상이 부활 대상이 아니게 됨");
                 return;
 
             case ServerChannel.Result.Completed:
@@ -303,21 +292,21 @@ public class ReviveKit : ItemBase
         // 경합을 한 번 더 막는다
         if (Holder != holder)
         {
-            NotifyOwner("자가 부활 실패 — 키트를 손에서 놓쳤다");
+            Feedback?.NotifyOwner("자가 부활 실패 — 키트를 손에서 놓쳤다");
             return;
         }
 
         PlayerHealth health = holder.GetComponent<PlayerHealth>();
         if (health == null || !(incap.IsDowned || incap.IsRevivable))
         {
-            NotifyOwner("자가 부활 실패 — 이미 복구됐거나 부활 대상이 아니다");
+            Feedback?.NotifyOwner("자가 부활 실패 — 이미 복구됐거나 부활 대상이 아니다");
             return;
         }
 
         // 부활이 먼저다 — ServerRevive()의 Recover()가 소유권을 본인에게 되돌려야, 뒤따르는
         // ServerConsume() 안의 SyncHeldItemsRpc(SendTo.Owner)가 서버가 아니라 본인에게 간다 (#763, #820)
         health.ServerRevive();
-        NotifyOwner("자가 부활 완료 (부활 키트 소모)");
+        Feedback?.NotifyOwner("자가 부활 완료 (부활 키트 소모)");
         ServerConsume();
     }
 

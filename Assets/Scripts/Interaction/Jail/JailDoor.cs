@@ -171,7 +171,7 @@ public class JailDoor : NetworkBehaviour, IInteractable
     /// <summary>
     /// 누른 사람 <b>한 명에게만</b> 안내를 띄운다 — 서버(또는 오프라인)에서 호출. (#537)
     ///
-    /// <c>NotifyOwner</c>(ChanneledInteractionBehaviour)를 쓸 수 없다: 그 경로는 <b>오브젝트의 오너</b>에게
+    /// <see cref="OwnerFeedback"/>를 쓸 수 없다: 그 경로는 <b>오브젝트의 오너</b>에게
     /// 보내는데 이 문은 씬 오브젝트라 오너가 서버다 — 원격 클라가 눌러도 호스트 화면에 뜬다.
     /// 그래서 누른 클라를 지목해 보낸다.
     ///

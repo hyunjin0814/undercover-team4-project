@@ -3,21 +3,21 @@
 다른 세션이 이어받아 작업할 수 있게 현재 상태와 남은 일을 정리한다.
 **설계 근거·함정은 [channeled-interaction-split.md](channeled-interaction-split.md)가 정본이다.** 이 문서는 "지금 어디까지 했고 다음에 뭘 하냐"만 담는다.
 
-작성 시점: 2026-09-11 / 브랜치 `main` / 마지막 커밋 `8b9145fc`
+갱신 시점: 2026-09-23 / 브랜치 `refactor/channeled-interaction-split` / 마지막 커밋 `9422e095`
 
 ---
 
 ## 한 줄 요약
 
-`ChanneledInteractionBehaviour`가 들고 있던 세 능력(채널링 A / 오너 로그 B / 토스트 C)을 독립 `NetworkBehaviour` 컴포넌트로 쪼개는 3단계 작업. **① 완료(커밋 전), ②③ 미착수.**
+`ChanneledInteractionBehaviour`가 들고 있던 세 능력(채널링 A / 오너 로그 B / 토스트 C)을 독립 `NetworkBehaviour` 컴포넌트로 쪼개는 3단계 작업. **①②③ 전부 완료 — 코드·프리팹·Play 검증 모두 통과.**
 
 ---
 
 ## 현재 상태
 
-### 단계 ① 완료 — 아직 커밋 안 됨
+### 단계 ① 완료 — 커밋 `9422e095`
 
-`ChannelGauge` 분리가 코드·프리팹 모두 끝났고 컴파일도 통과했다. **다만 Play 테스트를 아직 안 했다.**
+`ChannelGauge` 분리가 코드·프리팹 모두 끝났고 **Play 테스트도 통과했다**(아래 체크리스트 전 항목).
 
 **신설**
 
@@ -39,30 +39,72 @@
 `Assets/Scenes/Maps/Map_Apocalypse.unity`, `docs/quaternion-compression.md`,
 `Assets/AddressableAssetsData/**`, `.agents/`, `.codex/`, `AGENTS.md`
 
+### 단계 ② 완료 — 아직 커밋 안 됨
+
+`ToastFeedback` 분리가 코드·프리팹 모두 끝났고 컴파일도 통과했다(에러 0건). Play 검증은 ③과 함께 했다(아래).
+
+**신설:** `Assets/Scripts/Core/ToastFeedback.cs` — `ToastOwner` + `OwnerToastRpc`, 발행 지점은 `OnToast` 이벤트
+
+**수정:**
+- `Core/ChanneledInteractionBehaviour.cs` — C 멤버(`ToastOwner`·`OwnerToastRpc`·`RaiseOwnerToast`) 삭제. B(`NotifyOwner`·`OwnerLogRpc`)와 `HasServerAuthority`만 남았다
+- `Item/Tools/Scanner.cs` — override 삭제, `[RequireComponent(typeof(ToastFeedback))]` + lazy `Toast`, `ToastOwner` 4곳 전환. `Awake`에서 `OnToast` **eager 구독** → `OnScanFeedback`으로 중계. **배터리 중계(`m_battery.OnChargeToast += ...`) 삭제**
+- `Item/Power/ItemBattery.cs` — override와 `OnChargeToast` 삭제(구독자가 스캐너 중계뿐인 것을 grep으로 재확인), 완충 토스트 1곳 전환
+- `Editor/CapabilityComponentSync.cs` — `s_capabilities`에 `typeof(ToastFeedback)` 추가
+- `Assets/Prefabs/Items/Scanner.prefab` — 점검(누락 1건) → 반영 → 재점검(누락 없음), 디스크 반영까지 확인
+
 ### 결정된 사항
 
-- **PR 전략**: 한 브랜치에서 작업하고 PR만 단계별로 3개 분리 (사용자 확정)
+- **PR 전략**: 한 브랜치에서 작업하고 **마지막에 PR 하나로 올린다** (2026-09-22 변경 — 그 전에는 단계별 3개였다)
 - **게이지 토큰**: 현행 유지 + 후속 이슈로 분리 (사용자 확정 — 아래 "후속 이슈")
 - **Play 테스트는 사용자가 수행한다.** 이어받는 세션은 Play 모드 진입 금지. 컴파일·프리팹 점검까지만 검증하고 결과를 보고할 것
 
 ---
 
-## 지금 확인해야 할 것 (단계 ① Play 테스트)
+## 단계 ②③ Play 테스트 — 2026-09-23, 전 항목 통과
 
-커밋·②진행 전에 사용자가 확인할 항목. Multiplayer Play Mode로 호스트+클라 둘 다 볼 것 — 원격 클라가 오너인 경로가 RPC를 타기 때문이다.
+**항목을 5개로 줄인 근거**: 프리팹에 능력 컴포넌트가 붙었는지는 점검 도구가 직렬화된 YAML로 이미
+확인했고(8건 반영 → 누락 없음), 빠졌다면 런타임에 `…이(가) 프리팹에 없다` LogError가 뜬다. 그래서
+런타임에서만 알 수 있는 것은 **라우팅이 서로 다른 자리**뿐이다. 나머지 호출부는 같은 구조의 반복이다.
 
-- [ ] **스캐너** 채널링 게이지 + 루프 판독음 (`m_channelSeconds > 0`으로 둔 경우). 0이면 즉시 스캔이라 게이지가 안 뜨는 게 정상
-- [ ] **테이저** 발사 후 충전 게이지가 차오름
-- [ ] **⚠ 슬롯 전환 시 게이지가 사라짐** — 테이저 충전 중 다른 슬롯으로 바꿨다가 돌아오기. **이번에 고친 회귀 지점이라 가장 중요하다.** 게이지가 화면에 박혀 남으면 실패
-- [ ] **테이저 재장착 이어 표시**(#455) — 충전 중 슬롯을 바꿨다 돌아오면 남은 만큼부터 이어서 차오름
-- [ ] **부활 키트** 자가 부활 채널링 게이지 + 루프음 (Down/Die 중 E 홀드)
-- [ ] **홈런 진압봉** 차지 게이지 + 차지음 (좌클릭 홀드)
-- [ ] **구조 채널링**(PlayerReviver) 게이지 + 루프음, 취소 시 소리도 같이 멈춤
-- [ ] 밧줄 줄다리기 합류 채널링 — 현재 `Player.prefab`의 `m_channelSeconds: 0`이라 **게이지가 안 뜨는 게 정상**
+전부 **MPPM 클론(원격 오너)에서** 확인한다 — 호스트는 로컬 즉시 실행이라 RPC를 타지 않는다.
+
+- [x] **테이저를 허공에 쏜다** → 클론 콘솔에 `테이저 빗나감 — 허공`
+      *대표하는 것:* 아이템 프리팹의 `OwnerFeedback` (진압봉 3종·부활키트·구역스캐너·배터리가 같은 구조)
+- [x] **슬롯 꽉 찬 채로 약탈** → 클론 콘솔에 `약탈 실패 — 소지 슬롯이 꽉 찼다`
+      *대표하는 것:* `Player.prefab`의 `OwnerFeedback` 1개를 소비자 4개가 공유하는 구조
+- [x] **둘이 같은 NPC를 묶은 뒤 한 명이 감옥 밖으로 데려간다** → **남은 쪽** 콘솔에
+      `밧줄 끊김 — 다른 참가자가 감옥 밖으로 데리고 나갔다`
+      *대표하는 것:* `holder.Feedback` 교차 인스턴스 호출 — 유일하게 남의 컴포넌트를 부르는 자리
+- [x] **완충 상태에서 본부 충전기에 충전 시도** → 클론 화면에 완충 **토스트**
+      *대표하는 것:* ②의 유일한 동작 변경 — 중계를 지우고 `ItemBattery`→`Scanner`가 `ToastFeedback`
+      하나를 `OnToast`로 공유한다
+- [x] **`HealPack` 사용** → 정상 회복
+      *대표하는 것:* `HasServerAuthority()` 확장 메서드 — 능력 컴포넌트 0개 + 스폰 전 평가 경로
+
+### `m_channelSeconds: 0` 때문에 도달할 수 없는 경로 (확인하려면 임시로 올릴 것)
+
+`Scanner.prefab`이 즉시 스캔(0)이라 아래는 실행 자체가 안 된다. 되돌리고 커밋하지 말 것:
+스캔 채널링 시작·취소 로그, 범위 이탈·먹통 중단 토스트, `충전 실패 — 스캔 채널링 중`.
+`Player.prefab`(합류 채널링)도 0이라 게이지가 뜨지 않는다 — 로그는 나간다.
+
+**아이템 지급은 `ItemGrantDevHotkeys`(`;` 지급 / `'` 회수)로 한다** — 호스트에서 누르면 접속한 전원이 받는다.
 
 ---
 
-## 단계 ② — ToastFeedback 분리 (PR 2)
+## 단계 ① Play 테스트 — 완료 (2026-09-22, 전 항목 통과)
+
+- [x] **스캐너** 채널링 게이지 + 루프 판독음 (`m_channelSeconds > 0`으로 둔 경우). 0이면 즉시 스캔이라 게이지가 안 뜨는 게 정상
+- [x] **테이저** 발사 후 충전 게이지가 차오름
+- [x] **⚠ 슬롯 전환 시 게이지가 사라짐** — 테이저 충전 중 다른 슬롯으로 바꿨다가 돌아오기. **이번에 고친 회귀 지점이라 가장 중요하다.** 게이지가 화면에 박혀 남으면 실패
+- [x] **테이저 재장착 이어 표시**(#455) — 충전 중 슬롯을 바꿨다 돌아오면 남은 만큼부터 이어서 차오름
+- [x] **부활 키트** 자가 부활 채널링 게이지 + 루프음 (Down/Die 중 E 홀드)
+- [x] **홈런 진압봉** 차지 게이지 + 차지음 (좌클릭 홀드)
+- [x] **구조 채널링**(PlayerReviver) 게이지 + 루프음, 취소 시 소리도 같이 멈춤
+- [x] 밧줄 줄다리기 합류 채널링 — 현재 `Player.prefab`의 `m_channelSeconds: 0`이라 **게이지가 안 뜨는 게 정상**
+
+---
+
+## 단계 ② — ToastFeedback 분리 ✅ 완료 (아래는 실제로 한 작업 기록)
 
 가장 작다. 소비자 2개, 프리팹 1개.
 
@@ -112,7 +154,7 @@ public class ToastFeedback : NetworkBehaviour
 
 ---
 
-## 단계 ③ — OwnerFeedback 분리 + 기반 삭제 (PR 3)
+## 단계 ③ — OwnerFeedback 분리 + 기반 삭제 ✅ 완료 (아래는 계획 기록)
 
 가장 크다. 소비자 10개, 프리팹 8개.
 

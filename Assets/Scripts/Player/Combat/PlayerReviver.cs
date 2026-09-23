@@ -17,28 +17,18 @@ using UnityEngine;
 /// </summary>
 [RequireComponent(typeof(PlayerInputHandler))]
 [RequireComponent(typeof(ChannelGauge))]
-public class PlayerReviver : ChanneledInteractionBehaviour
+[RequireComponent(typeof(OwnerFeedback))]
+public class PlayerReviver : NetworkBehaviour
 {
+    private OwnerFeedback m_feedback;
+
+    private OwnerFeedback Feedback => this.ResolveCapability(ref m_feedback);
+
     private ChannelGauge m_gauge;
 
     // 프리팹 직렬화에 의존하므로 lazy로 잡는다 — RequireComponent는 기존 프리팹 자산을 소급 보정하지 않는다.
     // 같은 플레이어 오브젝트의 PlayerEscortCommands와 이 컴포넌트를 공유한다 (게이지 토큰 주의 — 후속 이슈).
-    private ChannelGauge Gauge
-    {
-        get
-        {
-            if (m_gauge == null)
-            {
-                m_gauge = GetComponent<ChannelGauge>();
-                if (m_gauge == null)
-                    Debug.LogError(
-                        "PlayerReviver: ChannelGauge가 프리팹에 없다 — 프리팹을 열어 추가하고 저장할 것",
-                        this
-                    );
-            }
-            return m_gauge;
-        }
-    }
+    private ChannelGauge Gauge => this.ResolveCapability(ref m_gauge);
 
     [Header("구조 채널링 (서버 권위)")]
     [Tooltip("구조 채널링 시간(초)")]
@@ -266,7 +256,7 @@ public class PlayerReviver : ChanneledInteractionBehaviour
             // (둘 다 히트박스가 꺼져 조준도 안 되지만 위조 RPC 방어로 여기서도 본다)
             // Die는 히트박스가 켜져 있어 실제로 여기까지 온다 — 조준·홀드가 되는데 침묵하면 버그로 보인다 (#364)
             if (targetIncap != null && targetIncap.IsDead)
-                NotifyOwner(
+                Feedback?.NotifyOwner(
                     $"구조 불가 — {target.name}은 기능 정지 상태다. 부활 키트로 일으켜야 한다 (#613)"
                 );
             return;
@@ -282,7 +272,7 @@ public class PlayerReviver : ChanneledInteractionBehaviour
         PlayerIncapacitation targetIncap
     )
     {
-        NotifyOwner($"구조 채널링 시작: {target.name} ({m_reviveSeconds}초)");
+        Feedback?.NotifyOwner($"구조 채널링 시작: {target.name} ({m_reviveSeconds}초)");
         // 루프음이 게이지와 같은 경로라 "취소했는데 소리가 계속 난다"가 구조적으로 생기지 않는다 (#725)
         Gauge?.Begin(m_reviveSeconds, EAudioClip.ReviveLoop);
         ServerNotifyChannelStarted();
@@ -314,12 +304,12 @@ public class PlayerReviver : ChanneledInteractionBehaviour
         switch (result)
         {
             case ServerChannel.Result.Canceled:
-                NotifyOwner("구조 취소됨");
+                Feedback?.NotifyOwner("구조 취소됨");
                 return;
 
             case ServerChannel.Result.OutOfRange:
                 // 여기서는 '거리 이탈'이 아니라 대상이 구조 대상에서 벗어난 것이다 (keepAlive, #364).
-                NotifyOwner(
+                Feedback?.NotifyOwner(
                     target != null && targetIncap.IsDead
                         ? $"구조 중단 — 제한시간 초과로 기능 정지됨: {target.name} (본부 이송 필요)"
                         : "구조 중단 — 대상이 구조 대상이 아니게 됨"
@@ -333,14 +323,14 @@ public class PlayerReviver : ChanneledInteractionBehaviour
         // 채널링 동안 대상이 파괴됐거나 사거리를 벗어났으면 실패
         if (target == null || !IsInRange(target))
         {
-            NotifyOwner("구조 실패 — 대상이 범위를 벗어남");
+            Feedback?.NotifyOwner("구조 실패 — 대상이 범위를 벗어남");
             return;
         }
         // 다른 동료가 먼저 살렸다면 중복 구조 방지.
         // 채널링(3초) 도중 구조 제한시간이 끝나 Die로 떨어졌을 수도 있다 — 한 발 늦은 구조는 실패다 (#364)
         if (!targetIncap.IsDowned)
         {
-            NotifyOwner(
+            Feedback?.NotifyOwner(
                 targetIncap.IsDead
                     ? $"구조 실패 — 제한시간 초과로 기능 정지됨: {target.name} (본부 이송 필요)"
                     : "구조 취소 — 대상이 이미 복구됨"
@@ -348,7 +338,7 @@ public class PlayerReviver : ChanneledInteractionBehaviour
             return;
         }
 
-        NotifyOwner($"구조 완료: {target.name}");
+        Feedback?.NotifyOwner($"구조 완료: {target.name}");
         target.ServerRevive();
         GetComponent<PlayerAssistCredit>()?.ServerCreditRescue(); // 정산 "최다 팀원 구조" 집계 (#739)
     }
@@ -398,7 +388,7 @@ public class PlayerReviver : ChanneledInteractionBehaviour
             transform.position
         );
 
-    // 채널링 게이지와 오너 피드백(NotifyOwner)은 기반 ChanneledInteractionBehaviour가 제공한다. (#184/#91)
+    // 채널링 게이지와 오너 피드백은 같은 오브젝트의 ChannelGauge·OwnerFeedback 컴포넌트가 제공한다. (#184/#91)
 
     public override void OnDestroy()
     {

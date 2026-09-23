@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 6638366612775789774}
   - component: {fileID: 2797442434866279411}
   - component: {fileID: 3597358746278584263}
+  - component: {fileID: 716291894348296909}
   m_Layer: 7
   m_Name: ToyHammer
   m_TagString: Untagged
@@ -107,6 +108,9 @@ MonoBehaviour:
   m_heldModelPrefab: {fileID: 6973116298489018123, guid: 3f8d1738e552c184ea19e6b73df2f6c0, type: 3}
   m_heldPositionOffset: {x: 0.15, y: 0.02, z: -0.05}
   m_heldRotationOffset: {x: 10, y: 135, z: -20}
+  m_overrideThirdPersonGrip: 0
+  m_thirdPersonPositionOffset: {x: 0, y: 0, z: 0}
+  m_thirdPersonRotationOffset: {x: 0, y: 0, z: 0}
   m_handGrip: 3
   m_targetOutlineColor: {r: 1, g: 0.85, b: 0.2, a: 1}
   m_shopPrice: 3000
@@ -122,3 +126,16 @@ MonoBehaviour:
   references:
     version: 2
     RefIds: []
+--- !u!114 &716291894348296909
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3742205529984326766}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b5fda882ea123be45b99560663b41a94, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::OwnerFeedback
+  ShowTopMostFoldoutHeaderGroup: 1

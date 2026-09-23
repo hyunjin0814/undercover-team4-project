@@ -28,8 +28,13 @@ public static class CapabilityComponentSync
     private const string k_prefabFolder = "Assets/Prefabs";
 
     // 이 스크립트가 붙여도 되는 타입 — 무관한 RequireComponent(Rigidbody 등)까지 임의로 추가하지 않기
-    // 위한 화이트리스트다. 단계가 진행되면 ToastFeedback·OwnerFeedback을 여기 추가한다.
-    private static readonly Type[] s_capabilities = { typeof(ChannelGauge) };
+    // 위한 화이트리스트다. 능력 컴포넌트를 새로 만들면 여기 추가한다.
+    private static readonly Type[] s_capabilities =
+    {
+        typeof(ChannelGauge),
+        typeof(ToastFeedback),
+        typeof(OwnerFeedback),
+    };
 
     [MenuItem(k_menuAudit)]
     public static void Audit() => Sync(apply: false);
@@ -42,7 +47,9 @@ public static class CapabilityComponentSync
         List<string> found = new();
         List<string> problems = new();
 
-        foreach (string prefabGuid in AssetDatabase.FindAssets("t:Prefab", new[] { k_prefabFolder }))
+        foreach (
+            string prefabGuid in AssetDatabase.FindAssets("t:Prefab", new[] { k_prefabFolder })
+        )
         {
             string path = AssetDatabase.GUIDToAssetPath(prefabGuid);
 
@@ -167,6 +174,8 @@ public static class CapabilityComponentSync
         if (apply)
             Debug.Log($"[능력 컴포넌트] {found.Count}건 추가·저장했다:\n  {body}");
         else
-            Debug.LogWarning($"[능력 컴포넌트] 누락 {found.Count}건 — '프리팹 반영'을 실행할 것:\n  {body}");
+            Debug.LogWarning(
+                $"[능력 컴포넌트] 누락 {found.Count}건 — '프리팹 반영'을 실행할 것:\n  {body}"
+            );
     }
 }

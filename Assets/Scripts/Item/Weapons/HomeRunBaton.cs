@@ -15,23 +15,7 @@ public class HomeRunBaton : Baton
 {
     private ChannelGauge m_gauge;
 
-    // 프리팹 직렬화에 의존하므로 lazy로 잡는다 — RequireComponent는 기존 프리팹 자산을 소급 보정하지 않는다.
-    private ChannelGauge Gauge
-    {
-        get
-        {
-            if (m_gauge == null)
-            {
-                m_gauge = GetComponent<ChannelGauge>();
-                if (m_gauge == null)
-                    Debug.LogError(
-                        "HomeRunBaton: ChannelGauge가 프리팹에 없다 — 프리팹을 열어 추가하고 저장할 것",
-                        this
-                    );
-            }
-            return m_gauge;
-        }
-    }
+    private ChannelGauge Gauge => this.ResolveCapability(ref m_gauge);
 
     [Header("홈런 진압봉 (#815)")]
     [Tooltip("최대 충전 시 발사 수평 속도(m/s)")]

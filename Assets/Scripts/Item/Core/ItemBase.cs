@@ -1,3 +1,4 @@
+using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.Localization;
 
@@ -6,9 +7,12 @@ using UnityEngine.Localization;
 /// 스캐너·수갑 등 하위 아이템이 이 클래스를 상속해 Use()를 구현한다.
 /// 아이템은 독립 NetworkObject 프리팹이므로(#88) NetworkBehaviour 계열을 상속한다 —
 /// 배터리 등 상태를 NetworkVariable로 동기화하고, 줍기 시 소유권이 이전된다.
-/// 채널링 게이지·오너 피드백은 기반 ChanneledInteractionBehaviour가 제공한다 (#184/#91).
+/// 채널링 게이지(<see cref="ChannelGauge"/>)·오너 토스트(<see cref="ToastFeedback"/>)·오너 로그
+/// (<see cref="OwnerFeedback"/>)는 <b>능력 컴포넌트</b>다 — 쓰는 아이템만 프리팹에 붙이고
+/// <c>[RequireComponent]</c>로 선언한다. 상속에서 합성으로 옮긴 경위는
+/// docs/channeled-interaction-split.md 참고.
 /// </summary>
-public abstract class ItemBase : ChanneledInteractionBehaviour
+public abstract class ItemBase : NetworkBehaviour
 {
     [Header("아이템 정보")]
     [SerializeField]

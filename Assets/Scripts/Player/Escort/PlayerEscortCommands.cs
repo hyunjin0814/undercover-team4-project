@@ -28,28 +28,18 @@ public enum EEscortCommand
 /// </summary>
 [RequireComponent(typeof(PlayerEscorter))]
 [RequireComponent(typeof(ChannelGauge))]
-public class PlayerEscortCommands : ChanneledInteractionBehaviour
+[RequireComponent(typeof(OwnerFeedback))]
+public class PlayerEscortCommands : NetworkBehaviour
 {
+    private OwnerFeedback m_feedback;
+
+    private OwnerFeedback Feedback => this.ResolveCapability(ref m_feedback);
+
     private ChannelGauge m_gauge;
 
     // 프리팹 직렬화에 의존하므로 lazy로 잡는다 — RequireComponent는 기존 프리팹 자산을 소급 보정하지 않는다.
     // 같은 플레이어 오브젝트의 PlayerReviver와 이 컴포넌트를 공유한다 (게이지 토큰 주의 — 후속 이슈).
-    private ChannelGauge Gauge
-    {
-        get
-        {
-            if (m_gauge == null)
-            {
-                m_gauge = GetComponent<ChannelGauge>();
-                if (m_gauge == null)
-                    Debug.LogError(
-                        "PlayerEscortCommands: ChannelGauge가 프리팹에 없다 — 프리팹을 열어 추가하고 저장할 것",
-                        this
-                    );
-            }
-            return m_gauge;
-        }
-    }
+    private ChannelGauge Gauge => this.ResolveCapability(ref m_gauge);
 
     [Header("밧줄 채널링 (서버 권위)")]
     [Tooltip(
@@ -379,7 +369,7 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
     // 줄다리기 합류 채널링 — 새로 묶기가 즉시 적용으로 바뀌면서(#446) 이 채널은 합류 전용이 됐다.
     private async UniTaskVoid ServerRopeJoinChannelAsync(NpcController target)
     {
-        NotifyOwner($"줄다리기 합류 채널링 시작: {target.name} ({m_channelSeconds}초)");
+        Feedback?.NotifyOwner($"줄다리기 합류 채널링 시작: {target.name} ({m_channelSeconds}초)");
         Gauge?.Begin(m_channelSeconds, EAudioClip.None);
 
         // 수갑 체포와 동일한 keepAlive — 도중 거리 이탈은 즉시 실패시킨다 (#91)
@@ -397,11 +387,11 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         switch (result)
         {
             case ServerChannel.Result.OutOfRange:
-                NotifyOwner("합류 실패 — 대상이 범위를 벗어남");
+                Feedback?.NotifyOwner("합류 실패 — 대상이 범위를 벗어남");
                 return;
 
             case ServerChannel.Result.Canceled:
-                NotifyOwner("합류 취소됨 (홀드 뗌)");
+                Feedback?.NotifyOwner("합류 취소됨 (홀드 뗌)");
                 return;
         }
 
@@ -454,7 +444,7 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         if (target.Death.IsDead)
         {
             target.Rope.StartRopeDrag(transform);
-            NotifyOwner(
+            Feedback?.NotifyOwner(
                 $"시체를 밧줄로 묶어 끌기 시작: {target.name} "
                     + $"({Escorter.TetheredCount}/{Escorter.RopeCapacity})"
             );
@@ -471,7 +461,7 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         // StartFlee를 걸어 묶자마자 도망친다. (#292)
         target.Stun.ExitStun(resumeReaction: false);
 
-        NotifyOwner($"밧줄로 묶어 끌기 시작: {target.name} ({Escorter.TetheredCount}/{Escorter.RopeCapacity})");
+        Feedback?.NotifyOwner($"밧줄로 묶어 끌기 시작: {target.name} ({Escorter.TetheredCount}/{Escorter.RopeCapacity})");
     }
 
     // ---- 서버 실행: 밧줄 풀기 채널링 (#290 → #369) ----
@@ -574,7 +564,7 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         {
             Escorter.ReleaseDrag(target); // 내 관절 가닥만 푼다 (NpcRopeDrag.StopRopeDrag → 전 피어)
             Escorter.RemoveTether(target);
-            NotifyOwner($"시체를 내려놓았다: {target.name}");
+            Feedback?.NotifyOwner($"시체를 내려놓았다: {target.name}");
             return;
         }
 
@@ -608,11 +598,11 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
 
             if (othersHold)
             {
-                NotifyOwner($"내 밧줄만 풀었다 — 다른 참가자가 계속 확보 중: {target.name}");
+                Feedback?.NotifyOwner($"내 밧줄만 풀었다 — 다른 참가자가 계속 확보 중: {target.name}");
                 return;
             }
 
-            NotifyOwner($"밧줄 풀기 완료 — 일어난 뒤 배회 복귀: {target.name}");
+            Feedback?.NotifyOwner($"밧줄 풀기 완료 — 일어난 뒤 배회 복귀: {target.name}");
             return;
         }
 
@@ -623,7 +613,7 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
         //
         // 그래서 자세 판정을 여기서 하지 않고 대상에게 맡긴다 — ServerStandUpThen이 묶임 여부를 보고
         // 일어나기를 태울지 곧바로 실행할지 가른다 (JailIntake·NpcCapturedState와 같은 방식).
-        NotifyOwner($"밧줄 풀기 완료 — 배회 복귀: {target.name}");
+        Feedback?.NotifyOwner($"밧줄 풀기 완료 — 배회 복귀: {target.name}");
         target.StandUp.ServerStandUpThen(afterStandUp, downSeconds);
     }
 
@@ -635,7 +625,7 @@ public class PlayerEscortCommands : ChanneledInteractionBehaviour
     private bool IsInRange(NpcController target) =>
         PlayerInteractor.IsWithinReach(Interactor, target.transform, CaptureRange, transform.position);
 
-    // 채널링 게이지와 오너 피드백(NotifyOwner)은 기반 ChanneledInteractionBehaviour가 제공한다. (#184/#91)
+    // 채널링 게이지와 오너 피드백은 같은 오브젝트의 ChannelGauge·OwnerFeedback 컴포넌트가 제공한다. (#184/#91)
 
     public override void OnNetworkDespawn()
     {

@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 6588843841137046898}
   - component: {fileID: -6396881021767209465}
   - component: {fileID: 795768077531382692}
+  - component: {fileID: 4791257643306196880}
   m_Layer: 7
   m_Name: Taser
   m_TagString: Untagged
@@ -134,4 +135,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d55f7c1e622ceb24aa080ac9ec4e842a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ChannelGauge
+  ShowTopMostFoldoutHeaderGroup: 1
+--- !u!114 &4791257643306196880
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7581991311652755793}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b5fda882ea123be45b99560663b41a94, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::OwnerFeedback
   ShowTopMostFoldoutHeaderGroup: 1

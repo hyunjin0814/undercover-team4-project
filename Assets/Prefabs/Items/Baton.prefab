@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 6638366612775789774}
   - component: {fileID: 1048637736484071511}
   - component: {fileID: 2797442434866279411}
+  - component: {fileID: 716291894348296909}
   m_Layer: 7
   m_Name: Baton
   m_TagString: Untagged
@@ -95,6 +96,9 @@ MonoBehaviour:
   m_heldModelPrefab: {fileID: 6463821525030920642, guid: dfd82aa3527962e449f5d5436d594754, type: 3}
   m_heldPositionOffset: {x: 0.09, y: 0.02, z: -0.022}
   m_heldRotationOffset: {x: 100, y: 135, z: 0}
+  m_overrideThirdPersonGrip: 0
+  m_thirdPersonPositionOffset: {x: 0, y: 0, z: 0}
+  m_thirdPersonRotationOffset: {x: 0, y: 0, z: 0}
   m_handGrip: 3
   m_targetOutlineColor: {r: 1, g: 0, b: 0.9479666, a: 1}
   m_shopPrice: 0
@@ -120,3 +124,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6708c43a2175d914ea50ce6a610d3cb6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WorldItemPickup
+--- !u!114 &716291894348296909
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3742205529984326766}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b5fda882ea123be45b99560663b41a94, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::OwnerFeedback
+  ShowTopMostFoldoutHeaderGroup: 1

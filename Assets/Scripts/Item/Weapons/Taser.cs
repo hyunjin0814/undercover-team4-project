@@ -25,27 +25,16 @@ using UnityEngine;
 /// 게이지 인프라는 같은 오브젝트의 <see cref="ChannelGauge"/> 컴포넌트를 쓴다.
 /// </summary>
 [RequireComponent(typeof(ChannelGauge))]
+[RequireComponent(typeof(OwnerFeedback))]
 public class Taser : ItemBase, IAimedWeapon
 {
+    private OwnerFeedback m_feedback;
+
+    private OwnerFeedback Feedback => this.ResolveCapability(ref m_feedback);
+
     private ChannelGauge m_gauge;
 
-    // 프리팹 직렬화에 의존하므로 lazy로 잡는다 — RequireComponent는 기존 프리팹 자산을 소급 보정하지 않는다.
-    private ChannelGauge Gauge
-    {
-        get
-        {
-            if (m_gauge == null)
-            {
-                m_gauge = GetComponent<ChannelGauge>();
-                if (m_gauge == null)
-                    Debug.LogError(
-                        "Taser: ChannelGauge가 프리팹에 없다 — 프리팹을 열어 추가하고 저장할 것",
-                        this
-                    );
-            }
-            return m_gauge;
-        }
-    }
+    private ChannelGauge Gauge => this.ResolveCapability(ref m_gauge);
 
     [Header("테이저 설정")]
     [Tooltip("전극이 날아가는 최대 사거리(m). 상호작용 레이(PlayerInteractor.Range)와 무관하게 이 값이 기준이다")]
@@ -169,7 +158,7 @@ public class Taser : ItemBase, IAimedWeapon
         // 정상 사격이 엉뚱하게 막힌다. 여기부터는 "실제로 발사했다"로 취급한다.
         if (Time.time < m_nextFireTime)
         {
-            NotifyOwner($"테이저 충전 중 — {m_nextFireTime - Time.time:F1}초 남음");
+            Feedback?.NotifyOwner($"테이저 충전 중 — {m_nextFireTime - Time.time:F1}초 남음");
             return;
         }
 
@@ -194,16 +183,16 @@ public class Taser : ItemBase, IAimedWeapon
                 out PlayerIncapacitation playerTarget, out RaycastHit hit))
         {
             case AimResult.NoHit:
-                NotifyOwner("테이저 빗나감 — 허공");
+                Feedback?.NotifyOwner("테이저 빗나감 — 허공");
                 return;
             case AimResult.HitNonTarget:
-                NotifyOwner($"테이저 빗나감 — {hit.collider.name}에 맞음");
+                Feedback?.NotifyOwner($"테이저 빗나감 — {hit.collider.name}에 맞음");
                 return;
             case AimResult.TargetInvalidState:
                 // 소리는 낸다 — 전극은 실제로 몸에 닿았다. 침묵하면 입력이 씹힌 것처럼 보인다.
                 // (진압봉의 같은 분기와 동일한 방침, #478)
                 App.Game.Fx?.PlayEverywhere(EFx.TaserHit, hit.point);
-                NotifyOwner(
+                Feedback?.NotifyOwner(
                     playerTarget != null
                         ? $"테이저 무효 — 이미 무력화된 동료 ({playerTarget.name})"
                         : $"테이저 무효 — 이미 기절한 대상 ({target.name})");
@@ -218,7 +207,7 @@ public class Taser : ItemBase, IAimedWeapon
         if (playerTarget != null)
         {
             playerTarget.ServerStun(m_playerStunSeconds);
-            NotifyOwner($"테이저 명중 — 동료 오사! {playerTarget.name} ({m_playerStunSeconds}초 기절)");
+            Feedback?.NotifyOwner($"테이저 명중 — 동료 오사! {playerTarget.name} ({m_playerStunSeconds}초 기절)");
             return;
         }
 
@@ -231,7 +220,7 @@ public class Taser : ItemBase, IAimedWeapon
             null,
             NpcStunCause.Taser
         );
-        NotifyOwner($"테이저 명중: {target.name} ({target.Stun.StunSeconds}초 기절)");
+        Feedback?.NotifyOwner($"테이저 명중: {target.name} ({target.Stun.StunSeconds}초 기절)");
     }
 
     // ---- 피격 연출 (#477 일부) ----
