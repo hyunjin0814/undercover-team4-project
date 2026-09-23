@@ -8,8 +8,8 @@ using UnityEngine;
 /// 완료 시 대상의 HP를 일부 회복시켜 무력화를 해제한다(PlayerHealth.ServerRevive).
 /// 서버 권위·RPC 구조는 PlayerEscorter를 본뜬다.
 ///
-/// <b>채널링 중 취소 조건</b>(<see cref="HandleCancelTrigger"/>)은 이동 입력·아이템 사용·버리기·E
-/// 재입력(토글)이다. 사거리 이탈·대상의 유예 만료·나 자신의 무력화는 서버 keepAlive
+/// <b>채널링 중 취소 조건</b>(<see cref="HandleCancelTrigger"/>)은 이동 입력·아이템 사용·버리기·
+/// 슬롯 전환·E 재입력(토글)이다. 사거리 이탈·대상의 유예 만료·나 자신의 무력화는 서버 keepAlive
 /// (<see cref="ServerChannelAsync"/>)가 이미 본다 — 오너 쪽은 입력 감시만 하면 된다.
 ///
 /// 채널링 시작/종료마다 대상의 <c>PlayerIncapacitation.ServerSetBeingRevived</c>를 불러 다운 유예
@@ -86,6 +86,12 @@ public class PlayerReviver : NetworkBehaviour
             m_inputHandler.OnInteractStarted += HandleInteractStarted;
             m_inputHandler.OnUseItemStarted += HandleCancelTrigger;
             m_inputHandler.OnDropItem += HandleCancelTrigger;
+            // 슬롯 전환도 "다른 입력"이라 취소다 (GDD 7장 구조). 막지 않고 취소하는 이유 — 막으면 키가
+            // 씹힌 것처럼 보이고, 구조를 계속하면 이전 아이템의 게이지 정리(PlayerLoadout.EquipSlot)가
+            // 하나뿐인 루프 슬롯을 끊어 구조음이 사라진다.
+            m_inputHandler.OnPreviousItem += HandleCancelTrigger;
+            m_inputHandler.OnNextItem += HandleCancelTrigger;
+            m_inputHandler.OnSelectSlot += HandleSelectSlot;
         }
     }
 
@@ -96,6 +102,9 @@ public class PlayerReviver : NetworkBehaviour
             m_inputHandler.OnInteractStarted -= HandleInteractStarted;
             m_inputHandler.OnUseItemStarted -= HandleCancelTrigger;
             m_inputHandler.OnDropItem -= HandleCancelTrigger;
+            m_inputHandler.OnPreviousItem -= HandleCancelTrigger;
+            m_inputHandler.OnNextItem -= HandleCancelTrigger;
+            m_inputHandler.OnSelectSlot -= HandleSelectSlot;
         }
         ServerCancelRevive();
     }
@@ -131,12 +140,15 @@ public class PlayerReviver : NetworkBehaviour
             RequestBeginRevive(target);
     }
 
-    // 이동·아이템 사용·버리기 — 채널링 중일 때만 취소로 이어진다. (#725)
+    // 이동·아이템 사용·버리기·슬롯 전환 — 채널링 중일 때만 취소로 이어진다. (#725)
     private void HandleCancelTrigger()
     {
         if (m_isChanneling)
             RequestCancelRevive();
     }
+
+    // 숫자키 슬롯 선택 — 인덱스는 볼 필요가 없다. 같은 칸을 다시 눌러도 취소다(다른 입력이므로).
+    private void HandleSelectSlot(int index) => HandleCancelTrigger();
 
     // 조준 중인 대상이 지정한 무력화 원인의 아군이면 그 PlayerHealth를, 아니면 null을 반환한다. (#105, #364)
     private PlayerHealth FindAllyTarget(IncapacitationCause cause)
