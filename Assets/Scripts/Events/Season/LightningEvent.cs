@@ -46,10 +46,7 @@ public class LightningEvent : NetworkBehaviour, IRoundWeather
     private float m_buffDuration = 5f;
 
     [Header("실내 차단")]
-    [Tooltip(
-        "머리 위로 이 거리(m) 안에 지붕이 있는 플레이어에게는 낙뢰가 떨어지지 않는다 — 0이면 실내에도 떨어진다.\n\n"
-            + "건물 높이보다 넉넉히 잡을 것. 비·눈이 그치는 판정과 같은 규칙을 쓴다(WeatherShelter)"
-    )]
+    [Tooltip("머리 위 이 거리(m) 안에 지붕이 있으면 낙뢰가 떨어지지 않는다. 0이면 실내에도 떨어진다")]
     [Min(0f)]
     [SerializeField]
     private float m_shelterProbeHeight = 25f;

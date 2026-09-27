@@ -67,9 +67,7 @@ public class CriminalAssigner : CommonManagerBase
     private float m_resistWeight = 0.4f;
 
     [Header("일반 시민 반응 가중치 (#78 · 재조정 #400)")]
-    [Tooltip(
-        "무고 시민의 반응 추첨 비율. 도주/저항은 진범을 헷갈리게 하는 미끼일 뿐 잡아도 오검거다 — 이 비율로 미끼 행동의 빈도(난이도)를 조절한다. 반응 트리거가 스캔으로 옮겨지면서(#400) 반응이 진범 tell이 될 위험이 커져 비순응 비율을 절반까지 올렸다 (GDD 6-2)"
-    )]
+    [Tooltip("무고 시민의 반응 추첨 비율(순응) — 도주·저항 미끼 행동의 빈도(난이도)를 조절한다")]
     [SerializeField]
     private float m_citizenCompliantWeight = 0.5f;
 

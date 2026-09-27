@@ -11,9 +11,7 @@ public class NpcAppearance : NetworkBehaviour, IAppearanceProfileSource
     private const int k_unassigned = -1;
 
     [Header("외형 후보 (바디 변형)")]
-    [Tooltip(
-        "바디 변형들이 자식으로 붙어 있는 컨테이너(보통 Model). 이 아래 SkinnedMeshRenderer를 가진 자식들을 바디 후보로 보고, 인덱스 순서대로 하나만 활성화한다. 비우면 이 오브젝트에서 탐색"
-    )]
+    [Tooltip("바디 변형들이 자식으로 붙은 컨테이너(보통 Model). 비우면 이 오브젝트에서 찾는다")]
     [SerializeField]
     private Transform m_modelRoot;
 
@@ -36,13 +34,11 @@ public class NpcAppearance : NetworkBehaviour, IAppearanceProfileSource
     [SerializeField]
     private string m_colorPropertyName = "_BaseColor";
 
-    [Tooltip("머리 프롭의 머리색 틴트에 쓰는 셰이더 프로퍼티. 베이스 머티리얼의 셰이더와 짝이다 — 마스크를 쓰는 Synty 캐릭터 셰이더면 _Hair_Color, 마스크 없는 URP/Lit이면 _BaseColor.\n마스크 채널(_Hair_Color)은 마스크 텍스처가 그린 팩의 UV에서만 먹는다. 어휘에 다른 팩 부착물이 섞이면 그 메시에서 틴트가 통째로 무시되므로(#619 — docs §13-13) 지금은 마스크를 안 쓰는 쪽으로 간다")]
+    [Tooltip("머리색 틴트에 쓰는 셰이더 프로퍼티 — 베이스 머티리얼 셰이더와 짝(URP/Lit이면 _BaseColor)")]
     [SerializeField]
     private string m_hairColorPropertyName = "_BaseColor";
 
-    [Tooltip(
-        "머리 프롭에 깔 밝은 중립 베이스 머티리얼. 프롭 기본 아틀라스가 어두워 곱셈 틴트하면 밝은 머리색(금발·은발)이 탁해지므로, 머리 프롭 머티리얼을 이 중립 머티리얼로 교체한 뒤 HairColor를 틴트한다. 비우면 원본에 그대로 틴트(기존 동작)"
-    )]
+    [Tooltip("머리 프롭에 깔 밝은 중립 베이스 머티리얼 — 밝은 머리색이 탁해지지 않게 한다. 비우면 원본에 틴트")]
     [SerializeField]
     private Material m_hairBaseMaterial;
 

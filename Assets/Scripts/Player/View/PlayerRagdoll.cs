@@ -33,13 +33,10 @@ public partial class PlayerRagdoll : MonoBehaviour
              "찾아내 시체가 한 층 밑으로 순간이동한다. 못 찾으면 골반 높이를 쓴다")]
     [SerializeField] private float m_groundProbeDistance = 1.5f;
 
-    [Tooltip("루트 yaw를 몸이 누운 방향에 맞춘다 — 기상 모션이 '루트 전방을 향해 누워 있다'를 " +
-             "전제하므로. 비행 중에도 매 프레임 맞춘다 — 근거는 docs/player-ragdoll.md §11")]
+    [Tooltip("루트 yaw를 몸이 누운 방향에 맞춘다(기상 모션 방향 정렬용)")]
     [SerializeField] private bool m_alignRootYawToBody = true;
 
-    [Tooltip("루트 yaw 추종 감쇠율(1/초) — 0이면 즉시 대입.\n\n" +
-             "⚠ 즉시 대입은 위험하다: 몸이 막 기우는 동안 방향값이 흔들려 루트에 매달린 것들" +
-             "(이름표·아이템)이 한 프레임에 통째로 돈다 — docs/player-ragdoll.md §11")]
+    [Tooltip("루트 yaw 추종 감쇠율(1/초). 0이면 즉시 대입한다(이름표·아이템이 튈 수 있다)")]
     [SerializeField] private float m_rootYawFollowSpeed = 8f;
 
     [Tooltip("몸 방향 대비 루트 yaw 보정(도) — Knockdown_StandUp 클립이 어느 쪽을 머리로 보는지에 " +

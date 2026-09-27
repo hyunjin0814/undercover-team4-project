@@ -28,10 +28,7 @@ public class MapSelection : NetworkedManagerBase
         )]
         public Sprite Preview;
 
-        [Tooltip(
-            "이 맵에 스폰될 NPC 수. 손으로 적는 값이다 — 고르는 시점(Shop)에는 맵 씬이 로드돼 있지 않아"
-                + " 스포너에서 읽을 수 없다. 맵 씬의 NpcSpawner.m_spawnCount를 바꾸면 여기도 함께 고칠 것"
-        )]
+        [Tooltip("이 맵에 스폰될 NPC 수(표시용 수동 값). 맵 씬 NpcSpawner의 스폰 수와 맞출 것")]
         [Min(0)]
         public int NpcCount;
 

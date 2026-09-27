@@ -16,10 +16,7 @@ public partial class NpcRagdoll : MonoBehaviour
     }
 
     [Header("정착 판정")]
-    [Tooltip("물리가 스스로 안 잠드는 몸을 강제로 재우는 시간(초) — 지형에 껴서 영원히 떨리는 " +
-             "경우의 안전장치다.\n\n" +
-             "<b>평시 정착은 이 값과 무관하다</b> — PhysX가 알아서 재운다. 여기까지 왔다는 것은 " +
-             "몸이 무언가에 물려 떨고 있다는 뜻이고, 그때만 Sleep()을 대신 불러 준다")]
+    [Tooltip("물리가 스스로 잠들지 않는 몸을 강제로 재우기까지의 시간(초) — 끼어 떠는 경우의 안전장치")]
     [SerializeField] private float m_settleTimeoutSeconds = 5f;
 
     [Header("기상 블렌드")]

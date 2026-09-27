@@ -10,8 +10,7 @@ public partial class PlayerRagdoll
              "읽는 법은 docs/player-ragdoll.md §13. 값이 확정되면 끈다")]
     [SerializeField] private bool m_logRevivalYaw;
 
-    [Tooltip("정착 순간 <b>앞뒤 20프레임</b>을 한 줄씩 찍는다 — 정착할 때 몸이 아래로 내려갔다 " +
-             "올라오는 현상을 잡는 계측이다. 읽는 법은 docs/player-ragdoll.md §13. 확정되면 끈다")]
+    [Tooltip("정착 순간 앞뒤 20프레임을 로그로 찍는다(정착 시 몸 출렁임 진단용)")]
     [SerializeField] private bool m_logSettleTrace;
 
     private Transform FindLiveBone(string boneName)
@@ -92,11 +91,7 @@ public partial class PlayerRagdoll
         return true;
     }
 
-    [Tooltip("래그돌 진입 직후 30프레임을 <b>루트 / 뼈 / 지면</b> 세 줄로 찍는다 — 쓰러지는 순간 몸이 " +
-             "죽기 직전 자세에서 뜨고 돌아 버리는 현상을 잡는 계측이다.\n\n" +
-             "⚠ <b>권한=True로 찍어야 한다</b> — 원격은 첫 패킷 전까지 자세가 못박혀 있어 아무것도 " +
-             "움직이지 않는다.\n\n" +
-             "각 칸을 읽는 법은 docs/player-ragdoll.md §13. 확정되면 끈다")]
+    [Tooltip("래그돌 진입 직후 30프레임의 루트/뼈/지면을 로그로 찍는다. 권위 피어에서 볼 것")]
     [SerializeField] private bool m_logEntryHeadTrace;
 
     private const int k_entryTraceFrames = 30;

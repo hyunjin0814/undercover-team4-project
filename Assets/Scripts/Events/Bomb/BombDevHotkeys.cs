@@ -31,8 +31,7 @@ public class BombDevHotkeys : NetworkBehaviour
     [Tooltip("순간이동으로 폭탄에서 몇 m 떨어져 설지 — 0이면 폭탄에 겹쳐 선다")]
     [SerializeField] private float m_teleportStandoff = 2f;
 
-    [Tooltip("놓는 자리에서 이 거리(m) 안의 NavMesh를 찾아 그 위에 올려놓는다 — " +
-             "폭탄은 NavMeshAgent라 떠 있거나 인도 밖이면 굳는다 (BombChaseEvent와 같은 이유)")]
+    [Tooltip("놓는 자리에서 이 거리(m) 안의 NavMesh를 찾아 그 위에 올려놓는다")]
     [SerializeField] private float m_navSampleMaxDistance = 5f;
 
     [Tooltip("켜면 놓자마자 무장한다 — 진짜 이벤트처럼 쫓아오고 30초 뒤 스스로 터진다. " +

@@ -15,8 +15,7 @@ public class SmugglerCourierEvent : SpawnedNpcEventBase
     }
 
     [Header("밀수 운반책")]
-    [Tooltip("화물 무게 — 표준 시민이 1.0(경량 0.6 / 중량 1.6)이다. 이 값과 RopeDragLoad의 하한 면제가 " +
-             "함께 '혼자서는 못 끈다'를 만든다: 속도 페널티는 무게 1당 -25%다")]
+    [Tooltip("화물 무게 — 표준 시민이 1.0. 무게 1당 끄는 속도 -25%로, 혼자서는 못 끌게 한다")]
     [Min(0f)]
     [SerializeField]
     private float m_cargoWeight = 5f;
@@ -26,9 +25,7 @@ public class SmugglerCourierEvent : SpawnedNpcEventBase
     [SerializeField]
     private float m_walkSpeedMultiplier = 0.75f;
 
-    [Tooltip("맞은 뒤 속도 배율 — 짐을 진 채 맨홀로 달린다. 한 번 켜지면 되돌아가지 않는다.\n\n" +
-             "시민 기본 속도가 2m/s(개체 편차 0.8~1.2배)라 2.5배면 4~6m/s다 — 달리기 모션 전환 임계 " +
-             "4m/s를 넘겨야 발이 미끄러지지 않고, 플레이어 걷기(5)보다 빠르되 달리기(8)로는 잡힌다")]
+    [Tooltip("맞은 뒤 속도 배율(되돌아가지 않음). 달리기 모션 임계(4m/s)를 넘고 플레이어 달리기(8)보단 느리게")]
     [Min(0.1f)]
     [SerializeField]
     private float m_panicSpeedMultiplier = 2.5f;

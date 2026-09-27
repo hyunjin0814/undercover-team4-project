@@ -13,10 +13,7 @@ public class TrafficLane : MonoBehaviour
     [SerializeField] private float m_runDistance = 120f;
 
     [Header("맵 밖 여유 (#673)")]
-    [Tooltip(
-        "도로 구간 <b>앞</b>에 붙는 맵 밖 주행 거리(m) — 차가 태어나는 자리다.\n"
-            + "⚠ 엔진음 maxDistance(AudioLibrary의 VehicleEngine, 현재 90)보다 커야 스폰 순간이 들리지 않는다"
-    )]
+    [Tooltip("도로 구간 앞의 맵 밖 주행 거리(m) — 엔진음 maxDistance보다 커야 스폰 순간이 안 들린다")]
     [Min(0f)]
     [SerializeField] private float m_approachDistance = 100f;
 

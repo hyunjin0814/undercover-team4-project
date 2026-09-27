@@ -20,29 +20,18 @@ public class NpcChaseConfig : ScriptableObject
     [SerializeField] private float m_retargetCooldown = 5f;
 
     [Header("조향 — 추격 중에만 적용하고 벗어날 때 원복한다 (#568)")]
-    [Tooltip("추격 중 선회 속도(도/초). 선회 반경 = 최고속/이 값(라디안)이라 포획 거리보다 작아야 파고들 수 있다 — 시민 기본값(240)이면 반경 1.67m로 포획 거리(1.3m) 안쪽을 못 판다")]
+    [Tooltip("추격 중 선회 속도(도/초) — 선회 반경이 포획 거리(1.3m)보다 작아지게 둘 것")]
     [SerializeField] private float m_turnSpeed = 900f;
     [Tooltip("추격 중 가속도(m/s²) — 방향을 튼 뒤 속도를 되찾는 빠르기. 낮으면 꺾을 때마다 뒤처진다")]
     [SerializeField] private float m_acceleration = 24f;
     [Tooltip("표적이 이 시간(초) 뒤에 있을 위치를 조준한다. 크면 코너를 질러가고, 너무 크면 급반전에 속아 엉뚱한 데로 간다")]
     [SerializeField] private float m_maxLeadSeconds = 0.6f;
 
-    [Tooltip(
-        "쫓던 표적을 완전히 놓는 거리(m) — 여기까지 벌어지면 추격을 접고 배회로 돌아간다 (#568 후속).\n\n"
-            + "<b>반드시 추격 범위(Range)보다 넓게 둘 것.</b> 좁으면 방금 고른 표적이 그 즉시 자격을 잃어 "
-            + "물었다 놨다를 매 프레임 반복한다(범위 안에서 다시 고르기 때문). 그 사이 배회로 떨어져 "
-            + "속도가 걷기로 주저앉으므로 화면에서는 '달리다 갑자기 멈춘다'로 보인다.\n\n"
-            + "갈아타기는 이 값이 아니라 SwitchAdvantage가 맡는다 — 이쪽은 포기 거리다"
-    )]
+    [Tooltip("표적을 완전히 놓는 거리(m) — 반드시 추격 범위(Range)보다 넓게 둘 것")]
     [Min(1f)]
     [SerializeField] private float m_releaseDistance = 35f;
 
-    [Tooltip(
-        "다른 후보가 지금 표적보다 이만큼(m) 더 가까우면 갈아탄다 (#568 후속).\n\n"
-            + "절대 거리로 놓았다 다시 무는 방식은 진동을 만든다 — 놓는 순간 범위 안에서 다시 고르므로 "
-            + "같은 사람을 도로 물기 쉽다. '더 가까운 사람이 나타났을 때만' 바꾸면 그 왕복이 없다.\n\n"
-            + "0에 가까우면 여럿이 붙어 있을 때 표적이 계속 바뀌어 산만해진다"
-    )]
+    [Tooltip("다른 후보가 현재 표적보다 이만큼(m) 더 가까우면 갈아탄다. 0에 가까우면 표적이 자주 바뀐다")]
     [Min(0f)]
     [SerializeField] private float m_switchAdvantage = 5f;
 

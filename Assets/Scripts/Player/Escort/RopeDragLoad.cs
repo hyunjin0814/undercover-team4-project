@@ -22,15 +22,11 @@ public class RopeDragLoad : NetworkBehaviour
     [SerializeField]
     private float m_minDragSpeedFactor = 0.35f;
 
-    [Tooltip(
-        "기능 정지된 동료 1명을 운반할 때 지는 무게 — NPC의 표준 무게(1.0)와 같다. NPC처럼 3티어 추첨을 하지 않는 이유는 플레이어 로봇이 전부 같은 몸이라 개체차를 둘 근거가 없기 때문이다"
-    )]
+    [Tooltip("기능 정지된 동료 1명을 운반할 때의 무게 — NPC 표준 무게(1.0)와 같다")]
     [SerializeField]
     private float m_carriedPlayerWeight = 1f;
 
-    [Tooltip(
-        "초중량 개체(밀수 운반책)를 끌고 있을 때 쓰는 하한 — 위 기본 하한 대신 걸린다. 혼자서는 사실상 못 끌게 하는 값이다. 0으로 두지 않는 이유는 완전 정지가 버그로 읽히기 때문"
-    )]
+    [Tooltip("초중량 개체(밀수 운반책)를 끌 때 쓰는 속도 하한 — 혼자서는 사실상 못 끌게 한다")]
     [Range(0f, 1f)]
     [SerializeField]
     private float m_heavyDragSpeedFactor = 0.04f;

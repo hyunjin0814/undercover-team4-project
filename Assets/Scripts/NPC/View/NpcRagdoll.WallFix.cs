@@ -15,9 +15,7 @@ public partial class NpcRagdoll
              "끄면 박힌 채로 남는다(옛 동작) — 개발 중 A/B 비교용")]
     [SerializeField] private bool m_wallFoldEnabled = true;
 
-    [Tooltip("뼈가 벽면 <b>너머로</b> 이만큼(m) 넘어가 있으면 박힌 것으로 본다.\n\n" +
-             "겹침 깊이가 아니다 — 완전히 관통한 팔도 이 값으로 잡힌다. 팔 캡슐 반지름이 0.085m라, " +
-             "너무 낮추면 살짝 걸친 팔에도 손대게 된다")]
+    [Tooltip("뼈가 벽면 너머로 이만큼(m) 넘어가면 박힌 것으로 본다. 너무 낮추면 살짝 걸친 팔도 건드린다")]
     [SerializeField] private float m_wallMinDepth = 0.06f;
 
     [Tooltip("이 질량(kg)을 넘는 뼈는 몸통으로 보고 대상에서 뺀다 — 실측: 팔 4.38 / 몸통 10.94. " +

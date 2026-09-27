@@ -29,17 +29,13 @@ public class RopeDragView : MonoBehaviour
     [SerializeField] private float m_npcKnotHeight = 0.25f;
 
     [Header("1인칭 보정 (#828)")]
-    [Tooltip("오너 1인칭에서 시작점을 놓을 카메라 앞 거리(m) — 1인칭 팔 카메라와 월드 카메라의 FOV가 달라 " +
-        "화면 위치를 맞추려면 깊이를 새로 정해야 한다. 0 이하면 손 자체 깊이를 쓴다")]
+    [Tooltip("오너 1인칭에서 밧줄 시작점을 놓을 카메라 앞 거리(m). 0 이하면 손 자체 깊이를 쓴다")]
     [SerializeField] private float m_fpStartDepth = 0.6f;
 
-    [Tooltip("오너 1인칭 시작점의 굵기(m) — 손이 카메라에서 ~0.5m라 정상 굵기(m_ropeWidth)를 그대로 두면 " +
-        "화면에서 두꺼운 띠로 잡힌다. m_ropeWidth 지점까지 짧게 테이퍼링한다")]
+    [Tooltip("오너 1인칭 밧줄 시작점의 굵기(m) — m_ropeWidth까지 짧게 테이퍼링한다")]
     [SerializeField] private float m_fpStartWidth = 0.012f;
 
-    [Tooltip("오너 1인칭 시작점의 화면 가로 보정(뷰포트 비율, 화면 폭 기준) — 음수면 왼쪽, 양수면 " +
-        "오른쪽으로 밀린다. 화면 위치 자체를 옮기는 값이라 깊이(m_fpStartDepth)와 달리 손에서 " +
-        "벗어난다 — 밧줄이 손을 가리거나 시야 가장자리에서 어색할 때만 미세하게 쓸 것")]
+    [Tooltip("오너 1인칭 시작점의 화면 가로 보정(뷰포트 비율). 음수면 왼쪽, 양수면 오른쪽")]
     [SerializeField] private float m_fpStartOffsetX = 0f;
 
     [Header("먼지")]

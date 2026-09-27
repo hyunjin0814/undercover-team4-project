@@ -25,7 +25,7 @@ public class AppearanceAssigner : CommonManagerBase
     private const int k_nonMatchingAttempts = 16;
 
     [Header("바디 성별")]
-    [Tooltip("수염이 붙은 NPC가 여성 바디를 받을 확률. Generic 바디 13개 중 8개가 여성이라, 수염 값이 흔하면 도시가 남성으로 쏠린다 — 이 확률만큼은 여성에게도 수염을 남긴다. 0이면 수염=여성이 절대 안 겹친다")]
+    [Tooltip("수염이 붙은 NPC가 여성 바디를 받을 확률. 0이면 수염과 여성 바디가 겹치지 않는다")]
     [Range(0f, 1f)]
     [SerializeField] private float m_femaleFacialHairChance = 0.03f;
 

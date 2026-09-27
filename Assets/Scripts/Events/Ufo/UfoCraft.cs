@@ -9,8 +9,7 @@ using UnityEngine;
 public class UfoCraft : NetworkBehaviour
 {
     [Header("빔")]
-    [Tooltip("빔 기둥의 뿌리 — 기체 원점에 두고 [b]아래로 2유닛[/b] 길이의 메시를 자식으로 둘 것. " +
-             "이 트랜스폼의 배율로 굵기와 길이를 맞춘다. 비우면 빔이 안 보일 뿐 판정은 그대로 돈다")]
+    [Tooltip("빔 기둥의 뿌리 — 기체 원점에 두고 아래로 2유닛 길이 메시를 자식으로 둔다. 비우면 빔만 안 보인다")]
     [SerializeField] private Transform m_beamPivot;
 
     [Tooltip("빔 반경(m) — 보이는 굵기와 걸리는 범위가 모두 이 값이다")]

@@ -15,7 +15,7 @@ public class RemainingCriminalsHud : MonoBehaviour
     [SerializeField]
     private TextMeshProUGUI m_countText;
 
-    [Tooltip("표시 형식 — Hud.Criminals.Count ({0}=잡은 수, {1}=수배된 진범 수(TotalWanted)). 라운드 목표는 금액이므로(#395) 이 표시는 목표 진행도가 아니라 검거 현황이다 — 목표 진행도는 본부 게시판 RoundFundBoard가 담당")]
+    [Tooltip("표시 형식 — Hud.Criminals.Count ({0}=잡은 수, {1}=수배된 진범 수)")]
     [SerializeField]
     private LocalizedString m_countFormat;
 

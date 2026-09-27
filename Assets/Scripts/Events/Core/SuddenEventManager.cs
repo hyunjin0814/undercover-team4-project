@@ -39,9 +39,7 @@ public class SuddenEventManager : NetworkedManagerBase
     [System.Serializable]
     private class SuddenEventEntry
     {
-        [Tooltip(
-            "ISuddenEvent 또는 ISuddenEventProvider를 구현한 컴포넌트 (예: DeviceBlackoutEvent, StreetThugEvent, JailbreakEvent)"
-        )]
+        [Tooltip("ISuddenEvent 또는 ISuddenEventProvider를 구현한 컴포넌트")]
         public MonoBehaviour component;
 
         [Tooltip("끄면 이 항목은 이벤트 풀에서 제외된다 — 특정 이벤트만 켜서 테스트할 때 쓴다")]

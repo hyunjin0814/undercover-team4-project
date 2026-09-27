@@ -9,11 +9,7 @@ using UnityEngine;
 public class PlayerCarrier : NetworkBehaviour
 {
     [Header("운반 (서버 권위)")]
-    [Tooltip(
-        "이 거리(m)를 넘게 벌어지면 놓친다 — 추종 실패의 안전장치다. 정상 이동으로는 닿지 않는 값으로 "
-        + "둘 것(전력 질주 추종 지연은 3.5m 안쪽). 몸이 문틀·기둥에 끼거나 끌려가는 쪽이 추종을 "
-        + "못 할 때, 끊어주지 않으면 운반자는 끌고 있다고 믿는데 몸만 뒤에 남는다"
-    )]
+    [Tooltip("이 거리(m)보다 벌어지면 운반이 끊긴다 — 정상 이동으론 닿지 않는 값(3.5m 초과)으로 둘 것")]
     [SerializeField]
     private float m_breakDistance = 8f;
 

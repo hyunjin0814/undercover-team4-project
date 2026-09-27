@@ -20,12 +20,7 @@ public class BombChaseEvent : MonoBehaviour, ISuddenEvent
     private float m_navSampleMaxDistance = 5f;
 
     [Header("정리")]
-    [Tooltip(
-        "폭발 후 폭탄을 남겨 둘 시간(초) — 기본 0이면 터지는 순간 사라진다. "
-            + "연출을 붙잡아 두는 값이 아니다: 폭발 이펙트는 월드에 독립 스폰돼 자기 수명을 따로 "
-            + "관리하고(BombExplosionView) 넉백도 폭발 순간에 끝나므로, 남겨 봤자 <b>멀쩡한 폭탄 "
-            + "모델</b>만 서 있다"
-    )]
+    [Tooltip("폭발 후 폭탄 모델을 남겨 둘 시간(초). 0이면 터지는 순간 사라진다")]
     [SerializeField]
     private float m_resolvedLingerSeconds;
 

@@ -38,9 +38,7 @@ public class RagdollWallDevHotkeys : MonoBehaviour
     [Tooltip("어느 쪽 팔을 넣을지 — 끄면 오른팔")]
     [SerializeField] private bool m_useLeftArm = true;
 
-    [Tooltip("팔꿈치 뼈가 벽면 안으로 들어갈 목표 깊이(m).\n\n" +
-             "HQ 벽 실측 두께가 0.038m라 그보다 크게 잡으면 <b>이미 반대편까지 나간</b> 상태가 되고, " +
-             "작게 잡으면 걸친 상태가 된다. 둘 다 재현 가치가 있으니 바꿔 가며 볼 것")]
+    [Tooltip("팔꿈치 뼈가 벽면 안으로 들어갈 목표 깊이(m). 벽 두께(0.038m)보다 크면 반대편까지 관통한다")]
     [SerializeField] private float m_armTargetPenetration = 0.03f;
 
     [Header("발사 (홈런 진압봉 기본값과 맞춰 둠)")]

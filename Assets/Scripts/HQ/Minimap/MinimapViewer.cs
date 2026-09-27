@@ -35,7 +35,7 @@ public class MinimapViewer : MonoBehaviour
     [Tooltip("켜면 씬의 MinimapArea.Current에서 월드 사각형·항공뷰를 읽는다 — 위 '맵이 덮는 월드 영역' 값을 무시한다")]
     [SerializeField] private bool m_useSceneArea;
 
-    [Tooltip("이 뷰어의 캔버스 자체가 화면비 때문에 돌아가 있으면(예: 세로로 긴 맵을 가로 콘솔에 맞춤) 그 각도만큼 모든 아이콘 회전을 보정한다. 마커마다 따로 각도를 맞추지 않도록 여기 한 곳에 둔다")]
+    [Tooltip("캔버스가 회전돼 있으면 그 각도만큼 모든 아이콘 회전을 보정한다(도)")]
     [SerializeField] private float m_iconAngleCorrection;
 
     [Header("카테고리 필터 (#835)")]

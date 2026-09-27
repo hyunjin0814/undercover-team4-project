@@ -20,35 +20,18 @@ public class RagdollPoseStreamer : NetworkBehaviour
     private const ushort k_sequenceHalfRange = 32768;
 
     [Header("권위")]
-    [Tooltip("이 시체의 자세를 누가 정하는가 — NPC는 Server, 플레이어는 Owner.\n\n" +
-             "⚠ 루트 NetworkTransform의 AuthorityMode와 <b>반드시 같아야</b> 한다. 어긋나면 " +
-             "몸과 루트가 서로 다른 피어에서 계산돼 시체가 이름표를 두고 떠난다")]
+    [Tooltip("자세를 정하는 권위(NPC=Server, 플레이어=Owner). 루트 NetworkTransform의 AuthorityMode와 같아야 한다")]
     [SerializeField] private PoseAuthority m_authority = PoseAuthority.Server;
 
     [Header("송신")]
-    [Tooltip("몇 번의 물리 스텝마다 한 번 보내는가 — 50Hz 기준 2면 25Hz, 4면 12.5Hz.\n\n" +
-             "<b>대역폭의 유일한 1차 손잡이다</b>(계획서 §1-6). 실측으로 시체 1구당 원격 1인 기준 " +
-             "<b>약 2KB/s</b>(25Hz · 페이로드 82B)이고, 서버 업링크는 여기에 <b>동시 시체 수 × 원격 " +
-             "수</b>가 곱해진다. 예산이 빠듯하면 여기부터 올린다 — 잃는 것은 보간 지연뿐이고 " +
-             "정착 자세는 그대로다")]
+    [Tooltip("자세 전송 주기(물리 스텝 수) — 50Hz 기준 2면 25Hz. 올리면 대역폭이 줄고 보간 지연이 는다")]
     [SerializeField] private int m_sendEveryFixedSteps = 2;
 
-    [Tooltip("몇 번의 물리 스텝마다 <b>뼈 길이</b>를 한 번 보내는가 — 50Hz 기준 25면 2Hz. " +
-             "<b>0이면 끈다</b>(정착 패킷만 나르던 예전 동작).\n\n" +
-             "권위 쪽 뼈는 무너지는 동안 관절이 늘어나는데 원격은 물리를 안 굴려 바인드 그대로다. " +
-             "예전에는 그 차를 <b>정착 패킷 한 번</b>으로 몰아 넘겼고, 원격은 그것을 한 프레임에 " +
-             "통째로 입혀 <b>정착 순간 상체가 내려앉았다</b>(실측 3.9cm · 2026-09-02, 클라에서만 " +
-             "보인다). 드리프트는 몇 초에 걸쳐 자라는 값이라 0.5초마다 갱신하면 보정 한 번이 1cm " +
-             "미만으로 쪼개지고, 그 구간은 몸이 빨라 눈에 안 띈다.\n\n" +
-             "<b>비용은 208B × 주기</b>(뼈 17 기준). 2Hz면 약 0.4KB/s로 시체 1구·원격 1인 기준 " +
-             "2.1 → 2.5KB/s다. <b>자세 패킷(86B·25Hz)은 안 바뀐다</b> — 별도 RPC다")]
+    [Tooltip("뼈 길이 전송 주기(물리 스텝 수) — 50Hz 기준 25면 2Hz. 0이면 끈다(정착 패킷에만 싣는다)")]
     [SerializeField] private int m_lengthEveryFixedSteps = 25;
 
     [Header("수신")]
-    [Tooltip("원격이 얼마나 뒤처진 시점을 그리는가(초) — 송신 주기의 2배가 기본값이다.\n\n" +
-             "이만큼 늦게 그려야 다음 스냅샷이 이미 도착해 있어 <b>보간할 두 점</b>이 생긴다. " +
-             "짧으면 패킷 하나만 늦어도 재생이 끝점에 부딪혀 시체가 멈칫하고, 길면 그만큼 " +
-             "화면이 늦는다")]
+    [Tooltip("원격이 뒤처져 그리는 시간(초) — 송신 주기의 2배가 기본. 짧으면 멈칫하고 길면 화면이 늦다")]
     [SerializeField] private float m_interpolationDelay = 0.08f;
 
     private RagdollRig m_rig;

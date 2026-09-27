@@ -15,8 +15,7 @@ public class BombBlastProfile
     [SerializeField]
     private int m_explosionDamage = 150;
 
-    [Tooltip("반경 끝에서 남는 피해 비율 — 폭심(1.0)에서 반경 끝까지 선형 감쇠. " +
-             "즉사 반경 = 반경 × (1 − 최대HP/피해) / (1 − 이 값). 기본값(150·0.2·8m)이면 약 3.3m")]
+    [Tooltip("반경 끝에서 남는 피해 비율(폭심 1.0에서 선형 감쇠). 기본값이면 즉사 반경 약 3.3m")]
     [Range(0f, 1f)]
     [SerializeField]
     private float m_damageEdgeFalloff = 0.2f;
@@ -35,16 +34,12 @@ public class BombBlastProfile
     [SerializeField]
     private float m_knockbackEdgeFalloff = 0.25f;
 
-    [Tooltip("래그돌 수평 세기 = 넉백 수평 세기 × 이 값. <b>연출 노브다</b> — 크게 잡으면 " +
-             "시원하게 날아간다. '캡슐이 못 따라온다'는 예전 제약은 캡슐 넉백 자체가 사라지며 " +
-             "함께 없어졌다 (EvaluateRagdollImpulse 주석). 사망자와 생존자가 같은 값을 쓴다")]
+    [Tooltip("래그돌 수평 세기 = 넉백 수평 세기 × 이 값. 연출용이며 사망자·생존자가 같은 값을 쓴다")]
     [Range(0f, 2f)]
     [SerializeField]
     private float m_ragdollImpulseScale = 0.3f;
 
-    [Tooltip("래그돌 상승 세기 = 위 수평 세기 × 이 값. <b>곧 발사각이다</b> — 1.0이 45°로 " +
-             "사거리 최대이고, 크면 높이 뜨는 대신 가까이 떨어진다. 예전 값 1.8은 61°라 속도를 " +
-             "높이에 낭비했다. 정점(m) ≈ (수평세기 × 이 값)² / 19.6")]
+    [Tooltip("래그돌 상승 세기 = 수평 세기 × 이 값(발사각). 1.0이 45°로 사거리 최대")]
     [Range(0f, 3f)]
     [SerializeField]
     private float m_ragdollLiftRatio = 1.2f;

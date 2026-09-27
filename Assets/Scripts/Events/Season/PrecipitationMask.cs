@@ -26,10 +26,7 @@ public class PrecipitationMask : MonoBehaviour
     [Min(1f)]
     [SerializeField] private float m_viewProbeDistance = 60f;
 
-    [Tooltip(
-        "맞은 표면에서 물러설 거리(m) — 벽 콜라이더 <b>안에서</b> 위로 쏘면 그 콜라이더를 맞히지 못해 "
-            + "실내 벽이 하늘로 잡힌다. 폐기된 파티클 리그의 창 탐색도 같은 이유로 이 값을 썼다 (#733)"
-    )]
+    [Tooltip("맞은 표면에서 물러설 거리(m) — 콜라이더 안에서 쏴 실내 벽이 하늘로 잡히는 것을 막는다")]
     [Min(0.01f)]
     [SerializeField] private float m_surfaceBackoff = 0.5f;
 

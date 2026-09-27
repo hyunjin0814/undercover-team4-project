@@ -78,11 +78,7 @@ public class MapPalette : ScriptableObject
         [SerializeField]
         private GameObject m_bottom;
 
-        [Tooltip(
-            "도로가 벽에 닿는 자리에 아래 조각 대신 세울 게이트 — 비우면 그냥 벽이 이어진다.\n"
-                + "'연석이 향하는 기호'(보통 R·C)와 맞닿은 벽 한 짝마다 하나씩 들어간다. 도로가 두 칸 폭이면 두 짝이 선다.\n"
-                + "아래 조각과 같은 축 규약(로컬 +X 두께, -Z 길이 한 칸)을 지키는 프리팹을 넣을 것."
-        )]
+        [Tooltip("도로가 벽에 닿는 자리에 세울 게이트 — 비우면 벽이 이어진다. 벽 조각과 같은 축 규약을 따를 것")]
         [SerializeField]
         private GameObject m_gate;
 
@@ -117,23 +113,12 @@ public class MapPalette : ScriptableObject
         [SerializeField]
         private GameObject m_column;
 
-        [Tooltip(
-            "벽면을 칸 경계보다 안쪽으로 당기는 거리(m).\n"
-                + "0으로 두면 벽이 바닥 타일의 끝선에 딱 붙는데, 바닥 타일은 두께가 얇아서 벽 밑을 내려다보면 "
-                + "타일 옆면 너머로 바닥 밑이 비친다. 조금 당겨 바닥 위로 물리면 가려진다.\n"
-                + "기둥에는 적용되지 않는다 — 기둥은 원래 벽면보다 앞으로 튀어나와 있어 이음매를 이미 덮고, "
-                + "모서리에서 두 벽이 서로 다른 방향으로 당겨져 기둥이 둘로 어긋나는 것도 막는다."
-        )]
+        [Tooltip("벽면을 칸 경계보다 안쪽으로 당기는 거리(m) — 바닥 타일 옆면이 비치는 것을 가린다. 기둥엔 미적용")]
         [SerializeField]
         private float m_inset = 0.3f;
 
         [Header("물리 껍질")]
-        [Tooltip(
-            "끄면 프리팹의 콜라이더를 그대로 쓴다.\n"
-                + "켜면 조각들의 콜라이더를 끄고 아래 치수의 BoxCollider가 대신 막는다 — 이 팩의 콜리전 껍질은 "
-                + "렌더 메시에서 구운 볼록 껍질이라 벽의 '평평한' 면조차 수직이 아니고(격리벽 실측 88도), "
-                + "그만큼 물리가 보이는 면과 어긋난다. 넘으면 안 되는 경계에는 켜 두는 편이 낫다."
-        )]
+        [Tooltip("켜면 조각 콜라이더를 끄고 아래 치수의 BoxCollider로 막는다. 끄면 프리팹 콜라이더를 그대로 쓴다")]
         [SerializeField]
         private bool m_useBoxCollider = true;
 

@@ -11,7 +11,7 @@ public class NpcOneShotMotion : MonoBehaviour, INpcMotionSource
     [SerializeField] private float m_swingAnimSeconds = 0.9f;
 
     [Header("일어나기 (#269/#513)")]
-    [Tooltip("일어나기 모션을 유지하는 시간(초) — 이 뒤에는 기준 상태 모션으로 되돌린다. NpcStunConfig.StandUpSeconds와 같은 클립이라 값도 같게 둘 것 (2배속을 걷으며 0.585→1.17, #572)")]
+    [Tooltip("일어나기 모션 유지 시간(초). NpcStunConfig.StandUpSeconds와 같게 둘 것")]
     [SerializeField] private float m_standUpSeconds = 1.17f;
 
     private NpcAnimationDriver m_driver;

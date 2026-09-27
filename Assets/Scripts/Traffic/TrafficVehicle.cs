@@ -25,7 +25,7 @@ public class TrafficVehicle : NetworkBehaviour
     [Tooltip("치였을 때 위로 뜨는 세기 — 0이면 바닥으로만 밀린다")]
     [SerializeField] private float m_knockbackUp = 6f;
 
-    [Tooltip("즉사 시 래그돌 임펄스 = 위 넉백 벡터 × 이 값. 1.0이 넉백 그대로다 — 홈런 진압봉의 발사 세기(14 m/s)와 같은 규모라 출발점으로 맞다. 캡슐 넉백과 값을 나눠 두는 이유는 단위가 다르기 때문이다: 저쪽은 CharacterController 외력 속도 하나이고, 이쪽은 뼈마다 linearVelocity로 얹혀 회전 편향까지 곱해진다 — 합치면 둘 중 하나가 영구히 인질이 된다")]
+    [Tooltip("즉사 시 래그돌 임펄스 = 넉백 벡터 × 이 값. 1.0이 넉백 그대로다")]
     [Range(0f, 3f)]
     [SerializeField] private float m_ragdollImpulseScale = 1f;
 

@@ -20,13 +20,7 @@ public class TrafficDevHotkeys : NetworkBehaviour
     [SerializeField] private Key m_comboKey = Key.P;
 
     [Header("차량")]
-    [Tooltip(
-        "차가 출발할 거리(m) — 나로부터 이만큼 뒤에서 나를 향해 온다. "
-        + "⚠ <b>콤보의 성패가 이 값에 달려 있다</b>: 도착 시간(거리÷속도)이 <b>정착 전에</b> 끝나야 한다. "
-        + "늦으면 몸이 이미 정착해 기상 블렌드에 들어가는데, 그 상태에서는 EnterRagdoll이 "
-        + "'일어나는 중'으로 보고 임펄스를 통째로 버려 <b>제자리에서 죽는다</b>. "
-        + "실측: 30m÷20m/s=1.5초는 늦어서 실패, 12m=0.6초면 아직 공중이라 잘 맞는다"
-    )]
+    [Tooltip("차가 출발할 거리(m) — 몸이 정착하기 전에 도착해야 한다(12m면 약 0.6초)")]
     [SerializeField] private float m_carDistance = 12f;
 
     [Tooltip("차 속도(m/s) — 도착까지 걸리는 시간은 거리÷속도다. 콤보의 선행 시간을 이 둘로 맞춘다")]
@@ -36,12 +30,7 @@ public class TrafficDevHotkeys : NetworkBehaviour
     [SerializeField] private float m_carOverrun = 20f;
 
     [Header("콤보 — 수직 발사")]
-    [Tooltip(
-        "위로 쏘아 올리는 속도(m/s) — <b>높이 띄우는 것이 목적이 아니다.</b> 차 판정 박스는 높이 "
-        + "1.8m라, 최고점(≈속도²÷19.6 m)이 그보다 높으면 차가 몸 밑으로 지나가 아무 일도 안 난다. "
-        + "필요한 것은 '아직 정착하지 않은 래그돌'이고 착지 후 구르는 동안도 그 상태다 — 4면 "
-        + "최고점 0.8m로 충분하다"
-    )]
+    [Tooltip("위로 띄우는 속도(m/s). 최고점이 차 판정 높이(1.8m)를 넘으면 안 맞으니 낮게 둘 것")]
     [SerializeField] private float m_launchUpSpeed = 4f;
 
     [Tooltip("비행 상태의 서버 상한(초) — 정착 통보가 안 올 때의 안전장치 (BombBlast와 같은 뜻)")]

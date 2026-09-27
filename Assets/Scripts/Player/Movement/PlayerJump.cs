@@ -9,11 +9,7 @@ using UnityEngine;
 public class PlayerJump : NetworkBehaviour
 {
     [Header("점프")]
-    [Tooltip(
-        "제자리 점프로 올라가는 최고 높이(m). 실제 초기 속도는 중력에서 역산한다.\n"
-            + "맵이 점프를 전제로 설계되지 않아(GDD 미정의) 보수적으로 잡았다 — 올라타면 안 되는 "
-            + "구조물이 발견되면 여기부터 낮출 것."
-    )]
+    [Tooltip("제자리 점프 최고 높이(m). 초기 속도는 중력에서 역산한다")]
     [SerializeField]
     private float m_jumpHeight = 0.8f;
 

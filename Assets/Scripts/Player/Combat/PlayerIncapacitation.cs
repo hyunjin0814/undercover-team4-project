@@ -37,10 +37,7 @@ public class PlayerIncapacitation : NetworkBehaviour
     public float DieAfterDownSeconds => m_dieAfterDownSeconds;
 
     [Header("소유권 이관 (#957)")]
-    [Tooltip(
-        "래그돌이 도는 중에 죽었을 때, 미뤄 둔 소유권 이관의 서버 상한(초) — 오너의 정착 통보가 "
-            + "안 오는 경우(연결 끊김·맵 밖 낙하)의 안전장치. PlayerRagdoll의 정착 타임아웃보다 넉넉히 잡을 것"
-    )]
+    [Tooltip("사망 소유권 이관을 미룰 수 있는 서버 상한(초). PlayerRagdoll 정착 타임아웃보다 넉넉히 둘 것")]
     [SerializeField]
     private float m_ownershipHandoverMaxSeconds = 8f;
 

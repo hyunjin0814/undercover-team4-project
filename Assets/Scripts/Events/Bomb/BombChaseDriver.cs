@@ -8,8 +8,7 @@ using UnityEngine.AI;
 [RequireComponent(typeof(NavMeshAgent))]
 public class BombChaseDriver : MonoBehaviour
 {
-    [Tooltip("추격 속도(m/s) — 플레이어 걷기 5·달리기 8 기준. 걷기보다 빠르게 둘 것: 걸어서 벌 수 있으면 " +
-             "달아나는 데 아무 대가가 없어 추격이 성립하지 않는다. 달리기보다는 확실히 느려야 한다")]
+    [Tooltip("추격 속도(m/s) — 플레이어 걷기(5)보다 빠르고 달리기(8)보다 확실히 느리게 둘 것")]
     [SerializeField]
     private float m_chaseSpeed = 5.5f;
 

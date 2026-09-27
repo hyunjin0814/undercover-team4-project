@@ -28,11 +28,7 @@ public class PlayerEscortCommands : NetworkBehaviour
     private ChannelGauge Gauge => this.ResolveCapability(ref m_gauge);
 
     [Header("밧줄 채널링 (서버 권위)")]
-    [Tooltip(
-        "줄다리기 합류 채널링 시간(초). 0이면 좌클릭 한 번에 즉시 합류한다 (#608). "
-        + "0보다 크면 예전 홀드 채널링으로 돌아간다(되돌리기용). "
-        + "새로 묶기는 무력화된 대상만 대상이 되면서 이미 즉시 적용이고(#446), 풀기 홀드도 제거됐다"
-    )]
+    [Tooltip("줄다리기 합류 채널링 시간(초). 0이면 좌클릭 한 번에 즉시 합류한다")]
     [Min(0f)]
     [SerializeField]
     private float m_channelSeconds;

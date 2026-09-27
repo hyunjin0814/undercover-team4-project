@@ -11,12 +11,7 @@ using UnityEngine;
 public class JailZone : NetworkedManagerBase
 {
     [Header("수감자 배치 지점 (비우면 감옥 자신의 위치)")]
-    [Tooltip(
-        "수감자를 세울 지점들. 빈 자리를 앞에서부터 배정한다 — 감옥 방 NavMesh 위, 문 앞 동선을 비켜 둘 것. "
-            + "Z축(파랑 화살표)이 서서 바라보는 방향이다.\n\n"
-            + "순간이동으로 배치되므로 걸어갈 경로는 필요 없지만, 배회·도주가 이 자리에서 이어지려면 "
-            + "NavMesh 위여야 한다"
-    )]
+    [Tooltip("수감자를 세울 지점들(앞에서부터 배정). 감옥 NavMesh 위에 두고, Z축이 바라보는 방향이다")]
     [SerializeField] private Transform[] m_inmatePoints;
 
     [Header("플레이어 입장 지점 (비우면 감옥 자신의 위치)")]
@@ -24,27 +19,15 @@ public class JailZone : NetworkedManagerBase
     [SerializeField] private Transform m_playerEntryPoint;
 
     [Header("퇴장 지점 (비우면 감옥 자신의 위치)")]
-    [Tooltip(
-        "셀에서 나오는 플레이어·반출 대상이 서는 자리 — <b>철창문 안쪽 본관 실내</b>의 NavMesh(HQ 영역) "
-            + "위에 둘 것 (#744). 탈옥으로 방출된 수감자도 여기로 나온 뒤 본부를 가로질러 도시로 걸어 나간다.\n\n"
-            + "Z축(파랑 화살표)이 <b>본관 안쪽</b>을 보게 둘 것 — 여럿이 한 번에 나올 때 그 방향으로 "
-            + "줄이 늘어난다 (ExitSlot). 반대로 두면 자리가 철창 너머로 파고든다"
-    )]
+    [Tooltip("셀에서 나온 대상이 서는 자리 — 본관 실내 NavMesh 위에 두고 Z축이 본관 안쪽을 보게 할 것")]
     [SerializeField] private Transform m_exitPoint;
 
     [Header("본부 정문 (비우면 자동 개폐 없음)")]
-    [Tooltip(
-        "방출·반출 대상이 도시로 나갈 때 열어 줄 본부 정문 (#744). 안 열면 닫힌 문짝을 그대로 "
-            + "통과한다 — 문짝 콜라이더는 CharacterController만 막고 NavMeshAgent는 지나간다.\n\n"
-            + "닫는 것은 플레이어 몫이다 (E 토글)"
-    )]
+    [Tooltip("방출·반출 대상이 도시로 나갈 때 열어 줄 본부 정문. 닫는 것은 플레이어 몫이다")]
     [SerializeField] private DoubleDoor[] m_frontDoors;
 
     [Header("감옥 방 범위 (비우면 자식에서 자동 탐색)")]
-    [Tooltip(
-        "'이 좌표가 감옥 안인가'를 답하는 부피 — 문 E가 들어가기/나오기를 가르는 유일한 기준이다. "
-            + "방 전체를 덮되 도시 쪽과 겹치지 않게 둘 것. Is Trigger를 켜 둘 것(끄면 플레이어를 막는다)"
-    )]
+    [Tooltip("감옥 방 부피 — 방 전체를 덮되 도시와 겹치지 않게 두고 Is Trigger를 켤 것")]
     [SerializeField] private BoxCollider m_roomVolume;
 
     private readonly NetworkVariable<int> m_inmateCount = new NetworkVariable<int>(0);

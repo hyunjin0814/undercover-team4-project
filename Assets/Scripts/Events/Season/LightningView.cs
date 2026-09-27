@@ -18,12 +18,7 @@ public class LightningView : MonoBehaviour
     [SerializeField] private GameObject m_warningPrefab;
 
     [Header("먹구름 — 어두워지기")]
-    [Tooltip(
-        "비가 오는 동안 어둡게 할 라이트. <b>비워 두는 것이 기본이다</b> — 비어 있으면 씬의 태양"
-            + "(Lighting 창의 Sun Source = RenderSettings.sun)을 런타임에 찾아 쓴다.\n\n"
-            + "이 컴포넌트는 프리팹(SuddenEvents)에 붙으므로 씬 오브젝트를 직렬화로 물릴 수 없다 — "
-            + "씬마다 다른 라이트를 가리켜야 하는데 프리팹은 씬을 모른다. 특정 라이트를 강제하고 싶을 때만 채운다"
-    )]
+    [Tooltip("비 오는 동안 어둡게 할 라이트. 비우면 씬의 태양(RenderSettings.sun)을 쓴다(기본)")]
     [SerializeField] private Light m_globalLight;
 
     [Tooltip("먹구름이 낀 동안의 밝기 배율 — 1이면 그대로. 구름이 꼈는데 한낮처럼 밝으면 구름이 안 읽힌다")]

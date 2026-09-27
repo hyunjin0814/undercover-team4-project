@@ -14,12 +14,7 @@ public class JailLock : NetworkedManagerBase
     [SerializeField] private Transform m_approachPoint;
 
     [Header("자동 재잠금")]
-    [Tooltip(
-        "해킹으로 열린 뒤 이 시간(초)이 지나면 철창문이 스스로 닫힌다 (#744).\n\n"
-            + "<b>본부 경보등의 탈옥 경보 시간보다 짧게 두지 말 것</b> — 재잠금은 경보를 '상황 종료'로 "
-            + "꺼 버리므로, 짧으면 울리는 중인 경보가 잘린다. 둘은 같은 순간에 시작하니 "
-            + "<b>같은 값이면 경보가 제 시간을 다 채우고 닫힌다</b>(기본값 10초가 그 값이다)"
-    )]
+    [Tooltip("해킹으로 열린 뒤 자동으로 다시 잠기기까지의 시간(초). 경보등 탈옥 경보 시간보다 짧게 두지 말 것")]
     [Min(0f)]
     [SerializeField] private float m_relockSeconds = 10f;
 

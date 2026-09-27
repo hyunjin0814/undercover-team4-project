@@ -15,17 +15,10 @@ public class RagdollRig : MonoBehaviour
     private const int k_solverIterations = 12;
     private const int k_solverVelocityIterations = 4;
 
-    [Tooltip("몸통 리그 최상단의 이름 — 이 오브젝트의 <b>직속</b> 자식이어야 한다.\n\n" +
-             "⚠ 범위를 여기로 못박는 것이 핵심이다. 플레이어 프리팹에는 뼈 이름이 같은 리그가 " +
-             "두 벌 있어(1인칭 팔) 프리팹 전체를 훑으면 그쪽이 걸린다 — docs/ragdoll-rig.md §3")]
+    [Tooltip("몸통 리그 최상단 오브젝트 이름 — 이 오브젝트의 직속 자식이어야 한다(1인칭 팔 리그와 구분)")]
     [SerializeField] private string m_boneRootName = k_defaultBoneRootName;
 
-    [Tooltip("겹친 콜라이더를 밀어내는 속도 상한(m/s) — <b>직렬화되지 않는 Rigidbody 값이라 런타임에 " +
-             "다시 건다.</b>\n\n" +
-             "<b>0.5는 엔진 기본값(10)의 1/20이다.</b> 튀어오름을 막으려고 조인 값인데(0.5m/s = 1.3cm), " +
-             "그 대가로 <b>접촉 해소가 느려진다</b> — 겹친 상태로 있는 몸은 초당 이 값만큼만 빠져나온다.\n\n" +
-             "⚠ 올리면 겹침에서 <b>튀어오름</b>이 커진다(10m/s면 수십 cm). 슬로모션(#759)의 원인이 " +
-             "아님은 실측으로 확인됐으므로(docs/759 §4-A) 바꿀 이유가 있을 때만 건드릴 것.")]
+    [Tooltip("겹친 콜라이더를 밀어내는 속도 상한(m/s). 올리면 겹침에서 튀어오름이 커진다(엔진 기본 10)")]
     [SerializeField] private float m_maxDepenetrationVelocity = k_maxDepenetrationVelocity;
 
     [Tooltip("골반보다 높은 뼈에 얹는 추가 속도 비율(1/m) — 상체가 더 빨라 다리가 끌리는 텀블이 생긴다")]

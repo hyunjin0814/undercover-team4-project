@@ -32,8 +32,7 @@ public class BombDevice : NetworkBehaviour
     private float m_countdownSeconds = 30f;
 
     [Header("테스트")]
-    [Tooltip("켜면 스폰/시작 시 스스로 무장한다 — 돌발 이벤트 없이 폭탄을 씬에 놓고 바로 등장·추격·폭발을 테스트할 때. " +
-             "실전 배선(BombChaseEvent) 전까지의 임시 스위치 (SignalDecoder.m_installedOnStart 관례)")]
+    [Tooltip("켜면 시작 시 스스로 무장한다 — 이벤트 없이 씬에 놓고 테스트할 때 쓰는 임시 스위치")]
     [SerializeField]
     private bool m_armOnStart;
 

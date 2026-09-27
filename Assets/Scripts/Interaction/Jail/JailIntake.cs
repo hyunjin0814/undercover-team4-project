@@ -12,12 +12,7 @@ public class JailIntake : CommonManagerBase
     [Header("감옥 (비우면 같은 오브젝트·부모에서 자동 탐색)")]
     [SerializeField] private JailZone m_jailZone;
 
-    [Tooltip(
-        "판정 버튼이 신병으로 인정하는 거리(m) — 손이 빈 사람이 눌렀을 때만 쓴다. 이 안의 확보 상태"
-            + "(놓아둔 Captured, 남이 끌고 온 Escorted, 내려놓은 시체)를 함께 판정하되, 아무도 손대지 "
-            + "않은 대상은 빠진다. 줄을 쥐고 있으면 밧줄에 걸린 대상만 판정한다(#637). "
-            + "밧줄 길이(1.6m)보다 넉넉히 둘 것"
-    )]
+    [Tooltip("빈손으로 누를 때 판정 대상으로 인정하는 거리(m) — 밧줄 길이(1.6m)보다 넉넉히 둘 것")]
     [SerializeField] private float m_admitReach = 4f;
 
     private readonly List<NpcController> m_admitBuffer = new List<NpcController>();

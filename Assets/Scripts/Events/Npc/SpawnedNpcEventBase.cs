@@ -54,8 +54,7 @@ public abstract class SpawnedNpcEventBase : MonoBehaviour, ISuddenEvent
     private int m_pettyCrimeRewardMax = 4000;
 
     [Header("소란 지속")]
-    [Tooltip("제압되지 않은 채 이 시간(초)이 지나면 소란을 멈추고 진정해 배회 시민으로 잔류한다 — 마커가 남아 언제든 잡으면 경범죄 수익 (#310). " +
-             "0 이하면 무제한 — 잡히거나 라운드가 끝날 때까지 계속한다 (공연음란범, #106)")]
+    [Tooltip("제압되지 않고 이 시간(초)이 지나면 진정해 배회 시민으로 잔류한다. 0 이하면 무제한")]
     [SerializeField]
     private float m_maxLifetimeSeconds = 60f;
 

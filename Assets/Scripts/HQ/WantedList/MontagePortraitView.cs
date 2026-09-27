@@ -15,7 +15,7 @@ public class MontagePortraitView : MonoBehaviour
     [SerializeField] private Image m_headwearImage;
     [SerializeField] private Image m_eyewearImage;
 
-    [Tooltip("공개되지 않은 색 축에 쓰는 표시. 색이 아니라 농도로 말해야 한다 — 무채색으로만 두면 은발(0.76,0.78,0.82)과 구분되지 않아 미공개가 실제 축 값 하나를 사칭하게 된다. 반투명이면 어느 색 값과도 겹치지 않는다")]
+    [Tooltip("공개되지 않은 색 축의 표시색 — 실제 색 값과 겹치지 않게 반투명으로 둔다")]
     [SerializeField] private Color m_unknownTint = new Color(0.72f, 0.72f, 0.74f, 0.35f);
 
     private readonly Dictionary<Image, Sprite> m_runtimeSprites = new Dictionary<Image, Sprite>();

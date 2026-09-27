@@ -22,18 +22,14 @@ public class NpcCommonConfig : ScriptableObject
     [SerializeField] private LayerMask m_knockbackObstacleMask = 1;
 
     [Header("무게 (밧줄 끌기 속도 페널티) — #398")]
-    [Tooltip("스폰 시 이 중 하나를 균등 추첨해 개체 무게로 삼는다(경량/표준/중량). 끄는 플레이어의 이동속도가 이 값에 비례해 떨어진다 — 페널티 계수·하한은 RopeDragLoad에 있다. 비어 있으면 전원 1.0")]
+    [Tooltip("스폰 시 균등 추첨하는 개체 무게 후보(경량/표준/중량). 비어 있으면 전원 1.0")]
     [SerializeField] private float[] m_weightTiers = { 0.6f, 1f, 1.6f };
 
     [Header("체력 — #366/#916")]
     [Tooltip("NPC 최대 체력 — 0이 되면 쓰러진다(기절). 저항 제압 게이지(구 SubdueGaugeMax)를 대체한 값")]
     [SerializeField] private int m_maxHp = 100;
 
-    [Tooltip("한 방의 <b>초과</b> 피해(피해량 − 남은 체력)가 이 값 이상이면 기절을 건너뛰고 즉사한다 — " +
-             "뿅망치 대박·차량·폭발이 설계대로 죽이게 하는 예외다(#916). " +
-             "⚠ <b>차량 피해와 함께 봐야 한다.</b> 최대 100 · 차량 120이면 만피를 쳐도 초과가 20뿐이라, " +
-             "이 값을 그보다 크게 잡으면 치인 시민이 죽지 않고 눕기만 한다. " +
-             "반대로 진압봉 한 대(20)는 마지막 체력을 깎아도 초과가 0이라 걸리지 않는다")]
+    [Tooltip("한 방의 초과 피해가 이 값 이상이면 기절 없이 즉사한다. 차량 피해 - 최대 체력보다 작게 둘 것")]
     [Min(1)]
     [SerializeField] private int m_lethalOverkillHp = 20;
 

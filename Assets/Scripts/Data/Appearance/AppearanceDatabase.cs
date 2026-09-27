@@ -24,12 +24,7 @@ public class AppearanceDatabase : ScriptableObject
         [Tooltip("지정하면 대상 머티리얼 슬롯을 통째로 교체한다 (프롭이 없을 때만)")]
         public Material MaterialOverride;
 
-        [Tooltip(
-            "머리 앵커에 부착하는 프롭 (머리카락·수염·모자·안경 등). 색은 Color로 틴트된다.\n"
-                + "여럿 넣으면 NPC마다 그중 하나를 쓴다 — 화면 다양성은 늘리되 몽타주는 한 값으로 남는다 (#619).\n"
-                + "⚠ 여기 함께 넣는 메시는 반드시 몽타주에서 서로 구분되지 않아야 한다. 그림은 0번으로 한 장만 굽기 때문에,\n"
-                + "구분되는 메시를 섞으면 그림이 실물과 어긋나 §1이 깨진다."
-        )]
+        [Tooltip("머리 앵커에 붙일 프롭(Color로 틴트). 여럿이면 NPC마다 하나를 쓰며, 몽타주에서 구분되지 않는 것만 넣을 것")]
         public GameObject[] PropPrefabs;
 
         public GameObject MontageProp => FirstPropFrom(0);
@@ -59,13 +54,13 @@ public class AppearanceDatabase : ScriptableObject
             return null;
         }
 
-        [Tooltip("SciFi 카탈로그 전용 값 — Generic 경로엔 프롭이 없어 표현 불가하므로 Generic 랜덤 배정에서 제외한다 (예: 머리 '가림', 후드/헬멧, 특수 피부색). 몽타주 텍스트·SciFi 카탈로그에는 그대로 쓰인다")]
+        [Tooltip("SciFi 카탈로그 전용 값 — Generic 랜덤 배정에서 제외한다(예: 가림, 후드/헬멧, 특수 피부색)")]
         public bool SciFiOnly;
 
-        [Tooltip("몽타주 포트레이트에서 이 값을 그리는 레이어 그림 (#607). 프롭이 있는 값은 Tools/몽타주 레이어 굽기로 자동 생성된다. 색 축(머리색·피부색)은 그림 없이 다른 레이어를 Color로 칠하므로 비운다. '없음/대머리'도 비운다 — 안 그리는 것이 곧 그 값이다")]
+        [Tooltip("몽타주에서 이 값을 그리는 레이어 그림 — 프롭 값은 자동 생성. 색 축과 '없음'은 비운다")]
         public Sprite MontageLayer;
 
-        [Tooltip("몽타주에서 이 값을 통째로 뺀다 — 그림도 안 꽂고 이 축이 공개 축 후보에서도 빠진다. 화면에는 그대로 착용한다.\n켜면 글로도 못 말하게 되는 것이 대가다. 그래서 정면 그림이 희미한 것만으로는 켜지 않는다 — 구분은 글이 하고, 희미한 정면 투영은 사실이라 그림이 거짓말을 하는 게 아니다. 머리 축에서 이 이유로 아무 값도 켜지 않았다 (#619, docs §13-7).\n켤 자리는 화면에서 무엇이 보이는지를 그림·글 어느 쪽으로도 옳게 말할 수 없는 값이다")]
+        [Tooltip("몽타주에서 이 값을 뺀다(그림·공개 축 후보 제외, 화면 착용은 유지). 그림·글로 옳게 말할 수 없는 값에만 켤 것")]
         public bool ExcludeFromMontage;
     }
 
@@ -74,13 +69,7 @@ public class AppearanceDatabase : ScriptableObject
     {
         public AppearanceOption[] Options;
 
-        [Tooltip(
-            "이 축이 '없음'(0번 값 — 대머리·수염 없음 등)으로 뽑힐 확률. 0이면 다른 값들과 같이 1/n로만 나온다.\n"
-                + "어휘를 늘리면 '없음'이 묻히는 것이 문제다 — 수염이 7값이 되면서 시민의 86%가 수염을 달았다.\n"
-                + "몽타주 난이도와는 무관하다(우연 부합은 CreateNonMatchingProfile이 이미 없앤다). 화면에 어떤 도시가\n"
-                + "보이는지를 정하는 값이다.\n"
-                + "색 축(머리색·피부색)은 '없음'이 0번이 아니므로 이 값을 쓰지 않는다."
-        )]
+        [Tooltip("이 축이 '없음'(0번)으로 뽑힐 확률. 0이면 다른 값과 같이 1/n. 색 축에는 쓰지 않는다")]
         [Range(0f, 1f)]
         public float NoneChance;
     }

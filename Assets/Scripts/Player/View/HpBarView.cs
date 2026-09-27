@@ -7,11 +7,7 @@ using UnityEngine.UI;
 /// </summary>
 public class HpBarView : MonoBehaviour
 {
-    [Tooltip(
-        "채움 — Image Type은 Filled, Fill Method는 Horizontal, Fill Origin은 Left. "
-            + "[주의] Sprite가 비어 있으면 Unity가 Filled 타입을 무시하고 단순 사각형을 그려 "
-            + "채움이 전혀 동작하지 않는다 (NpcHealthBarView와 같은 함정)"
-    )]
+    [Tooltip("채움 이미지 — Image Type Filled, Horizontal, Origin Left. Sprite가 비면 채움이 동작하지 않는다")]
     [SerializeField]
     private Image m_fill;
 

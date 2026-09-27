@@ -17,8 +17,7 @@ public class BombBlast : NetworkBehaviour
     private LayerMask m_blockMask = 1;
 
     [Header("생존자 발사 (#815 문 재사용)")]
-    [Tooltip("살아남은 NPC가 착지 후까지 누워 있는 시간(초). <b>비행 시간보다 넉넉히 길게</b> — " +
-             "짧으면 아직 공중인 몸에 기상 모션이 나간다 (HomeRunBaton.m_stunSeconds와 같은 노브)")]
+    [Tooltip("살아남은 NPC가 누워 있는 시간(초) — 비행 시간보다 넉넉히 길게 둘 것")]
     [SerializeField]
     private float m_launchStunSeconds = 6f;
 

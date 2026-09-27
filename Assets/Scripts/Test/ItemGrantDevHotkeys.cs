@@ -31,9 +31,7 @@ public class ItemGrantDevHotkeys : MonoBehaviour
     [SerializeField] private Key m_clearKey = Key.Quote;
 
     [Header("지급 구성")]
-    [Tooltip("지급할 아이템 프리팹. 비워 두면 기본 세트(테이저·스캐너·부활키트·홈런봉·밧줄)를 " +
-             "Assets/Prefabs/Items에서 자동으로 찾는다.\n\n" +
-             "한 가지만 시험할 때는 여기에 그것만 남기면 된다")]
+    [Tooltip("지급할 아이템 프리팹. 비우면 기본 세트를 Assets/Prefabs/Items에서 자동으로 찾는다")]
     [SerializeField] private List<ItemBase> m_gear = new List<ItemBase>();
 
     [Tooltip("켜면(기본) 접속한 전원에게 지급한다 — MPPM 클론도 같이 받아 원격 오너 경로를 볼 수 있다.\n\n" +

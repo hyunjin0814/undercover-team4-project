@@ -45,12 +45,7 @@ public class TrafficManager : MonoBehaviour
     [SerializeField] private float m_gapMarginSeconds = 2f;
 
     [Header("풀")]
-    [Tooltip("(차종마다 미리 만들어 둘 인스턴스 수 — 첫 배출의 Instantiate 히칭을 없앤다.\n" +
-            "⚠ 0으로 두는 것이 맞다 (#634, 2026-08-13 확정). 0보다 크면 Awake가 맵 씬 안에 비활성 " +
-            "NetworkObject를 만들어 두는데, NGO의 씬 동기화가 그걸 'in-scene placed'로 입양해 버린다. " +
-            "그러면 클라의 despawn이 프리팹 핸들러를 건너뛰어 차가 풀로 안 돌아오고, 같은 인스턴스가 " +
-            "여러 NetworkObjectId로 스폰돼 \\\"Object-N is already spawned!\\\"가 쏟아진다. " +
-            "되살리려면 VehiclePool.Prewarm 주석을 먼저 읽을 것")]
+    [Tooltip("차종마다 미리 만들어 둘 인스턴스 수. 0으로 둘 것 — 0보다 크면 풀 반납이 깨진다")]
     [Min(0)]
     [SerializeField] private int m_prewarmPerPrefab;
 

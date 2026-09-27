@@ -11,7 +11,7 @@ public class ArrestJudge : CommonManagerBase
 {
     private const int k_wrongfulReward = 0;
 
-    [Tooltip("DeadOrAlive 대상을 시체로 인계할 때 깎는 비율(0.4 = 40% 감액). 100원 단위로 떨어진다(BountyRoll.Reduce). AliveOnly는 이 비율을 타지 않고 ConditionUnmet으로 0원이다 (#766)")]
+    [Tooltip("DeadOrAlive 대상을 시체로 인계할 때 감액 비율(0.4 = 40%). AliveOnly 시체는 0원이다")]
     [Range(0f, 1f)]
     [SerializeField]
     private float m_corpseBountyPenalty = 0.4f;

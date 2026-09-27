@@ -29,10 +29,7 @@ public class SnowEvent : NetworkBehaviour, IRoundWeather
     [SerializeField] private float m_thawSeconds = 45f;
 
     [Header("실내 차단")]
-    [Tooltip(
-        "머리 위로 이 거리(m) 안에 지붕이 있으면 그 자리에는 빙판이 없다 — 0이면 실내에서도 미끄럽다.\n\n"
-            + "눈 표현(SnowView)의 같은 이름 값과 맞춰 둘 것. 건물 높이보다 넉넉히"
-    )]
+    [Tooltip("머리 위 이 거리(m) 안에 지붕이 있으면 빙판이 없다. 0이면 실내도 미끄럽다. SnowView 값과 맞출 것")]
     [Min(0f)]
     [SerializeField] private float m_shelterProbeHeight = 25f;
 

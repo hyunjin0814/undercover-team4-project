@@ -11,10 +11,7 @@ public class ToyHammer : Baton
     [SerializeField]
     private float m_criticalChance = 0.01f;
 
-    [Tooltip(
-        "대박이 터졌을 때의 데미지. NPC 최대 체력(기본 100)을 훌쩍 넘겨 어떤 체력 상태에서도 0으로 떨어뜨린다 — "
-            + "동료(PlayerHealth)도 같은 규칙(건강하면 다운, 이미 다운 상태면 확인사살)으로 그대로 맞는다"
-    )]
+    [Tooltip("대박이 터졌을 때의 데미지 — 어떤 체력이든 0으로 만든다(동료는 다운 또는 확인사살)")]
     [Min(1)]
     [SerializeField]
     private int m_criticalDamage = 9999;

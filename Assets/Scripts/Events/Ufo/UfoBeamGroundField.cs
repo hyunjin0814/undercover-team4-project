@@ -23,8 +23,7 @@ public class UfoBeamGroundField : MonoBehaviour
     [Min(0f)]
     [SerializeField] private float m_rayLift = 0.5f;
 
-    [Tooltip("다시 굽는 간격(초) — 높이맵은 구운 자리에 월드로 박혀 있어 건너뛴 동안에도 지면이 밀리지 않는다. " +
-             "그사이 기체가 움직인 만큼만 발자국이 뒤처지므로 여유(m_padding)를 넘길 만큼 벌리지 말 것")]
+    [Tooltip("높이맵을 다시 굽는 간격(초) — 그사이 기체 이동이 여유(m_padding)를 넘지 않게 둘 것")]
     [Min(0f)]
     [SerializeField] private float m_refreshInterval = 0.05f;
 
