@@ -4,28 +4,15 @@ using UnityEditor;
 using UnityEngine;
 
 /// <summary>
-/// 아이템 아이콘 굽기 — 메뉴: Tools/아이템 아이콘 굽기 (#793, #843)
-///
-/// 인벤토리 핫바(<see cref="InventorySlotView"/>)와 약탈창(<see cref="LootSlotView"/>)이 쓰는
-/// <see cref="ItemBase.ItemIcon"/>을 아이템 모델에서 직접 찍어 만든다. 손으로 그리지 않는 이유는
-/// <see cref="EmoteIconBaker"/>와 같다 — 모델에서 찍으면 실제로 손에 들리는 물건과 어긋날 수 없다.
-///
-/// <b>찍는 대상은 아이템 프리팹이 아니라 <see cref="ItemBase.HeldModelPrefab"/>이다.</b> 아이템
-/// 프리팹에는 렌더러가 없고(월드에 떨어진 모습도 손에 든 모습도 이 모델을 런타임에 붙인 것),
-/// 모델을 안 걸어 둔 아이템은 그릴 것이 없어 건너뛴다.
-///
-/// <b>설치형은 아이템 프리팹이 없다</b> — 주문창 목록에 쓸 아이콘을 <see cref="ShopCatalog"/> 항목의
-/// 진열 모델에서 찍어 그 항목의 <c>m_displayIcon</c>에 배선한다 (#843). 굽는 방식은 소지형과 같다.
-///
-/// 저장까지 하면 대상의 아이콘 필드까지 배선한다 — 구워 놓고 손으로 다시 끌어다 넣을 이유가 없다.
+/// 아이템의 HeldModelPrefab(설치형은 진열 모델)을 찍어 아이콘을 굽고 해당 필드에 배선한다.
+/// 메뉴: Tools/아이템 아이콘 굽기.
 /// </summary>
 public class ItemIconBaker : EditorWindow
 {
-    private const int k_resolution = 256; // 감정표현 아이콘과 같은 크기
+    private const int k_resolution = 256;
     private const string k_defaultOutput = "Assets/Imported/Art/ItemIcons";
     private const string k_prefabSearchFolder = "Assets/Prefabs";
 
-    // 아이템별 각도가 없을 때 쓰는 기본값.
     [SerializeField] private float m_yaw = 30f;
     [SerializeField] private float m_pitch = 20f;
     [SerializeField] private float m_padding = 1.2f;
@@ -33,27 +20,18 @@ public class ItemIconBaker : EditorWindow
 
     private readonly List<BakeTarget> m_targets = new List<BakeTarget>();
 
-    // 대상별 각도 — 모델마다 정면으로 삼는 축이 달라 한 각도로 전부 찍으면 어떤 것은 뒤통수가 나온다.
-    // 대상 식별자로 EditorPrefs에 남긴다: 굽는 사람이 눈으로 맞춘 값이라 다시 구울 때 되살아나야 하고,
-    // 결과물(PNG)은 어차피 별도 저장소로 나가므로 각도까지 에셋으로 만들 값어치는 없다.
     private readonly Dictionary<string, Vector2> m_angles = new Dictionary<string, Vector2>();
 
-    // 미리 구운 결과 — 저장 전에 눈으로 확인한다. 저장은 이 결과를 그대로 쓴다.
     private readonly Dictionary<string, Texture2D> m_preview = new Dictionary<string, Texture2D>();
 
     private Vector2 m_scroll;
 
-    // ---- 굽는 대상 ----
-
-    /// <summary>아이콘을 굽고 배선할 자리 하나. 소지형 아이템과 설치형 카탈로그 항목이 같은 창을 쓴다.</summary>
     private abstract class BakeTarget
     {
-        /// <summary>각도·미리보기를 기억하는 열쇠. 에셋 GUID 기반이라 다시 모아도 같은 값이다.</summary>
         public abstract string Id { get; }
         public abstract string Label { get; }
         public abstract GameObject Model { get; }
 
-        /// <summary>찍을 때 모델에 씌울 배율. 카탈로그가 정한 비례와 아이콘이 어긋나지 않게 한다.</summary>
         public virtual Vector3 ModelScale => Vector3.one;
 
         public abstract Sprite Current { get; }
@@ -102,8 +80,6 @@ public class ItemIconBaker : EditorWindow
         public override string Label => Entry != null ? Entry.Installable.ToString() : "(빈 항목)";
         public override GameObject Model => Entry?.DisplayModel;
 
-        // 설치형 모델은 카탈로그 배율이 곧 실물 비례다 — 사이렌 버튼처럼 납작하게 눌러 쓰는 것을
-        // 배율 없이 찍으면 아이콘만 원래 구(球)로 나와 실물과 다른 물건처럼 보인다.
         public override Vector3 ModelScale => Entry != null ? Entry.DisplayScale : Vector3.one;
 
         public override Sprite Current => Entry?.Icon;
@@ -130,8 +106,6 @@ public class ItemIconBaker : EditorWindow
 
     private void OnDisable() => ClearPreview();
 
-    // Assets/Prefabs 아래의 ItemBase 프리팹 + 카탈로그의 설치형 항목을 모은다 — 목록을 손으로
-    // 유지하면 아이템이 늘 때 빠진다.
     private void CollectTargets()
     {
         m_targets.Clear();
@@ -154,7 +128,6 @@ public class ItemIconBaker : EditorWindow
             if (catalog == null)
                 continue;
 
-            // 소지형은 위에서 프리팹으로 이미 잡혔다 — 여기서는 프리팹이 없는 설치형만 더한다.
             for (int i = 0; i < catalog.Count; i++)
             {
                 ShopCatalog.Entry entry = catalog.Get(i);
@@ -211,7 +184,6 @@ public class ItemIconBaker : EditorWindow
         {
             EditorGUILayout.BeginHorizontal("box");
 
-            // 왼쪽: 지금 배선된 아이콘 / 오른쪽: 방금 구운 것 — 나란히 놓아야 나아졌는지 보인다
             DrawThumb(target.Current != null ? target.Current.texture : null, "현재");
             DrawThumb(m_preview.TryGetValue(target.Id, out Texture2D baked) ? baked : null, "구운 것");
 
@@ -255,8 +227,6 @@ public class ItemIconBaker : EditorWindow
         EditorGUILayout.EndScrollView();
     }
 
-    // ---- 대상별 각도 ----
-
     private static string AngleKey(BakeTarget target) => "ItemIconBaker.angle." + target.Id;
 
     /// <summary>이 대상에 맞춰 둔 각도. 없으면 창의 기본값.</summary>
@@ -278,8 +248,6 @@ public class ItemIconBaker : EditorWindow
         EditorGUILayout.LabelField(caption, EditorStyles.miniLabel);
         EditorGUILayout.EndVertical();
     }
-
-    // ---- 굽기 ----
 
     private void BakeAll()
     {
@@ -318,11 +286,10 @@ public class ItemIconBaker : EditorWindow
         Repaint();
     }
 
-    // 모델 하나를 정투영으로 찍는다. 배경은 투명 — 슬롯 배경(선택 하이라이트가 색을 바꾼다) 위에 얹혀야 한다.
     private Texture2D RenderModel(GameObject modelPrefab, float yaw, float pitch, Vector3 scale)
     {
         var root = new GameObject("~ItemIconBake") { hideFlags = HideFlags.HideAndDontSave };
-        root.transform.position = new Vector3(0f, -10000f, 0f); // 열려 있는 씬이 화면에 들어오지 않게 멀리 둔다
+        root.transform.position = new Vector3(0f, -10000f, 0f);
 
         RenderTexture target = null;
         RenderTexture previous = RenderTexture.active;
@@ -358,16 +325,13 @@ public class ItemIconBaker : EditorWindow
             camera.farClipPlane = 100f;
             camera.clearFlags = CameraClearFlags.SolidColor;
             camera.cullingMask = ~0;
-            camera.enabled = false; // Render()로만 돈다
+            camera.enabled = false;
 
-            // 카메라는 축에 맞춰 두고 대상을 돌린다 — 프레이밍을 월드 경계 그대로 쓸 수 있다.
             cameraObject.transform.position = bounds.center + Vector3.back * 10f;
             cameraObject.transform.rotation = Quaternion.identity;
 
             target = new RenderTexture(k_resolution, k_resolution, 24, RenderTextureFormat.ARGB32) { antiAliasing = 1 };
 
-            // 흰 배경·검은 배경 두 번 찍어 알파를 역산한다 — URP 불투명 패스는 알파를 그대로 두지 않아
-            // 투명 배경 한 번으로는 통째로 불투명하게 나온다. (MontageBakeRig.RenderPixels와 같은 방식)
             Texture2D onWhite = Capture(camera, target, Color.white);
             Texture2D onBlack = Capture(camera, target, Color.black);
 
@@ -419,7 +383,6 @@ public class ItemIconBaker : EditorWindow
         return texture;
     }
 
-    // 아이템 모델은 정적 프롭이라 Renderer.bounds가 그대로 실측이다 (스킨 메시의 부풀린 경계 문제 없음).
     private static bool TryGetBounds(GameObject subject, out Bounds bounds)
     {
         bounds = default;
@@ -443,8 +406,6 @@ public class ItemIconBaker : EditorWindow
         return found;
     }
 
-    // ---- 저장 ----
-
     private void SaveAll()
     {
         if (!Directory.Exists(m_outputFolder))
@@ -460,10 +421,6 @@ public class ItemIconBaker : EditorWindow
             if (!m_preview.TryGetValue(target.Id, out Texture2D baked) || baked == null)
                 continue;
 
-            // 저장 위치는 항상 이 폴더다. 배선된 아이콘의 경로를 따라가면 누가 임시로 꽂아 둔 팩 스프라이트를
-            // 구운 그림으로 덮어쓸 수 있고(서드파티 에셋 수정 금지), 따라갈 이유도 없다 — 임포트 설정은
-            // ApplySpriteImport가, 배선은 target.Assign이 직접 하고, 경로가 이름으로 결정적이라
-            // 다시 구워도 같은 파일을 쳐서 GUID가 그대로 유지된다.
             string path = $"{m_outputFolder}/{target.FileName}";
 
             File.WriteAllBytes(path, baked.EncodeToPNG());
@@ -485,9 +442,6 @@ public class ItemIconBaker : EditorWindow
         Debug.Log($"[아이템] 아이콘 {written}장을 굽고 배선했다");
     }
 
-    // 새로 만든 PNG는 기본이 Default 텍스처라 Image.sprite에 못 넣는다 — 스프라이트로 돌려놓는다.
-    // spriteImportMode까지 Single로 박는 이유: 이 프로젝트의 기본값이 Multiple이라 그대로 두면
-    // 스프라이트 시트로 잡혀 잘라낸 조각이 하나도 없고, LoadAssetAtPath<Sprite>가 null로 온다.
     private static void ApplySpriteImport(string path)
     {
         var importer = AssetImporter.GetAtPath(path) as TextureImporter;

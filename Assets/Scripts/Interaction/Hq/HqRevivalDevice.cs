@@ -3,18 +3,8 @@ using UnityEngine;
 using UnityEngine.Localization;
 
 /// <summary>
-/// 본부 부활 장치 — 기능 정지(Die)된 동료를 <b>넣어 두면</b> 30초 뒤 부활시킨다. (#365, GDD 7-5)
-/// 동료를 운반한 채 장치를 겨냥해 E를 누르면 몸이 안치 자리로 옮겨지고 타이머가 돈다.
-///
-/// 처음에는 콜라이더 안에 몸이 들어왔는지로 판정했는데 두 번 갈아엎었다:
-///  · 트리거 콜백은 서버에서 안 울린다 — 원격 클라의 플레이어는 NetworkTransform이 트랜스폼을 직접 써서
-///    CharacterController.Move를 타지 않는다(실측 확인).
-///  · 위치 폴링으로 바꾸니 이번엔 <b>조작이 까다로워졌다</b> — 몸을 구역 안에 정확히 내려놓아야 했다.
-/// 그래서 위치가 아니라 상호작용으로 확정한다: 겨냥해서 넣으면 끝이고, 어디에 눕혔는지는 상관없다.
-/// 안치된 몸은 서버가 자리로 스냅하므로 그림도 항상 같다.
-///
-/// 자리는 하나다. 진행 중에 누가 밧줄로 다시 끌어가면(꺼내기) 타이머는 취소된다 — 반쯤 살린 몸을
-/// 다시 데려가는 것도 선택지로 열어 둔다.
+/// 본부 부활 장치 — 운반 중인 기능 정지 동료를 넣으면 안치 자리에 두고 30초 뒤 부활시킨다(GDD 7-5).
+/// 진행 중 밧줄로 다시 끌어가면 타이머가 취소된다.
 /// </summary>
 [RequireComponent(typeof(Collider))]
 public class HqRevivalDevice : NetworkBehaviour, ICarriedBodyReceiver
@@ -47,27 +37,21 @@ public class HqRevivalDevice : NetworkBehaviour, ICarriedBodyReceiver
     [SerializeField]
     private string m_idleText = "부활 장치";
 
-    // 안치된 몸 — 서버(또는 오프라인)에서만 유효. 자리는 하나뿐이다.
     private PlayerIncapacitation m_occupant;
     private float m_elapsed;
 
-    // 남은 시간(초) — 0이면 비어 있다. 라벨을 전 피어가 같은 값으로 그리기 위해 동기화한다.
     private readonly NetworkVariable<float> m_remainingSynced = new();
 
-    private int m_shownSeconds = -1; // 라벨 갱신 스로틀 — 초 단위가 바뀔 때만 텍스트를 만든다
+    private int m_shownSeconds = -1;
 
-    // 안치 직후 자리 이탈 검사를 미루는 유예(초) — 오너 권한 텔레포트가 도착할 시간을 준다.
     private const float k_strayGraceSeconds = 1f;
 
     private Transform Slot => m_slot != null ? m_slot : transform;
 
-    /// <summary>지금 몸이 들어 있는지 — 서버·오프라인은 실참조, 원격 피어는 동기화값. (PlayerEscorter 관례)</summary>
     public bool IsOccupied =>
         IsSpawned && !IsServer ? m_remainingSynced.Value > 0f : m_occupant != null;
 
-    // ---- 상호작용 (오너 클라에서 호출됨) ----
-
-    /// <summary>E가 실제로 동작하는 상태인지 — 조준 피드백(윤곽선)용. 서버 검증과 같은 기준. (#184)</summary>
+    /// <summary>E가 실제로 동작하는 상태인지 — 조준 피드백(윤곽선)용. 서버 검증과 같은 기준.</summary>
     public bool CanInteract(GameObject interactor)
     {
         if (IsOccupied)
@@ -77,7 +61,6 @@ public class HqRevivalDevice : NetworkBehaviour, ICarriedBodyReceiver
         return carrier != null && carrier.IsCarrying;
     }
 
-    // 조준 안내 (#664)
     public LocalizedString PromptLabel(GameObject interactor) => InteractPrompts.HandOverBody;
 
     public void Interact(GameObject interactor)
@@ -86,45 +69,34 @@ public class HqRevivalDevice : NetworkBehaviour, ICarriedBodyReceiver
         if (carrier == null)
             return;
 
-        // 서버 권위 — 요청만 넘긴다. 대상·거리 판정은 서버가 한다 (#118 관례)
         carrier.RequestPlaceInDevice(this);
     }
 
     private static PlayerCarrier FindCarrier(GameObject interactor) =>
         interactor != null ? interactor.GetComponentInParent<PlayerCarrier>() : null;
 
-    // ---- 서버 실행 (권위) ----
-
-    /// <summary>
-    /// 운반 중인 몸을 안치한다 — <see cref="PlayerCarrier"/>가 서버에서 호출. 성공하면 true.
-    /// 위조 RPC 방어를 겸해 여기서 상태·거리를 다시 본다.
-    /// </summary>
+    /// <summary>운반 중인 몸을 안치한다. 상태·거리를 다시 검증하고 성공하면 true.</summary>
     public bool ServerPlace(PlayerCarrier carrier)
     {
         if (IsSpawned && !IsServer)
             return false;
         if (m_occupant != null || carrier == null)
-            return false; // 자리는 하나
+            return false;
 
         PlayerCarrier body = carrier.CarriedTarget;
         if (body == null)
-            return false; // 아무도 안 끌고 있다
+            return false;
 
         PlayerIncapacitation incapacitation = body.GetComponent<PlayerIncapacitation>();
         if (incapacitation == null || !incapacitation.IsDead)
             return false;
 
-        // 거리 — 겨냥만으로는 부족하다(위조 RPC). 장치 앞까지 실제로 와야 한다
         if ((carrier.transform.position - transform.position).sqrMagnitude
             > m_placeRange * m_placeRange)
             return false;
 
-        // 끌기를 먼저 끊고 나서 옮긴다 — 순서를 뒤집으면 추종이 살아 있어 몸이 자리에서 다시 끌려 나온다.
-        // 전원을 끊는다(합류 중이었으면 안치를 청한 사람 말고도 남을 수 있다) — 한 명만 끊으면 남은
-        // 참가자의 추종이 몸을 안치 자리에서 다시 끌어낸다.
         body.ServerDropAllCarriers("부활 장치에 안치");
 
-        // 몸 위치는 오너 권한이라 서버가 직접 못 옮긴다 — 오너에게 넘기는 텔레포트 경로를 쓴다 (#101/#214)
         PlayerMovement movement = body.GetComponent<PlayerMovement>();
         if (movement != null)
             movement.ServerTeleport(Slot.position, Slot.rotation);
@@ -142,18 +114,16 @@ public class HqRevivalDevice : NetworkBehaviour, ICarriedBodyReceiver
         UpdateLabel();
 
         if (IsSpawned && !IsServer)
-            return; // 타이머는 서버 권위
+            return;
         if (m_occupant == null)
             return;
 
-        // 다른 경로로 복구됐거나(라운드 리셋 등) 몸이 사라졌으면 자리를 비운다
         if (!m_occupant.IsDead)
         {
             ClearOccupant("대상이 이미 복구됨");
             return;
         }
 
-        // 누가 다시 밧줄로 끌어갔다 — 꺼내기다. 진행은 버린다(다시 넣으면 처음부터)
         PlayerCarrier body = m_occupant.GetComponent<PlayerCarrier>();
         if (body != null && body.IsBeingCarried)
         {
@@ -163,12 +133,6 @@ public class HqRevivalDevice : NetworkBehaviour, ICarriedBodyReceiver
 
         m_elapsed += Time.deltaTime;
 
-        // 몸이 자리를 벗어났다 — 밧줄이 아닌 경로로 옮겨졌다는 뜻이다(오검거 광장 이송 등).
-        // 안치 '판정'은 여전히 위치가 아니라 상호작용이지만(위 주석), 이미 들어온 몸이 사라진 것까지
-        // 모른 척하면 장치 밖에 있는 사람이 타이머만 채우고 부활한다. 넣는 조건과 유지 조건은 다르다.
-        //
-        // 유예를 두는 이유: 몸 이동은 오너 권한이라 ServerPlace의 텔레포트가 한 왕복 늦게 반영된다.
-        // 유예가 없으면 안치한 프레임에 몸이 아직 운반자 옆에 있어 스스로 풀려 버린다.
         if (m_elapsed >= k_strayGraceSeconds)
         {
             Vector3 stray = m_occupant.transform.position - Slot.position;
@@ -197,7 +161,6 @@ public class HqRevivalDevice : NetworkBehaviour, ICarriedBodyReceiver
             return;
         }
 
-        // 부활은 구조와 같은 경로를 쓴다 — HP 부분 회복 + 무력화 해제 (PlayerHealth.ServerRevive)
         health.ServerRevive();
         Debug.Log($"[본부 부활] 복구 완료 — {revived.name} HP={health.CurrentHp}, 상태={revived.Cause}");
     }
@@ -217,10 +180,9 @@ public class HqRevivalDevice : NetworkBehaviour, ICarriedBodyReceiver
         if (IsSpawned && IsServer)
             m_remainingSynced.Value = seconds;
         else if (!IsSpawned)
-            m_remainingSynced.Value = seconds; // 오프라인 Play 테스트 — 로컬 값으로만 쓰인다
+            m_remainingSynced.Value = seconds;
     }
 
-    // 라벨은 전 피어에서 각자 그린다 — 남은 시간이 초 단위로 바뀔 때만 텍스트를 새로 만든다.
     private void UpdateLabel()
     {
         if (m_label == null)
@@ -240,6 +202,6 @@ public class HqRevivalDevice : NetworkBehaviour, ICarriedBodyReceiver
     public override void OnDestroy()
     {
         m_occupant = null;
-        base.OnDestroy(); // NetworkBehaviour 내부 정리 — 반드시 호출
+        base.OnDestroy();
     }
 }

@@ -1,8 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// 연행(Escorted) 상태 튜닝 값. (#59, #259 — NpcController에서 분리)
-/// 오검거 페널티 호송(PenaltyEscort)도 boost 값을 공유한다.
+/// 연행(Escorted) 상태 튜닝 SO. 오검거 호송도 부스트 값을 공유한다.
 /// </summary>
 [CreateAssetMenu(fileName = "NpcEscortConfig", menuName = "Undercover/NPC/Escort Config")]
 public class NpcEscortConfig : ScriptableObject

@@ -2,14 +2,13 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 
 /// <summary>
-/// 본부 열람 패널 공통 뼈대 — 설치물 상호작용(E)으로 열고 Esc로 닫는 로컬 UI. (#222/#223)
-/// 여는 동안 게임플레이 입력을 정지하고 커서를 푼다. 파생 클래스는 데이터 구독·그리기만 맡는다.
+/// 본부 열람 패널 베이스 — E로 열고 Esc로 닫으며, 여는 동안 입력을 정지하고 커서를 푼다.
 /// </summary>
 public abstract class HqPanelView : MonoBehaviour
 {
     [Header("루트")]
     [SerializeField]
-    protected GameObject m_root; // 켜고 끌 패널 루트 (기본 비활성)
+    protected GameObject m_root;
 
     private PlayerInputHandler m_input;
     private bool m_isOpen;
@@ -46,7 +45,6 @@ public abstract class HqPanelView : MonoBehaviour
 
         OnClosed();
 
-        // ?. 금지 — 파괴된 Unity 오브젝트 fake null 우회 방지 (CitizenDirectoryView와 같은 관례)
         if (m_input != null)
             m_input.SetSuspended(false);
         CursorLock.PopUnlock();
@@ -67,10 +65,9 @@ public abstract class HqPanelView : MonoBehaviour
         if (!m_isOpen)
             return;
 
-        // 열려 있는 동안 ESC 진입 메뉴(일시정지) 오픈을 막는다 — 이중 동작 방지 (#326)
         EscMenuGuard.BlockThisFrame();
 
-        if (m_input == null) // 연 플레이어 디스폰 시 입력 잠김 방지
+        if (m_input == null)
         {
             Close();
             return;

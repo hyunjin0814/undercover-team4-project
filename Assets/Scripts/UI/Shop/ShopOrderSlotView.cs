@@ -3,13 +3,7 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// 주문창 그리드의 한 칸 (#843). 진열 칸 하나의 품목을 그리고, 주문 버튼을 창에 전달한다.
-/// 로직은 <see cref="ShopBrowserPanel"/>이 소유한다 — 이 칸은 표시와 클릭 전달만 한다
-/// (<see cref="LootSlotView"/>와 같은 분담).
-///
-/// 문구는 <see cref="Bind"/> 때 한 번 읽는다 — 언어가 바뀌면 창이 전체를 다시 바인드한다.
-/// 칸마다 StringChanged를 걸지 않는 이유: 항목이 여럿이라 로케일 변경을 한 곳에 걸고 통째로
-/// 다시 채우는 편이 해제 누락이 없다.
+/// 주문창 그리드의 한 칸 — 품목을 표시하고 주문 버튼 클릭을 창에 전달한다.
 /// </summary>
 public class ShopOrderSlotView : MonoBehaviour
 {
@@ -59,9 +53,8 @@ public class ShopOrderSlotView : MonoBehaviour
     private Color m_ownedColor = new Color(0.271f, 0.890f, 0.604f, 1f);
 
     private ShopBrowserPanel m_owner;
-    private int m_slot = -1; // 빈 칸이면 -1
+    private int m_slot = -1;
 
-    // 주문 가능할 때의 버튼 글자색 — 상태색으로 덮어썼다가 되돌려야 해서 처음 값을 들고 있는다
     private Color m_orderLabelColor = Color.white;
     private bool m_orderLabelColorCached;
 
@@ -100,7 +93,7 @@ public class ShopOrderSlotView : MonoBehaviour
         if (m_icon != null)
         {
             m_icon.sprite = entry.Icon;
-            m_icon.enabled = entry.Icon != null; // 아이콘 미배선이면 이름 글자가 폴백
+            m_icon.enabled = entry.Icon != null;
         }
 
         SetText(m_nameText, ResolveName(entry));
@@ -109,8 +102,6 @@ public class ShopOrderSlotView : MonoBehaviour
 
         bool orderable = status == EShopSlotStatus.Available;
 
-        // 상태는 별도 배지가 아니라 주문 버튼 자리에 띄운다 — 못 사는 칸에 "주문"이 그대로 있으면
-        // 누를 수 있는 것처럼 읽히고, 구석 배지는 눈이 가지 않는다.
         SetText(m_orderButtonText, LocalizedStrings.Get(k_shopTable, StatusKey(status)));
 
         if (m_orderButtonText != null)
@@ -146,7 +137,6 @@ public class ShopOrderSlotView : MonoBehaviour
             m_orderButton.gameObject.SetActive(false);
     }
 
-    // 이름 조회는 카탈로그 항목이 한다 (#840) — 구매 내역·본부 재고 게시판도 같은 것을 읽는다.
     private static string ResolveName(ShopCatalog.Entry entry)
     {
         string name = entry.DisplayName;

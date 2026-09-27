@@ -7,8 +7,8 @@ using UnityEngine;
 using UnityEngine.AI;
 
 /// <summary>
-/// 구워진 NavMesh를 격자로 훑어 기준점에서 못 가는 구역과 스폰 앵커 도달성을 로그로 뽑는다. (#719, #660)
-/// 맵 씬을 연 채 Tools/맵 NavMesh 점검. 굽지는 않는다 — Bake 뒤에 돌릴 것.
+/// 구워진 NavMesh를 격자로 훑어 도달 불가 구역과 스폰 앵커 도달성을 로그로 출력한다.
+/// 메뉴: Tools/맵 NavMesh 점검.
 /// </summary>
 public class MapNavMeshAudit : EditorWindow
 {
@@ -149,7 +149,7 @@ public class MapNavMeshAudit : EditorWindow
         int cols = Mathf.Max(1, Mathf.CeilToInt(bounds.size.x / m_cellSize));
         int rows = Mathf.Max(1, Mathf.CeilToInt(bounds.size.z / m_cellSize));
 
-        var state = new int[cols * rows]; // -1 대상 아님 / 0 못 감 / 1 도달
+        var state = new int[cols * rows];
         var hitPos = new Vector3[cols * rows];
         var path = new NavMeshPath();
 
@@ -386,10 +386,6 @@ public class MapNavMeshAudit : EditorWindow
         Debug.LogWarning(sb.ToString().TrimEnd());
     }
 
-    // 기준점이 멀면 CalculatePath 한 방 쿼리가 실제로는 이어진 경로를 PathPartial로
-    // 오판하는 경우가 있다(#946 후속 — 모텔 2층 계단이 이 오탐 때문에 4번 재베이크해도
-    // 똑같이 고립으로 잡혔었다). 고립 판정을 확정하기 전에 이미 도달 확인된 지점 중
-    // 가장 가까운 곳에서 다시 한번 물어봐서 오탐을 걸러낸다.
     private static List<Cluster> ReverifyAgainstNearestReachable(List<Cluster> clusters, List<Vector3> reachable)
     {
         var falsePositives = new List<Cluster>();
@@ -429,7 +425,6 @@ public class MapNavMeshAudit : EditorWindow
         return falsePositives;
     }
 
-    // 높이차가 climb(0.75) 근처면 단차 문제, 수평이 멀면 구멍 문제다.
     private static string DescribeNearest(List<Cluster> group, List<Vector3> reachable)
     {
         if (reachable.Count == 0)

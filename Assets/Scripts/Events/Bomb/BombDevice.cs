@@ -2,25 +2,18 @@
 using Unity.Netcode;
 using UnityEngine;
 
-/// <summary>폭탄 진행 상태 — 동기화는 int로(NetworkVariable&lt;enum&gt; 회피).</summary>
 public enum BombState
 {
-    Idle,     // 아직 무장 전 (스폰 직후)
-    Emerging, // 상자에서 나오는 중 — 아직 움직이지도 카운트다운하지도 않는다 (등장 예고)
-    Dormant,  // 사람을 찾아 배회 — 표적이 생길 때까지 시간이 흐르지 않는다 (#993 전까지는 상자 앞 정지였다)
-    Armed,    // 카운트다운 중 — 가장 가까운 현장 플레이어를 쫓는다
-    Exploded, // 시간 초과 폭발
+    Idle,
+    Emerging,
+    Dormant,
+    Armed,
+    Exploded,
 }
 
 /// <summary>
-/// 추격 폭탄의 브레인 — 서버 권위. 무장하면 가장 가까운 현장 플레이어를 쫓고 제한시간이 끝나면
-/// 터진다. <b>해체도 밀어내기도 없다</b> — 대응은 달아나기뿐이고, 진압봉으로 때리면 즉발한다
-/// (<see cref="ServerDetonate"/> — 오조작의 대가다). 스폰·수명은 <see cref="BombChaseEvent"/>가 쥔다.
-/// (GDD 6-4, #399)
-/// <b>파사드다 (#768 분할).</b> 상태 기계·수명 타이머·권위 판정만 직접 들고, 추격은
-/// <see cref="BombChaseDriver"/>, 폭발은 <see cref="BombBlast"/>에 맡긴다. <b>상태 주인은 여기
-/// 하나다</b> — 전이가 갈리면 원격 동기화가 어느 쪽을 믿을지 모호해진다. 소비자는 전부 이 파사드에
-/// 붙으므로 분할 뒤에도 붙는 자리가 바뀌지 않는다.
+/// 추격 폭탄의 상태 기계(서버 권위) — 무장하면 가장 가까운 현장 플레이어를 쫓고 제한시간이 끝나면 터진다.
+/// 추격은 BombChaseDriver, 폭발은 BombBlast에 맡기는 파사드이며, 진압봉으로 맞으면 즉발한다.
 /// </summary>
 [RequireComponent(typeof(NetworkObject))]
 [RequireComponent(typeof(BombChaseDriver))]
@@ -39,50 +32,35 @@ public class BombDevice : NetworkBehaviour
     private float m_countdownSeconds = 30f;
 
     [Header("테스트")]
-    [Tooltip("켜면 스폰/시작 시 스스로 무장한다 — 돌발 이벤트 없이 폭탄을 씬에 놓고 바로 등장·추격·폭발을 테스트할 때. " +
-             "실전 배선(BombChaseEvent) 전까지의 임시 스위치 (SignalDecoder.m_installedOnStart 관례)")]
+    [Tooltip("켜면 시작 시 스스로 무장한다 — 이벤트 없이 씬에 놓고 테스트할 때 쓰는 임시 스위치")]
     [SerializeField]
     private bool m_armOnStart;
 
-    // ---- 동기화 상태 (서버 쓰기 / 전원 읽기) ----
     private readonly NetworkVariable<int> m_stateSynced = new NetworkVariable<int>((int)BombState.Idle);
-    // NGO 서버시간 기준 폭발 시각 — 클라 카운트다운 UI가 남은 시간을 계산한다
     private readonly NetworkVariable<double> m_explodeTimeSynced = new NetworkVariable<double>();
 
-    // ---- 서버·오프라인 진실값 ----
     private BombState m_state = BombState.Idle;
-    private float m_armAtLocal;     // Time.time 기준 무장(등장 완료) 시각 (서버·오프라인)
-    private float m_explodeAtLocal; // Time.time 기준 폭발 시각 (서버·오프라인)
+    private float m_armAtLocal;
+    private float m_explodeAtLocal;
 
     private BombChaseDriver m_chase;
     private BombBlast m_blast;
 
-    // 폭발 이벤트를 이미 발행했는가 — 상태 동기화와 RPC가 겹쳐도 연출이 두 번 나지 않게 한다 (#936)
     private bool m_explodedRaised;
 
-    // 라운드당 폭탄 1개 — 씬에 놓인 상자(BombCrate)가 "내 상자에서 나오는 폭탄인가"를 묻는 단일 참조.
-    // 매니저가 아니라 스폰물이므로 App 파사드가 아닌 이 정적 참조로 노출한다(단일 인스턴스 보장은 이벤트가 한다).
     private static BombDevice s_active;
 
-    /// <summary>현재 씬에 살아 있는 폭탄 — 없으면 null. 상자가 여는 시점을 판단하는 진입점.</summary>
     public static BombDevice Active => s_active;
 
-    /// <summary>현재 상태 — 서버·오프라인은 실참조, 원격 피어는 동기화값.
-    /// 폭발만 예외로 실참조를 먼저 본다 — 클라는 RPC로 먼저 알 수 있고 그때 동기화값은 아직 Armed다 (#936).</summary>
     public BombState State =>
         m_state == BombState.Exploded || !IsSpawned || IsServer ? m_state : (BombState)m_stateSynced.Value;
 
-    /// <summary>카운트다운이 도는 중인가 — 무장부터 폭발까지가 전부 추격(Armed)이다. (#993)</summary>
     public bool IsCountingDown => State == BombState.Armed;
 
-    /// <summary>지금 때리면 터지는 상태인가 — <see cref="Baton"/>이 타격 판정에 쓴다.
-    /// 카운트다운 전(등장·대기)과 이미 터진 뒤는 그냥 소품이라 빗나감으로 둔다.</summary>
     public bool CanBeStruck => IsCountingDown;
 
-    /// <summary>피해·발사가 닿는 반경(m) — <see cref="BombBlast"/>가 든 값을 그대로 내보낸다.</summary>
     public float ExplosionRadius => m_blast.ExplosionRadius;
 
-    /// <summary>남은 시간(초) — 카운트다운 UI용. 카운트다운 중이 아니면 0.</summary>
     public float RemainingSeconds
     {
         get
@@ -98,10 +76,8 @@ public class BombDevice : NetworkBehaviour
         }
     }
 
-    /// <summary>폭발했다 — 전 피어. 폭발 넉백·VFX가 구독한다.</summary>
     public event Action OnExploded;
 
-    // 서버·오프라인에서만 권위. 스폰 전(오프라인 Play)이면 항상 권위.
     private bool IsAuthority => !IsSpawned || IsServer;
 
     private void Awake()
@@ -109,10 +85,9 @@ public class BombDevice : NetworkBehaviour
         m_chase = GetComponent<BombChaseDriver>();
         m_blast = GetComponent<BombBlast>();
 
-        s_active = this; // 라운드당 1개 전제 — 상자가 이 폭탄을 보고 열린다
+        s_active = this;
     }
 
-    // NetworkBehaviour.OnDestroy를 가리지 않도록 override + base 호출 (csc.rsp가 CS0114를 에러로 승격)
     public override void OnDestroy()
     {
         if (s_active == this)
@@ -124,23 +99,19 @@ public class BombDevice : NetworkBehaviour
     {
         m_stateSynced.OnValueChanged += HandleStateSyncedChanged;
 
-        // 이동 권한은 서버 하나뿐이다 — 끄는 것은 에이전트 소유자(BombChaseDriver)에게 맡긴다.
-        // 권위는 스폰 뒤에야 확정되므로 Awake가 아니라 여기서 끈다.
         if (!IsServer)
         {
             m_chase.DisableAgent();
-            m_state = (BombState)m_stateSynced.Value; // 늦게 접속한 클라: 진행 중인 폭탄의 현재 상태 반영
+            m_state = (BombState)m_stateSynced.Value;
             return;
         }
 
-        // 테스트 자동 무장(네트워크 세션) — 서버에서만
         if (m_armOnStart && m_state == BombState.Idle)
             ServerDeploy();
     }
 
     private void Start()
     {
-        // 테스트 자동 무장(오프라인) — 세션이 없으면 OnNetworkSpawn이 안 오므로 여기서 무장한다.
         if (m_armOnStart && !SuddenEventUtil.IsNetworkSessionActive && m_state == BombState.Idle)
             ServerDeploy();
     }
@@ -152,11 +123,9 @@ public class BombDevice : NetworkBehaviour
 
     private void Update()
     {
-        // 추격·카운트다운·폭발 판정은 서버 권위 (오프라인 폴백 포함). 클라는 표현만.
         if (!IsAuthority)
             return;
 
-        // 등장 중 — 상자에서 나오는 동안은 가만히 있는다. 다 나오면 대기 상태로 넘어간다.
         if (m_state == BombState.Emerging)
         {
             if (Time.time >= m_armAtLocal)
@@ -164,10 +133,6 @@ public class BombDevice : NetworkBehaviour
             return;
         }
 
-        // 대기 — 사람을 찾아 도시를 <b>돌아다닌다</b>. 카운트다운은 아직 돌지 않는다. (#993)
-        // 시계는 표적이 생기는 순간부터 돈다 — 빈 골목에서 혼자 터지면 누구도 위협하지 못한다.
-        // 배회는 그 규칙을 바꾸지 않고 <b>표적을 만날 확률만</b> 올린다: 상자 앞에 서 있으면
-        // 아무도 안 지나가는 판이 생기는데, 돌아다니면 폭탄이 스스로 사람을 찾아간다.
         if (m_state == BombState.Dormant)
         {
             if (m_chase.PollWakeTrigger())
@@ -183,22 +148,13 @@ public class BombDevice : NetworkBehaviour
         if (m_state != BombState.Armed)
             return;
 
-        // 터질 때까지 쫓는다 (#993) — 폭심을 미리 확정하고 멈춰 서던 마지막 3초를 없앴다.
-        // 멈추면 그 자리가 안전지대가 되어 "붙어 있다가 마지막에 걸어 나오면 된다"가 공략이 됐다.
         m_chase.Tick();
 
         if (Time.time >= m_explodeAtLocal)
             ServerExplode();
     }
 
-    /// <summary>
-    /// 폭탄을 배치한다 — <see cref="BombChaseEvent"/>가 스폰 직후 서버(또는 오프라인)에서 호출.
-    /// 상자에서 나오는 동안(<see cref="BombState.Emerging"/>)은 가만히 있다가 대기(<see cref="BombState.Dormant"/>)로
-    /// 넘어가고, 사람이 다가오면 그때 <see cref="ServerArm"/>이 걸린다.
-    ///
-    /// 등장 시간을 두는 이유는 연출 때문만이 아니다 — <b>예고</b>다. 상자가 들썩이는 동안 근처 인원이
-    /// 달아날 채비를 할 수 있어야, 30초 카운트다운이 "도망칠 수 있었는데 못 갔다"가 된다.
-    /// </summary>
+    /// <summary>폭탄을 배치해 등장(Emerging) → 대기(Dormant) 흐름을 시작한다. 서버(또는 오프라인) 전용.</summary>
     public void ServerDeploy()
     {
         if (!IsAuthority)
@@ -214,17 +170,14 @@ public class BombDevice : NetworkBehaviour
         SetState(BombState.Emerging);
     }
 
-    /// <summary>
-    /// 폭탄을 무장한다 — 대기 중 현장 인원이 깨우기 반경 안에 들어오면 스스로 호출한다.
-    /// <b>카운트다운은 여기서 시작한다</b> — 등장 시점이 아니라 표적이 생긴 시점이 기준이다.
-    /// </summary>
+    /// <summary>폭탄을 무장하고 카운트다운을 시작한다.</summary>
     public void ServerArm()
     {
         if (!IsAuthority)
             return;
 
         m_explodeAtLocal = Time.time + m_countdownSeconds;
-        m_chase.ResetRetargetClock(); // 다음 Update에서 곧바로 표적을 고른다
+        m_chase.ResetRetargetClock();
 
         if (IsSpawned && IsServer)
         {
@@ -235,15 +188,7 @@ public class BombDevice : NetworkBehaviour
         SetState(BombState.Armed);
     }
 
-    /// <summary>
-    /// 진압봉 타격 진입점 — 서버(또는 오프라인)에서만 호출한다. <b>그 자리에서 즉발한다.</b> (#399)
-    ///
-    /// 남은 시간을 앞당기는 것이 아니라 폭발 자체를 지금 일으킨다 — 때린 순간과 터지는 순간 사이에
-    /// 틈이 있으면 "때렸더니 잠시 뒤에 터졌다"가 되어 원인이 흐려진다.
-    ///
-    /// 카운트다운 중(<see cref="CanBeStruck"/>)에만 받는다. 등장·대기 중인 폭탄까지 때려서 터뜨릴 수
-    /// 있으면 <b>아무도 쫓기지 않은 채 이벤트가 끝나</b>, 도망치는 30초라는 이벤트의 알맹이가 사라진다.
-    /// </summary>
+    /// <summary>진압봉 타격 시 그 자리에서 즉시 폭발시킨다. 카운트다운 중에만 받는다. 서버(또는 오프라인) 전용.</summary>
     public void ServerDetonate()
     {
         if (!IsAuthority)
@@ -255,7 +200,6 @@ public class BombDevice : NetworkBehaviour
         ServerExplode();
     }
 
-    // 폭발 오케스트레이션 — 중복 가드와 상태 전이가 여기 있는 이유는 상태 주인이 여기이기 때문이다.
     private void ServerExplode()
     {
         if (m_state == BombState.Exploded)
@@ -265,13 +209,9 @@ public class BombDevice : NetworkBehaviour
         m_blast.ServerExplode();
         SetState(BombState.Exploded);
 
-        // 폭발만 RPC로 한 번 더 알린다 (#936) — 폭탄은 폭발 직후 디스폰되므로 상태 동기화에만
-        // 기대면 델타가 틱 전에 사라져 원격 피어에 영영 도달하지 않는다(연출이 통째로 빠진다).
         if (IsSpawned && IsServer)
             ExplodedClientRpc();
     }
-
-    // ---- 상태 전파 ----
 
     private void SetState(BombState state)
     {
@@ -282,18 +222,15 @@ public class BombDevice : NetworkBehaviour
         if (IsSpawned && IsServer)
             m_stateSynced.Value = (int)state;
 
-        HandleStateEntered(state); // 서버·오프라인 로컬 발행 (원격은 동기화 콜백이 담당)
+        HandleStateEntered(state);
     }
 
-    // 종료 상태 진입 시 표현 이벤트 발행 — 폭발 연출은 전 피어에서 일어난다.
     private void HandleStateEntered(BombState state)
     {
         if (state == BombState.Exploded)
             RaiseExplodedOnce();
     }
 
-    // 폭발 알림 경로가 둘(상태 동기화·RPC)이라 한 번만 발행되도록 잠근다 — 호스트는 로컬 발행과
-    // 자기에게도 오는 ClientRpc를 둘 다 받고, 클라도 델타가 제때 나가면 양쪽을 받는다.
     private void RaiseExplodedOnce()
     {
         if (m_explodedRaised)
@@ -306,11 +243,9 @@ public class BombDevice : NetworkBehaviour
     [ClientRpc]
     private void ExplodedClientRpc()
     {
-        m_state = BombState.Exploded; // 델타가 못 나갔을 수 있다 — 상태도 여기서 맞춘다
+        m_state = BombState.Exploded;
         RaiseExplodedOnce();
     }
-
-    // ---- 동기화 콜백 (원격 클라 전용) ----
 
     private void HandleStateSyncedChanged(int previous, int current)
     {

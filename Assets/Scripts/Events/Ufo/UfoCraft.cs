@@ -2,30 +2,14 @@ using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// UFO 기체 (#819) — 맵 상공을 <b>늘 떠다니며 빔을 켜 놓고</b> 있는 상주 기믹이다.
-///
-/// <b>돌발 이벤트가 아니다.</b> 스폰되지도 사라지지도 않고 씬에 놓인 채로 라운드 내내 돌아다닌다 —
-/// 그래서 <see cref="SuddenEventManager"/> 풀에 등록하지 않는다. 저 위에 뭔가 떠 있고 그것이
-/// 천천히 다가온다는 상시 압박이 이 기믹의 값이고, 발생·종료를 스케줄러가 쥐면 그 값이 사라진다.
-///
-/// <b>이 컴포넌트는 움직임과 겉모습만 든다.</b> 빔에 걸린 사람을 어떻게 할지는 같은 오브젝트의
-/// <see cref="UfoAbductor"/>가 서버 권위로 판정한다. 나눈 이유는 기체를 판정 없이 재사용할 수 있게
-/// 하려는 것이다(그냥 지나가는 UFO).
-///
-/// <b>위치는 서버가 민다</b> — 오너가 없는 씬 배치물이라 NetworkTransform의 기본(서버 권위)이 맞는다.
-///
-/// <b>빔 길이는 각 피어가 스스로 잰다.</b> 늘 켜져 있으므로 상태를 복제할 것이 없고, 지면까지의
-/// 거리는 기체 위치(이미 복제된다)에서 아래로 레이를 쏘면 나온다. 판정도 같은 레이를 쓰므로
-/// <b>보이는 기둥과 걸리는 범위가 어긋나지 않는다</b>.
-///
-/// <b>지붕에 걸리는 것은 셰이더가 픽셀마다 자른다</b> (#907) — 여기서는 기둥을 가장 낮은 지면까지 늘리기만 한다.
+/// 맵 상공을 늘 배회하며 빔을 켜 둔 UFO 기체의 이동과 겉모습을 담당하는 상주 기믹.
+/// 위치는 서버가 움직이고, 빔 길이는 각 피어가 아래로 레이를 쏴 스스로 잰다.
 /// </summary>
 [RequireComponent(typeof(NetworkObject))]
 public class UfoCraft : NetworkBehaviour
 {
     [Header("빔")]
-    [Tooltip("빔 기둥의 뿌리 — 기체 원점에 두고 [b]아래로 2유닛[/b] 길이의 메시를 자식으로 둘 것. " +
-             "이 트랜스폼의 배율로 굵기와 길이를 맞춘다. 비우면 빔이 안 보일 뿐 판정은 그대로 돈다")]
+    [Tooltip("빔 기둥의 뿌리 — 기체 원점에 두고 아래로 2유닛 길이 메시를 자식으로 둔다. 비우면 빔만 안 보인다")]
     [SerializeField] private Transform m_beamPivot;
 
     [Tooltip("빔 반경(m) — 보이는 굵기와 걸리는 범위가 모두 이 값이다")]
@@ -33,13 +17,12 @@ public class UfoCraft : NetworkBehaviour
     [SerializeField] private float m_beamRadius = 3f;
 
     [Tooltip("지면을 찾을 때 볼 레이어 — 환경만 넣을 것. 사람이 들어가면 머리 위에서 빔이 끊긴다")]
-    [SerializeField] private LayerMask m_groundMask = 1; // Default
+    [SerializeField] private LayerMask m_groundMask = 1;
 
     [Tooltip("이 거리(m) 안에서 지면을 못 찾으면 기체 바로 아래를 지면으로 친다")]
     [Min(1f)]
     [SerializeField] private float m_groundProbeDistance = 200f;
 
-    // 넘치면 어느 히트가 버려지는지 정해져 있지 않다 — 가장 낮은 지면이 빠지면 기둥이 짧아진다
     private static readonly RaycastHit[] s_groundHitBuffer = new RaycastHit[64];
 
     [Header("배회")]
@@ -67,26 +50,19 @@ public class UfoCraft : NetworkBehaviour
     [Min(0.1f)]
     [SerializeField] private float m_bobPeriod = 4f;
 
-    private Vector3 m_home;        // 씬에 놓인 자리 — 배회 반경의 중심
-    private Vector3 m_destination; // 지금 향하는 곳 (흔들림을 뺀 기준 높이)
+    private Vector3 m_home;
+    private Vector3 m_destination;
     private float m_bobPhase;
-    private bool m_held;           // 제자리 정지 — 빨아올리는 동안 판정부가 건다
-    private UfoBeamGroundField m_groundField; // 없으면 기둥은 중앙 레이 하나로만 길이를 잡는다
+    private bool m_held;
+    private UfoBeamGroundField m_groundField;
 
-    /// <summary>빔 반경 — 판정도 이 값을 쓴다.</summary>
     public float BeamRadius => m_beamRadius;
 
-    /// <summary>하늘을 막는 것으로 치는 레이어 — 판정부의 실내 검사도 같은 값을 써야 보이는 것과 걸리는 것이 맞는다. (#885)</summary>
     public LayerMask GroundMask => m_groundMask;
 
-    /// <summary>지면을 찾을 때 아래로 보는 최대 거리(m) — 높이맵도 같은 거리를 쓴다. (#907)</summary>
     public float GroundProbeDistance => m_groundProbeDistance;
 
-    /// <summary>
-    /// 서버 전용 — 제자리에 세우거나 다시 배회시킨다. <b>빨아올리는 동안</b> 판정부가 건다:
-    /// 기체가 계속 날아가면 매달린 몸이 하늘을 가로질러 끌려가고, 빔도 발밑을 떠나
-    /// "저 기둥에 잡혔다"가 화면에서 성립하지 않는다. 흔들림·회전은 계속한다.
-    /// </summary>
+    /// <summary>기체를 제자리에 세우거나 다시 배회시킨다. 서버 전용.</summary>
     public void ServerSetHold(bool held) => m_held = held;
 
     private void Awake()
@@ -95,21 +71,16 @@ public class UfoCraft : NetworkBehaviour
         m_destination = m_home;
         m_groundField = GetComponent<UfoBeamGroundField>();
 
-        // 개체마다 다른 위상으로 흔들린다 — 여럿이 떠 있을 때 한 몸처럼 오르내리지 않게
         m_bobPhase = Random.Range(0f, Mathf.PI * 2f);
 
         if (m_beamPivot != null)
-            m_beamPivot.gameObject.SetActive(true); // 상시 점등 — 끄고 켜는 상태가 없다
+            m_beamPivot.gameObject.SetActive(true);
     }
 
-    /// <summary>
-    /// 빔이 닿는 지면 지점 — 기체 바로 아래로 레이를 쏴 찾는다. 못 찾으면 기체 아래
-    /// <see cref="m_groundProbeDistance"/>만큼을 지면으로 친다(허공을 지날 때의 폴백).
-    /// </summary>
+    /// <summary>기체 바로 아래 지면 지점을 레이로 찾는다. 못 찾으면 폴백 거리를 쓴다.</summary>
     public Vector3 BeamGroundPoint() => BeamGroundPoint(out _);
 
-    /// <summary>지면 지점과 함께 실제로 레이가 맞았는지도 돌려준다 — <see cref="StretchBeam"/>이
-    /// 폴백 거리(기본 200m)로 시각 기둥을 늘리지 않게 가르는 데 쓴다.</summary>
+    /// <summary>지면 지점과 실제 레이 적중 여부를 함께 돌려준다.</summary>
     private Vector3 BeamGroundPoint(out bool grounded)
     {
         Vector3 origin = transform.position;
@@ -124,7 +95,6 @@ public class UfoCraft : NetworkBehaviour
             return origin + Vector3.down * m_groundProbeDistance;
         }
 
-        // 가장 먼(=가장 낮은) 히트가 지면이다 — 지붕에서 멈추는 것은 셰이더가 한다 (#907)
         int farthest = 0;
         for (int i = 1; i < count; i++)
         {
@@ -138,22 +108,17 @@ public class UfoCraft : NetworkBehaviour
 
     private void Update()
     {
-        // 연출은 전 피어가 각자 돈다 — 회전까지 복제할 이유가 없다
         if (m_spinDegreesPerSecond != 0f)
             transform.Rotate(Vector3.up, m_spinDegreesPerSecond * Time.deltaTime, Space.World);
 
         StretchBeam();
 
-        // 위치는 서버만 민다. 나머지 피어는 NetworkTransform이 채운다.
         if (!HasServerAuthority)
             return;
 
-        // 흔들림을 뺀 기준 높이에서 옮긴 뒤 새 흔들림을 얹는다 — 진폭이 더해진 채로 수렴하면
-        // 상하로 떨면서 영영 도착하지 못한다
         Vector3 position = transform.position;
         position.y -= BobOffset();
 
-        // 세워 둔 동안에는 목적지도 새로 고르지 않는다 — 풀리는 순간 가던 곳으로 이어 간다. 흔들림도 함께 멈춘다.
         if (!m_held)
         {
             position = Vector3.MoveTowards(position, m_destination, m_roamSpeed * Time.deltaTime);
@@ -170,8 +135,6 @@ public class UfoCraft : NetworkBehaviour
         transform.position = position;
     }
 
-    // 처음 자리를 중심으로 한 원 안에서 다음 목적지를 고른다. 고도는 놓인 높이를 그대로 지킨다 —
-    // 지형을 따라 오르내리게 하려면 지면을 읽어야 하는데, 그러면 건물 위를 지날 때 기체가 튄다.
     private void PickDestination()
     {
         Vector2 offset = Random.insideUnitCircle * m_roamRadius;
@@ -180,8 +143,6 @@ public class UfoCraft : NetworkBehaviour
 
     private float BobOffset() => m_bobAmplitude <= 0f ? 0f : Mathf.Sin(m_bobPhase) * m_bobAmplitude;
 
-    // 자식 메시가 아래로 2유닛이라는 전제 위에서 굵기·길이를 배율로 맞춘다 (Unity 기본 Cylinder가 그렇다).
-    // 기체가 회전하지만 요 회전뿐이라 기둥은 늘 수직이다.
     private void StretchBeam()
     {
         if (m_beamPivot == null)
@@ -189,9 +150,6 @@ public class UfoCraft : NetworkBehaviour
 
         Vector3 groundPoint = BeamGroundPoint(out bool grounded);
 
-        // 지면을 못 찾았다면(맵 밖·허공 위) 판정은 그대로 폴백 지점을 쓰되(그 자리엔 아무도 없다),
-        // 시각 기둥은 200m짜리로 늘리는 대신 접어 둔다 — 허공에 뜬 긴 기둥이 눈에 띄지 않게.
-        // 밑면은 높이맵이 잡은 가장 낮은 지면까지 — 그 아래는 셰이더가 자른다 (#907)
         float bottom = m_groundField != null && m_groundField.HasField
             ? Mathf.Min(groundPoint.y, m_groundField.LowestGround)
             : groundPoint.y;
@@ -201,7 +159,6 @@ public class UfoCraft : NetworkBehaviour
         m_beamPivot.localScale = new Vector3(diameter, length * 0.5f, diameter);
     }
 
-    // 씬 배치물이라 자기 Update가 스스로 돈다 — 서버 권한을 직접 게이트한다 (AbductionEvent와 같은 패턴)
     private bool HasServerAuthority =>
         NetworkManager.Singleton == null
         || !NetworkManager.Singleton.IsListening

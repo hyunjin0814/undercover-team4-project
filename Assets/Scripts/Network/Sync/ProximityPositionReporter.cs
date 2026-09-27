@@ -6,11 +6,7 @@ using Unity.Services.Vivox;
 using UnityEngine;
 
 /// <summary>
-/// 근접 채널 3D 위치 보고 루프 — <see cref="VivoxManager"/>의 부품 (#466).
-/// 로컬 플레이어가 움직였을 때만 Vivox에 좌표를 올린다(거리 감쇠는 Vivox가 계산한다).
-///
-/// 배선: VivoxManager와 같은 오브젝트에 붙여 SerializeField로 연결 (architecture.md R3).
-/// 시작·정지 시점은 VivoxManager가 지시한다 — 이 부품은 자기 정리를 따로 예약하지 않는다.
+/// 로컬 플레이어가 움직일 때만 Vivox 근접 채널에 3D 위치를 보고하는 VivoxManager 부품.
 /// </summary>
 public class ProximityPositionReporter : MonoBehaviour
 {
@@ -37,7 +33,6 @@ public class ProximityPositionReporter : MonoBehaviour
         m_cts?.Cancel();
     }
 
-    // 컴포넌트가 껐다 켜지면 루프도 함께 재개한다 (분리 전 VivoxManager.OnEnable/OnDisable과 같은 동작)
     private void OnEnable()
     {
         if (m_reporting)

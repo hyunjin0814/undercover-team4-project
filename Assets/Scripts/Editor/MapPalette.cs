@@ -2,20 +2,12 @@ using System;
 using UnityEngine;
 
 /// <summary>
-/// 맵 격자 생성기(<see cref="MapGridBuilder"/>)가 읽는 팔레트 — <b>레이아웃 글자마다 어떤 프리팹을 깔지</b>를 담는다. (#215)
-///
-/// 프리팹을 스크립트에 박아두면 맵 하나 늘 때마다 C#을 고쳐야 한다. 그래서 배치 <b>규칙</b>만 생성기에 두고
-/// 무엇을 깔지는 전부 이쪽 에셋으로 뺐다 — 새 테마는 팔레트를 하나 더 만들어 프리팹을 끌어다 넣으면 끝이다.
-///
-/// <b>만드는 법.</b> Project 창에서 Create ▸ Map ▸ Map Palette.
-/// 레이아웃 .txt를 물리고 기호별로 프리팹을 채운 뒤, 그 팔레트를 고른 채 메뉴 Tools/맵 격자 생성.
-///
-/// Editor 폴더에 있으므로 빌드에 포함되지 않는다 — 맵 제작용 데이터이지 런타임 데이터가 아니다.
+/// 맵 격자 생성기가 읽는 팔레트 SO — 레이아웃 글자마다 깔 프리팹을 담는다.
+/// Create ▸ Map ▸ Map Palette로 만든다. 에디터 전용 데이터다.
 /// </summary>
 [CreateAssetMenu(fileName = "MapPalette", menuName = "Map/Map Palette")]
 public class MapPalette : ScriptableObject
 {
-    /// <summary>레이아웃 글자 한 자에 대응하는 배치 규칙.</summary>
     [Serializable]
     public class Entry
     {
@@ -61,7 +53,6 @@ public class MapPalette : ScriptableObject
         [SerializeField]
         private bool m_randomYaw;
 
-        /// <summary>이 규칙이 맡는 글자 — 비어 있으면 '\0'(무시된다).</summary>
         public char Symbol => string.IsNullOrEmpty(m_symbol) ? '\0' : m_symbol[0];
 
         public string Group => string.IsNullOrEmpty(m_group) ? "Tiles" : m_group;
@@ -73,11 +64,9 @@ public class MapPalette : ScriptableObject
         public float Scale => m_scale;
         public bool RandomYaw => m_randomYaw;
 
-        /// <summary>접한 방향에 맞춰 프리팹을 돌려 놓을지 — 연석 프리팹이 채워져 있을 때만.</summary>
         public bool UsesEdgeFacing => m_edgePrefabs != null && m_edgePrefabs.Length > 0;
     }
 
-    /// <summary>경계벽 — 조각을 쌓아 한 짝을 세우고, 물리는 상자 하나가 든다.</summary>
     [Serializable]
     public class WallSettings
     {
@@ -89,11 +78,7 @@ public class MapPalette : ScriptableObject
         [SerializeField]
         private GameObject m_bottom;
 
-        [Tooltip(
-            "도로가 벽에 닿는 자리에 아래 조각 대신 세울 게이트 — 비우면 그냥 벽이 이어진다.\n"
-                + "'연석이 향하는 기호'(보통 R·C)와 맞닿은 벽 한 짝마다 하나씩 들어간다. 도로가 두 칸 폭이면 두 짝이 선다.\n"
-                + "아래 조각과 같은 축 규약(로컬 +X 두께, -Z 길이 한 칸)을 지키는 프리팹을 넣을 것."
-        )]
+        [Tooltip("도로가 벽에 닿는 자리에 세울 게이트 — 비우면 벽이 이어진다. 벽 조각과 같은 축 규약을 따를 것")]
         [SerializeField]
         private GameObject m_gate;
 
@@ -128,23 +113,12 @@ public class MapPalette : ScriptableObject
         [SerializeField]
         private GameObject m_column;
 
-        [Tooltip(
-            "벽면을 칸 경계보다 안쪽으로 당기는 거리(m).\n"
-                + "0으로 두면 벽이 바닥 타일의 끝선에 딱 붙는데, 바닥 타일은 두께가 얇아서 벽 밑을 내려다보면 "
-                + "타일 옆면 너머로 바닥 밑이 비친다. 조금 당겨 바닥 위로 물리면 가려진다.\n"
-                + "기둥에는 적용되지 않는다 — 기둥은 원래 벽면보다 앞으로 튀어나와 있어 이음매를 이미 덮고, "
-                + "모서리에서 두 벽이 서로 다른 방향으로 당겨져 기둥이 둘로 어긋나는 것도 막는다."
-        )]
+        [Tooltip("벽면을 칸 경계보다 안쪽으로 당기는 거리(m) — 바닥 타일 옆면이 비치는 것을 가린다. 기둥엔 미적용")]
         [SerializeField]
         private float m_inset = 0.3f;
 
         [Header("물리 껍질")]
-        [Tooltip(
-            "끄면 프리팹의 콜라이더를 그대로 쓴다.\n"
-                + "켜면 조각들의 콜라이더를 끄고 아래 치수의 BoxCollider가 대신 막는다 — 이 팩의 콜리전 껍질은 "
-                + "렌더 메시에서 구운 볼록 껍질이라 벽의 '평평한' 면조차 수직이 아니고(격리벽 실측 88도), "
-                + "그만큼 물리가 보이는 면과 어긋난다. 넘으면 안 되는 경계에는 켜 두는 편이 낫다."
-        )]
+        [Tooltip("켜면 조각 콜라이더를 끄고 아래 치수의 BoxCollider로 막는다. 끄면 프리팹 콜라이더를 그대로 쓴다")]
         [SerializeField]
         private bool m_useBoxCollider = true;
 
@@ -176,7 +150,6 @@ public class MapPalette : ScriptableObject
         public float Height => m_height;
         public float ColumnWidth => m_columnWidth;
 
-        /// <summary>세울 조각이 하나라도 있는가 — 전부 비어 있으면 경계를 만들지 않는다.</summary>
         public bool HasAnyPiece => m_bottom != null || m_top != null || m_cap != null || m_column != null;
 
         public bool IsWallSymbol(char symbol) => Symbols.IndexOf(symbol) >= 0;

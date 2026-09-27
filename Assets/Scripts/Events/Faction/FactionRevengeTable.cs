@@ -1,8 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// 라운드별 세력 복수대 인원 표 (#721). 조회 규약은 <see cref="RoundQuotaTable"/>과 같다 —
-/// 첫 항목이 1라운드, 표 끝을 넘으면 마지막 행을 유지한다. 수치는 보류 항목이라 에셋으로 뺀다 (GDD 12장).
+/// 라운드별 세력 복수대 인원 표 SO. 표 끝을 넘으면 마지막 행을 유지한다.
 /// </summary>
 [CreateAssetMenu(fileName = "FactionRevengeTable", menuName = "Undercover/Events/Faction Revenge Table")]
 public class FactionRevengeTable : ScriptableObject
@@ -11,7 +10,6 @@ public class FactionRevengeTable : ScriptableObject
     [Min(1)]
     [SerializeField] private int[] m_memberCounts = { 2, 3, 4 };
 
-    /// <summary>표에 굴릴 행이 있는가 — 비어 있으면 호출부는 자기 인스펙터 값을 쓴다.</summary>
     public bool HasRows => m_memberCounts != null && m_memberCounts.Length > 0;
 
     /// <summary>N라운드의 복수대 인원. 표가 비었거나 값이 0 이하면 <paramref name="fallback"/>.</summary>

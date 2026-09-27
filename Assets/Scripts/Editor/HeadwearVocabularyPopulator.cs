@@ -6,24 +6,8 @@ using UnityEngine.Localization;
 using UnityEngine.Localization.Tables;
 
 /// <summary>
-/// 모자 어휘 배선 (#619) — 메뉴: Tools/모자 어휘 배선
-///
-/// 모자 축을 아래 표대로 통째로 다시 쓴다. <see cref="HairVocabularyPopulator"/>와 같은 이유로 코드에 표를 둔다.
-///
-/// <b>값 묶음을 계산하지 않고 후보를 전부 별개 값으로 올렸다 (값 7 → 19).</b> 모자는 실루엣이 아니라
-/// 실제 색으로 굽는 축이라(문서 §13-2) 형태가 닮아도 색이 갈린다 — 굽기 로그의 쌍별 측정에서
-/// 24장 중 구분 문턱(12%) 미만인 쌍이 <b>0개</b>였고 최근접이 34칸(13.3%)이다. 수염(최근접 15칸)·
-/// 안경(36칸)에서 받아들인 거리보다 넉넉하다.
-/// 나중에 두 값이 너무 닮았다는 것이 눈에 띄면 <c>ExcludeFromMontage</c>만 켜면 되므로(묶음머리와 같은 수법)
-/// 배열을 건드리지 않고 수습된다.
-///
-/// 값 [0]~[6]의 자리는 고정이다 — <c>AppearanceModelCatalog</c>의 <c>HeadwearIndex</c>가 이 번호를 가리킨다.
-/// 새 값은 뒤에만 붙였다.
-///
-/// 이름은 128px 비교 시트로 메시를 눈으로 보고 붙였다(팩 이름이 번호뿐이라 그 길밖에 없다).
-/// 이름은 이제 디버그 로그용이라 <b>이름 키를 바꿔도 인덱스는 안 움직인다.</b>
-///
-/// 배선 후에는 <c>Tools/몽타주 레이어 굽기</c>로 레이어를 다시 구워야 새 값의 그림이 생긴다.
+/// 모자 외형 축을 코드에 정의한 표대로 다시 쓴다. 메뉴: Tools/모자 어휘 배선.
+/// 값 [0]~[6]은 AppearanceModelCatalog가 참조하므로 새 값은 뒤에만 붙인다.
 /// </summary>
 public static class HeadwearVocabularyPopulator
 {
@@ -33,7 +17,6 @@ public static class HeadwearVocabularyPopulator
 
     private const string k_table = "NpcTable";
 
-    /// <summary>값 하나 — 이름 키(+없으면 새로 팔 번역), 틴트 색, 그 값이 쓰는 메시들(0번이 몽타주 대표).</summary>
     private readonly struct Value
     {
         public readonly string Key;
@@ -54,10 +37,6 @@ public static class HeadwearVocabularyPopulator
         }
     }
 
-    // 순서가 곧 인덱스다. [0]~[6]은 기존 자리·기존 틴트 색 그대로다 — 카탈로그가 가리키는 뜻이 바뀌면 안 된다.
-    //
-    // 새 값은 틴트를 안 건다(흰색 = 메시 원색). 08-12 시트를 '실물 색으로' 구워 34칸을 확인한 것이 원색 기준이라,
-    // 색을 새로 지어내면 그 측정이 무효가 된다.
     private static readonly Value[] s_values =
     {
         new Value("Npc.Appearance.None", "없음", "None", Color.white, false),
@@ -86,7 +65,6 @@ public static class HeadwearVocabularyPopulator
             false,
             k_generic + "Hat_02"
         ),
-        // 후드는 어느 팩에도 부착물이 없다 — SciFi 13번 모델이 메시에 구워 쓰는 값이라 자리만 지킨다
         new Value(
             "Npc.Appearance.Headwear.Hood",
             "후드",
@@ -94,8 +72,6 @@ public static class HeadwearVocabularyPopulator
             new Color(0.4f, 0.35f, 0.3f, 1f),
             true
         ),
-        // PS 헤드셋 둘을 여기 묶었다 — 헤드셋이 안경 축(바이저)과 모자 축으로 갈려 있던 것을 이쪽으로 모은다.
-        // 안경 축 '바이저'에 간 G_Headset_01은 눈을 덮는 판이라 그대로 둔다
         new Value(
             "Npc.Appearance.Headwear.Headphones",
             "헤드폰",
@@ -106,8 +82,6 @@ public static class HeadwearVocabularyPopulator
             k_police + "Headset_01",
             k_police + "Headset_02"
         ),
-        // SciFi 전용을 껐다 — 검은 헬멧에 투명 바이저뿐이라 경찰 표식이 없어 시민이 써도 아군과 안 섞인다.
-        // SciFi 모델이 이 값을 쓰는 것은 그대로고, Generic 시민도 이제 뽑는다
         new Value(
             "Npc.Appearance.Headwear.Helmet",
             "헬멧",
@@ -116,16 +90,6 @@ public static class HeadwearVocabularyPopulator
             false,
             k_apocalypse + "RiotCop_Male_Helmet_01"
         ),
-
-        // ── 여기부터 새 값 (PoliceStation 5 + Apocalypse 7) ──
-        //
-        // 이름은 128px 비교 시트를 보고 붙였다. 머리 축과 같은 방식이다 — 값이 곧 이름은 아니고,
-        // 그림으로 갈리는 값이 같은 이름을 나눠 쓴다([9]·[15] 챙 넓은 모자, [2]·[16] 캡).
-        // 말은 갈래를 가리키고 후보를 좁히는 것은 그림이 한다.
-        //
-        // 경찰 표식이 있는 여섯(PS Hat_01·02 정모, Hat_03 순경 헬멧, Hat_04 POLICE 캡,
-        // Helmet_01·04 POLICE 진압 헬멧)은 뺐다 — 플레이어가 로봇 경찰이라 시민이 그 표식을 달면
-        // 화면에서 아군과 섞인다. 경찰로 읽히더라도 표식이 없는 것(베레모·전술 헬멧·챙 넓은 모자)은 남겼다.
 
         new Value("Npc.Appearance.Headwear.BrimHat", "챙모자", "Brim hat", Color.white, false, k_police + "Hat_05"),
         new Value("Npc.Appearance.Headwear.Beret", "베레모", "Beret", Color.white, false, k_police + "Hat_06"),
@@ -187,7 +151,6 @@ public static class HeadwearVocabularyPopulator
             false,
             k_apocalypse + "Sheriff_Male_Hat_01"
         ),
-        // 기존 [2]와 같은 이름을 쓴다 — 형태는 캡이고 색만 다르다
         new Value(
             "Npc.Appearance.Headwear.Cap",
             "캡",
@@ -214,8 +177,6 @@ public static class HeadwearVocabularyPopulator
         ),
     };
 
-    // 한 번 팠다가 버린 이름 키 — 첫 배선에서 메시 번호를 그대로 옮겼던 자리표시(PS 모자 1 …)와,
-    // 경찰 표식 때문에 뺀 값들의 이름이다. 지우지 않으면 안 쓰는 키가 NpcTable에 남는다.
     private static readonly string[] s_retiredKeys =
     {
         "Npc.Appearance.Headwear.PsHat1",

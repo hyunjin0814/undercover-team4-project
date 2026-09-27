@@ -4,10 +4,8 @@ using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// 상점 구매품 배달 (#182). 서버가 게임 씬 진입 시 팀 구매 목록(ShopPurchases)을 훑어 이번 라운드 몫을
-/// 다시 지급한다 — 소지형은 DeliveryPad(#824)가 있으면 그 위에 배달 상자(DeliveryCrate)를 놓고 열 때
-/// 아이템이 나오게 하며, 없으면(Tutorial 등) 본부 내부 지점에 직접 스폰한다. 설치형은 본부 씬
-/// 인스턴스를 켠다(#108). 매 라운드 다시 배달하는 이유는 상점 복귀 시 전량 회수되기 때문(#370).
+/// 게임 씬 진입 시 서버가 팀 구매 목록의 이번 라운드 몫을 배달한다.
+/// 소지형은 배달 상자(또는 본부 지점)로, 설치형은 본부 씬 인스턴스를 켠다.
 /// </summary>
 public class ShopDelivery : MonoBehaviour
 {
@@ -41,7 +39,6 @@ public class ShopDelivery : MonoBehaviour
         DeliverAsync().Forget();
     }
 
-    // NGO 메시지 처리 도중 스폰하면 뒤이어 접속하는 클라의 씬 동기화가 중복 스폰으로 깨진다.
     private async UniTaskVoid DeliverAsync()
     {
         await UniTask.NextFrame(this.GetCancellationTokenOnDestroy());
@@ -124,10 +121,8 @@ public class ShopDelivery : MonoBehaviour
             ItemBase item = Instantiate(itemPrefab, position, Quaternion.identity);
             WorldItemPickup.SettleOnGround(item.gameObject, position.y);
 
-            // 구매품 표식 — 소매치기에게 잃으면 구매 목록에서도 빼야 한다 (#303)
             item.gameObject.AddComponent<ShopDeliveredItem>().SourcePrefab = itemPrefab;
 
-            // 아이템은 씬을 넘어 살아남는 관례(PlayerLoadout 지급과 동일) — 회수는 상점 복귀 시 일괄 처리한다.
             item.NetworkObject.Spawn(destroyWithScene: false);
         }
 

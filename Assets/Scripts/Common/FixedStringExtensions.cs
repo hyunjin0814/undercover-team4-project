@@ -1,9 +1,7 @@
 using Unity.Collections;
 
 /// <summary>
-/// string → FixedString 변환 공용 유틸 (#258).
-/// FixedString은 용량 초과 시 예외를 던지므로 전부 잘라 담는 방식으로 통일한다.
-/// null은 빈 문자열로 취급한다.
+/// string을 FixedString으로 변환하는 공용 확장 — 용량을 넘으면 잘라 담고, null은 빈 문자열로 취급한다.
 /// </summary>
 public static class FixedStringExtensions
 {

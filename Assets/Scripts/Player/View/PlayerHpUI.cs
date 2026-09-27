@@ -2,15 +2,7 @@ using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// 로컬 플레이어의 HP를 좌하단 HP 바로 표시한다. (#691, 이전에는 텍스트 한 줄이었다)
-/// <see cref="PlayerReviveHud"/>의 관례를 따라 오너 전용으로 동작한다.
-///
-/// <b>여기는 판단, 그림은 <see cref="HpBarView"/>.</b> <see cref="PlayerHitView"/>가
-/// <see cref="DamageVignetteUI"/>를 모는 것과 같은 분리다 — "내가 오너인가"·"지금 맞았는가"는
-/// 플레이어 오브젝트의 사정이고, 뷰는 비율과 피해량만 받아 그린다.
-///
-/// 오프라인(비네트워크) Play 테스트에서도 동작한다 — 구독을 Awake에서 걸고, 스폰 전에는
-/// <see cref="IsLocalOwner"/>가 자기를 오너로 취급한다 (PlayerHitView와 같은 방침).
+/// 로컬 플레이어의 HP를 좌하단 HpBarView로 표시한다. 오너 전용.
 /// </summary>
 [RequireComponent(typeof(PlayerHealth))]
 public class PlayerHpUI : NetworkBehaviour
@@ -22,11 +14,6 @@ public class PlayerHpUI : NetworkBehaviour
 
     private PlayerHealth m_health;
 
-    // 스폰 전(오프라인)에는 IsOwner가 늘 false다 — 그때는 자기 화면이 곧 내 화면이므로 오너로 본다.
-    // (PlayerHitView.IsLocalOwner와 같은 형태)
-    //
-    // ⚠ <b>스폰 시점의 오너를 굳혀서 쓴다.</b> 사망 중에는 소유권이 서버로 넘어가므로(#763 A-1)
-    // IsOwner를 매번 물으면 호스트에서 남의 시체가 "내 몸"이 되어 내 HUD가 그쪽 HP를 따라간다.
     private bool IsLocalOwner => !IsSpawned || m_isLocalPlayer;
 
     private bool m_isLocalPlayer;
@@ -38,12 +25,8 @@ public class PlayerHpUI : NetworkBehaviour
 
     public override void OnNetworkSpawn()
     {
-        m_isLocalPlayer = IsOwner; // 라운드 중에 뒤집히는 값이라 여기서 굳힌다 (#763 A-1)
+        m_isLocalPlayer = IsOwner;
 
-        // 남의 플레이어 게이지가 내 화면에 그려지지 않게 오너의 것만 남긴다.
-        // 예전에는 컴포넌트를 끄기만 했는데, 그러면 남의 프리팹에 딸려 온 통이 화면에 그대로 남는다.
-        // 통을 끄고 컴포넌트도 함께 끈다 — InventoryBarView가 "PlayerHpUI 관례"로 인용하는 처리이고,
-        // 정작 이쪽이 지키지 않고 있었다. 꺼 두면 비오너에서 폴링(Update)도 돌지 않는다.
         if (IsOwner)
             return;
 
@@ -58,8 +41,6 @@ public class PlayerHpUI : NetworkBehaviour
         if (!IsLocalOwner || m_gauge == null || m_health == null)
             return;
 
-        // 체력은 이미 동기화 값이라 이벤트에 실을 이유가 없어 폴링한다 — PlayerHitView가 저체력
-        // 글리치를 폴링으로 모는 것과 같은 방침.
         m_gauge.SetHealth(m_health.CurrentHp, m_health.MaxHp);
     }
 }

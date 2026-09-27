@@ -6,21 +6,8 @@ using UnityEditor;
 using UnityEngine;
 
 /// <summary>
-/// 세이브 편집기 (#373) — '이어하기'를 테스트할 판을 손으로 만들어 올리는 개발 도구. 메뉴: Tools/세이브 편집기
-///
-/// 이 게임의 세이브는 로컬 파일이 아니라 UGS Cloud Save의 키 하나이고, 저장소가 로그인 계정 단위다 —
-/// 그래서 <b>플레이 모드에서 로그인이 끝난 뒤에만</b> 읽고 쓸 수 있다(타이틀 화면이면 조건이 갖춰져 있다).
-/// 쓰는 경로는 <see cref="SaveService.DevOverwriteAsync"/> 하나뿐이라 실제 저장과 키·직렬화가 같다.
-/// 즉 여기서 만든 세이브는 진짜로 플레이해서 만든 세이브와 구분되지 않는다.
-///
-/// <b>사용 순서</b>
-///  ① Play → 타이틀에서 로그인이 끝나기를 기다린다
-///  ② 이 창에 값을 채우고 '이 값으로 덮어쓰기'
-///  ③ Play를 껐다 켠다 → 타이틀의 '이어하기'가 그 값으로 켜진다
-/// ③이 필요한 이유: 세이브 유무 조회(SessionPanel)는 로그인 직후 한 번만 돈다.
-///
-/// 세이브는 <b>지금 로그인한 계정의 것</b>이다. 다른 계정으로 방을 만들면 보이지 않고,
-/// 지갑도 PlayerId가 일치해야 복원된다 — 그래서 '내 PlayerId 추가' 버튼이 있다.
+/// 이어하기 테스트용 세이브를 직접 편집해 Cloud Save에 올리는 개발 창. 메뉴: Tools/세이브 편집기.
+/// 플레이 모드에서 로그인 후에만 동작하며, 덮어쓴 뒤 Play를 재시작해야 반영된다.
 /// </summary>
 public class SaveDevWindow : EditorWindow
 {
@@ -48,13 +35,10 @@ public class SaveDevWindow : EditorWindow
     [MenuItem("Tools/세이브 편집기")]
     private static void Open() => GetWindow<SaveDevWindow>("세이브 편집기");
 
-    // 로그인은 런타임 상태다 — 에디트 모드에서는 App을 아예 건드리지 않는다.
     private static AuthBootstrap Auth => Application.isPlaying ? App.Net.Auth : null;
 
     private static bool IsReady => Auth != null && Auth.IsSignedIn;
 
-    // '지금 판 상태로 저장'만 조건이 하나 더 붙는다 — 세션 밖(타이틀)에서 부르면 상주 홀더가 아직 없어
-    // 기본값(1라운드·자금 0·빈 구매 목록)이 '저장 완료' 로그와 함께 세이브를 덮는다. 실패로 보이지도 않는다.
     private static bool CanSaveLive
     {
         get
@@ -107,7 +91,6 @@ public class SaveDevWindow : EditorWindow
         );
     }
 
-    // 소지형 — 세이브에 적히는 id는 프리팹 이름이라(SaveItemLookup) 프리팹을 그대로 끌어다 놓게 한다.
     private void DrawCarried()
     {
         EditorGUILayout.Space();
@@ -127,7 +110,6 @@ public class SaveDevWindow : EditorWindow
         if (removeAt >= 0)
             m_carried.RemoveAt(removeAt);
 
-        // 빈 칸에 프리팹을 떨구면 목록에 추가된다(칸 자신은 계속 비어 있다). 같은 아이템 중복도 그대로 허용.
         var added = (ItemBase)EditorGUILayout.ObjectField("추가", null, typeof(ItemBase), false);
         if (added != null)
             m_carried.Add(added);
@@ -135,8 +117,6 @@ public class SaveDevWindow : EditorWindow
         WarnUnregistered();
     }
 
-    // 복원은 NGO 등록 명부에 있는 프리팹만 된다 — 미등록 프리팹은 올라가기는 하고 복원 시점에 조용히 사라진다.
-    // 명부는 런타임 상태라 플레이 중에만 물어볼 수 있다(선형 탐색이지만 목록이 짧아 그릴 때마다 훑어도 된다).
     private void WarnUnregistered()
     {
         if (!Application.isPlaying)
@@ -204,7 +184,6 @@ public class SaveDevWindow : EditorWindow
 
         EditorGUILayout.BeginHorizontal();
 
-        // 지갑 복원은 PlayerId가 일치해야 걸린다 — 손으로 적다 틀리면 "새로 합류한 사람"으로 취급돼 0에서 시작한다.
         using (new EditorGUI.DisabledScope(!IsReady))
         {
             if (GUILayout.Button("내 PlayerId 추가"))
@@ -228,7 +207,6 @@ public class SaveDevWindow : EditorWindow
 
             EditorGUILayout.BeginHorizontal();
 
-            // 창에 적어 둔 값을 통째로 날리는 방향이라 한 번 묻는다.
             if (
                 GUILayout.Button("클라우드에서 불러오기")
                 && EditorUtility.DisplayDialog(
@@ -242,7 +220,6 @@ public class SaveDevWindow : EditorWindow
                 LoadAsync().Forget();
             }
 
-            // 지금 진행 중인 판을 그대로 굳힌다 — 실제 저장 경로(SaveAsync)다. 세션이 서 있을 때만 켜진다.
             using (new EditorGUI.DisabledScope(!CanSaveLive))
             {
                 if (GUILayout.Button("지금 판 상태로 저장"))

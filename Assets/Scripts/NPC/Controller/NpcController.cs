@@ -6,12 +6,9 @@ using Random = UnityEngine.Random;
 
 /// <summary>
 /// NPC 두뇌 — FSM/NavMesh 구동과 상태 동기화를 담당한다.
-/// 이동·상태 판단은 서버 전용(서버 권위)이고, 클라이언트는
-/// NetworkTransform(위치)과 NetworkVariable(상태)로 동기화된 결과만 표현한다. (이슈 #56)
-/// 네트워크를 켜지 않은 로컬 Play 테스트에서는 기존처럼 단독으로 동작한다.
+/// 이동·상태 판단은 서버 전용이고, 클라는 NetworkTransform·NetworkVariable 결과만 표현한다.
 /// </summary>
 [RequireComponent(typeof(NavMeshAgent))]
-// 도메인 부품 10개 — 누락 시 그 도메인 경로가 NRE로 죽는다 (#503)
 [RequireComponent(typeof(NpcCustody))]
 [RequireComponent(typeof(NpcDeath))]
 [RequireComponent(typeof(NpcHealth))]
@@ -42,7 +39,6 @@ public class NpcController : NetworkBehaviour
     private NpcStateMachine m_stateMachine;
     private NpcRepathScheduler m_repath;
 
-    // 도메인 부품 — 같은 GameObject에 붙는다. [RequireComponent]로 누락을 막는다. (#503)
     private NpcCustody m_custody;
     private NpcDeath m_death;
     private NpcHealth m_health;
@@ -52,84 +48,53 @@ public class NpcController : NetworkBehaviour
     private NpcReaction m_reaction;
     private NpcRopeDrag m_rope;
 
-    // 래그돌 — 밧줄 틱을 돌릴지 가르는 데 쓴다. 리그 없는 프리팩에서는 null이다 (#572).
     private NpcRagdoll m_ragdoll;
     private NpcStandUp m_standUp;
     private NpcStun m_stun;
 
-    // 라운드 종료 정지(freeze) 플래그 — 서버(또는 오프라인)에서만 의미. 켜지면 FSM/이동을 멈춘다.
     private bool m_frozen;
 
-    // 프리팹이 정한 통행 마스크 — Awake에서 1회 확정하고 이후 <b>절대 바뀌지 않는다</b> (#634 후속).
     private int m_prefabAreaMask;
 
-    // 지금 추가로 열어 준 영역(Jail) — 유치장에 드나드는 동안만 얹힌다 (#744, SetGrantedAreas)
     private int m_grantedAreas;
 
-    // 호출부가 요구한 영역 — m_grantedAreas와 다르면 아직 반영하지 못한 것이다 (TickAreaGrant)
     private int m_requestedAreas;
     private float m_areaGrantProbeSeconds;
 
-    // 도로 위라 아직 마스크를 좁히지 못했다 — 벗어나는 즉시 좁힌다 (TickRoadEgress)
     private bool m_roadEgressPending;
     private float m_roadEgressProbeSeconds;
 
-    // 서버 권위 FSM 상태 — 서버만 쓰고 모든 클라이언트가 읽는다 (#56)
     private readonly NetworkVariable<NpcState> m_networkState = new NetworkVariable<NpcState>(NpcState.Idle);
 
     public NavMeshAgent Agent => m_agent;
     public NpcStateMachine StateMachine => m_stateMachine;
 
-    /// <summary>재탐색·훑기 주기 게이트 — 상태 클래스가 "지금 다시 계산할 때인가"를 묻는다. (#573)</summary>
     public NpcRepathScheduler Repath => m_repath;
 
-    // 튜닝 SO는 코어가 계속 들고 부품이 여기서 읽는다 (계획서 § 3-3).
-    // 부품은 같은 어셈블리라 internal로 족하다. 뒤 주석은 읽는 부품이다. (#503)
-    internal NpcChaseConfig ChaseConfig => m_chaseConfig; // NpcDutyAgent — 격퇴 도주 시간
-    internal NpcResistConfig ResistConfig => m_resistConfig; // NpcReaction — 위협 탐색 반경
-    internal NpcStunConfig StunConfig => m_stunConfig; // NpcStun — 지속 시간·기상 클립 / NpcHealth — 쓰러짐 기절 시간
-    internal NpcCommonConfig CommonConfig => m_commonConfig; // NpcHealth·NpcKnockback·NpcRopeDrag
-    internal NpcRopeDragConfig RopeDragConfig => m_ropeDragConfig; // NpcRopeDrag — 길이·장력
+    internal NpcChaseConfig ChaseConfig => m_chaseConfig;
+    internal NpcResistConfig ResistConfig => m_resistConfig;
+    internal NpcStunConfig StunConfig => m_stunConfig;
+    internal NpcCommonConfig CommonConfig => m_commonConfig;
+    internal NpcRopeDragConfig RopeDragConfig => m_ropeDragConfig;
 
-    /// <summary>
-    /// 현재 NPC 상태. 네트워크 세션 중에는 동기화된 값이라 클라이언트에서도 안전하게 읽을 수 있다.
-    /// (StateMachine.CurrentState는 서버에서만 갱신되므로 외부 코드는 반드시 이 프로퍼티를 읽을 것)
-    /// </summary>
     public NpcState CurrentState => IsSpawned ? m_networkState.Value : m_stateMachine.CurrentState;
 
-    /// <summary>상태 변경 이벤트 — 서버·클라이언트 모든 피어에서 발생한다. 애니메이션 등 표현 계층이 구독. (#56)</summary>
     public event Action<NpcState> OnStateChanged;
 
-    // 도메인 부품 접근자 — 호출부는 npc.Rope.IsRoped처럼 부품을 거친다 (계획서 § 3-1). (#503)
-    /// <summary>신병 — 연행·인계 표식·수감·감옥 퇴장·반출 표식 (#59/#228/#537)</summary>
     public NpcCustody Custody => m_custody;
-    /// <summary>사망 — 체력 0에서 되돌아오지 않는 끝으로 넘긴다 (#571)</summary>
     public NpcDeath Death => m_death;
-    /// <summary>체력 — HP·피해 적용·회복과 <see cref="IDamageable"/> 구현 (#366)</summary>
     public NpcHealth Health => m_health;
-    /// <summary>침입 — 목표·해제 시간·진행 이벤트 (#231)</summary>
     public NpcIntruder Intruder => m_intruder;
-    /// <summary>넉백 — 외력 비행과 착지 후 복귀 상태 (#232)</summary>
     public NpcKnockback Knockback => m_knockback;
-    /// <summary>특수 임무 — 오검거·납치·소매치기의 수용·추격·수렴·호송 (#277~#279/#371/#303)</summary>
     public NpcDutyAgent Penalty => m_penalty;
-    /// <summary>래그돌 — 리그가 없는 프리팹에서는 null이다 (#571/#768)</summary>
     public NpcRagdoll Ragdoll => m_ragdoll;
-    /// <summary>검거 반응 — 위협 대상·도주·저항·스윙 (#76/#205/#213/#220)</summary>
     public NpcReaction Reaction => m_reaction;
-    /// <summary>밧줄 — 묶임·끌기·무게 (#269/#369/#398)</summary>
     public NpcRopeDrag Rope => m_rope;
-    /// <summary>기상 예약 — 줄이 풀리며 일어나는 구간과 재포획 창 (#513)</summary>
     public NpcStandUp StandUp => m_standUp;
-    /// <summary>기절 — 스턴 오버레이·진입·해제 (#292)</summary>
     public NpcStun Stun => m_stun;
 
-    // 살아 있는 인스턴스 목록 — 반경 안의 NPC를 찾는 쪽(JailIntake)이 씬 전체를 뒤지지 않게 한다
-    // (PlayerIncapacitation.All과 같은 패턴, #961). 풀에 들어가 꺼진 NPC는 목록에서 빠진다.
-    // ⚠ 컴포넌트만 비활성(enabled=false)이어도 빠진다 — 집합 정의는 PlayerHealth.All 주석 참고.
     private static readonly System.Collections.Generic.List<NpcController> s_instances = new();
 
-    /// <summary>씬에 살아 있는 모든 NPC — 자주 순회해도 되는 무할당 목록. (#961)</summary>
     public static System.Collections.Generic.IReadOnlyList<NpcController> All => s_instances;
 
     private void OnEnable() => s_instances.Add(this);
@@ -139,11 +104,8 @@ public class NpcController : NetworkBehaviour
     private void Awake()
     {
         m_agent = GetComponent<NavMeshAgent>();
-        m_lastProbePosition = transform.position; // 굳음 판정의 첫 비교 기준 (#913)
+        m_lastProbePosition = transform.position;
 
-        // 프리팹이 정한 통행 마스크를 <b>좁히기 전에</b> 잡아 둔다 (#634 후속).
-        // 되돌릴 때 NavMesh.AllAreas로 복구하면 프리팹이 일부러 뺀 영역(Jail)까지 되살아나고,
-        // 좁아진 뒤의 m_agent.areaMask를 기준으로 삼으면 한 번 좁힌 뒤 영영 못 되돌린다.
         m_prefabAreaMask = m_agent.areaMask;
 
         m_custody = GetComponent<NpcCustody>();
@@ -158,7 +120,6 @@ public class NpcController : NetworkBehaviour
         m_standUp = GetComponent<NpcStandUp>();
         m_stun = GetComponent<NpcStun>();
 
-        // 상태보다 먼저 만든다 — 상태 클래스가 생성자에서 게이트를 잡을 수 있게. 위상은 여기서 한 번만 흔뿌려진다 (#573)
         m_repath = new NpcRepathScheduler(m_repathConfig, transform);
 
         m_stateMachine = new NpcStateMachine();
@@ -178,17 +139,9 @@ public class NpcController : NetworkBehaviour
         m_stateMachine.AddState(NpcState.Sprinting, new NpcSprintState(this, m_fleeConfig));
         m_stateMachine.AddState(NpcState.Smuggling, new NpcSmuggleState(this));
 
-        // 통행 정책은 새 상태의 Enter()가 목적지를 잡기 <b>전에</b> 걸려야 한다 — 그래서
-        // OnStateChanged가 아니라 OnBeforeEnter다 (#634 후속)
-        //
-        // <b>두 구독자 사이의 순서는 계약이 아니다</b> (#744). OnBeforeEnter는 구독자를 <b>전부</b>
-        // 돌린 뒤에 Enter()로 넘어가고(NpcStateMachine.ChangeState), 반납이 실제로 값을 바꾸면
-        // ApplyGrantedAreas가 스스로 ApplyRoadPolicy를 다시 부른다 — 어느 쪽을 먼저 걸어도 Enter()가
-        // 보는 마스크는 같다. 반납을 앞에 둔 것은 마스크를 두 번 쓰지 않으려는 것뿐이다.
         m_stateMachine.OnBeforeEnter += RevokeGrantedAreasOnCityLife;
         m_stateMachine.OnBeforeEnter += ApplyRoadPolicy;
 
-        // FSM 전이(서버/오프라인에서만 발생)를 동기화 변수 또는 로컬 이벤트로 흘려보낸다
         m_stateMachine.OnStateChanged += HandleFsmStateChanged;
     }
 
@@ -202,8 +155,6 @@ public class NpcController : NetworkBehaviour
         }
         else
         {
-            // 클라이언트의 이동은 NetworkTransform이 담당 — NavMeshAgent가 켜져 있으면
-            // 동기화로 옮겨진 위치를 NavMesh 위로 되돌리려 해 서로 싸운다
             m_agent.enabled = false;
         }
     }
@@ -215,8 +166,6 @@ public class NpcController : NetworkBehaviour
 
     private void Start()
     {
-        // 오프라인 폴백 — 네트워크 세션 없이 Play한 로컬 테스트에서는 기존처럼 단독 구동한다.
-        // (네트워크 스폰된 경우 OnNetworkSpawn이 Start보다 먼저 불리므로 여기는 건너뛴다)
         if (!IsSpawned)
             InitBehavior();
     }
@@ -224,17 +173,12 @@ public class NpcController : NetworkBehaviour
     /// <summary>배회 파라미터 초기화 + FSM 시동. 서버(또는 오프라인)에서 1회 호출.</summary>
     private void InitBehavior()
     {
-        // 개체마다 걷는 속도를 다르게 해 군중이 같은 리듬으로 움직이는 것을 깨준다
         m_agent.speed *= Random.Range(m_commonConfig.SpawnSpeedMultiplierMin, m_commonConfig.SpawnSpeedMultiplierMax);
 
-        // 회피 우선순위도 개체마다 다르게 — 전원이 같은 값이면 정면으로 마주친 둘이
-        // 대칭적으로 서로 양보하다가 교착에 빠진다 (값이 낮은 쪽이 우선권을 가진다)
         m_agent.avoidancePriority = Random.Range(30, 71);
 
-        // 체력은 FSM 시동 전에 채운다 — 첫 틱부터 CurrentHp가 유효해야 한다 (#366)
         m_health.InitHealth();
 
-        // 무게 추첨 — 라운드 내내 유지된다(재검거·탈옥 후에도 같은 값). (#398)
         m_rope.InitDragWeight();
 
         m_stateMachine.ChangeState(NpcState.Idle);
@@ -242,80 +186,37 @@ public class NpcController : NetworkBehaviour
 
     private void Update()
     {
-        // FSM/NavMesh는 서버 전용 — 클라이언트는 동기화된 위치·상태만 표현한다 (#56)
         if (IsSpawned && !IsServer)
             return;
 
-        // 라운드 종료 freeze — 서버에서 멈추면 NetworkTransform이 정지 위치를 복제해 전 피어에서 멈춘다
         if (m_frozen)
             return;
 
-        // NavMesh 밖에서 굳은 몸의 정리 — 아래 모든 게이트보다 **먼저** 돈다 (#557).
-        // 뒤로 내리면 스턴 게이트에 가려 기절한 채 굳은 NPC(=신고된 증상 그대로)에 영영 닿지 못한다.
         TickStuckOffNavMesh();
 
-        // NavMesh 밖인 동안에는 아래를 돌리지 않는다 (#913) — isStopped·SetAreaCost·remainingDistance가
-        // 전부 "not placed on a NavMesh" 예외를 던진다. 예전에는 회수 워프가 1초 만에 붙여 이 구간이
-        // 짧았지만, 지금은 정리까지 몇 초를 그대로 머문다. 그 구간은 위 정리가 끝낸다.
         if (m_agent.enabled && !m_agent.isOnNavMesh)
             return;
 
-        // 도로를 벗어나면 통행 마스크를 좁힌다 — 위 정리와 같은 이유로 게이트보다 먼저 돈다 (#634 후속).
-        // 도로 위에서 기절·넉백을 맞으면 그 구간 내내 대기 상태로 남는데, 그동안 움직이지 않으므로
-        // 판정은 계속 "도로 위"고 좁혀지지 않는다 — 깨어나 걸어 나가면 그때 좁는다.
         TickRoadEgress();
 
-        // 사망 — <b>모든 게이트보다 먼저 끝낸다</b> (#571). 죽은 몸은 아무 틱도 돌지 않는다.
-        //
-        // 다른 게이트들과 달리 여기서 대신 돌릴 Tick이 없다: 시체의 표현은 래그돌(NpcRagdoll)이
-        // 자기 Update에서 로컬로 굴리고, 그건 클라에서도 돌아야 해서(이 Update는 서버 전용이다)
-        // 애초에 여기 있을 수 없다.
-        //
-        // ⚠ <b>밧줄보다 앞인 것이 이제 방어선이 아니라 사양이다</b> (#571 시체 끌기). 시체에도 줄이
-        // 걸리는데(밧줄 좌클릭), 그 줄은 <b>관절</b>(RagdollRope)이라 물리가 몸을 끌고 루트는
-        // NpcRagdoll.TickRootFollow가 따라붙인다. 아래 m_rope.Tick()은 <c>transform.position</c>을
-        // 직접 대입하는 반대편 방식이라(#369), 시체에 돌면 둘이 같은 프레임에 위치를 다퉈 시체가
-        // 떨거나 몸을 두고 루트만 날아간다. <b>갈리는 기준은 "대상이 래그돌이냐"다</b>(docs/ragdoll.md §8).
         if (m_death.IsDead)
             return;
 
-        // 미뤄 둔 Jail 통행 회수 (#744) — <b>사망 게이트 뒤</b>다. 시체는 돌려줄 통행이 없고,
-        // 앞에 두면 셀에서 죽은 수감자가 영영 끝나지 않는 회수를 매 주기 재시도한다.
-        // 기절·넉백은 이 게이트를 지나므로, 멈춰 있는 동안에도 발밑은 계속 확인된다.
         TickAreaGrant();
 
-        // 방치 회복 — 사망 게이트 뒤, 나머지 게이트보다는 앞 (#707)
         m_health.Tick();
 
-        // 밧줄 장력 — 게이트보다 **먼저** (#390). 묶인 채 기절한 대상은 스턴 오버레이를 단 채 끌려가야 하므로,
-        // 뒤로 내리면 테이저→밧줄 콤보로 잡은 대상이 그 자리에 멈춘다. (넉백과는 배타적 — StopEscort가 끌기를 정리한다)
-        //
-        // ⚠ <b>래그돌인 대상에는 돌리지 않는다</b> (#572 3단계). 위 사망 게이트 주석이 적어 둔 기준
-        // ("갈리는 기준은 대상이 래그돌이냐다")을 그대로 적용한 것이다 — 예전에는 래그돌 = 시체라
-        // 사망 게이트 하나로 같은 효과가 났지만, 기절에도 래그돌이 붙으면서 둘이 갈렸다.
-        // 래그돌인 몸은 <b>관절 밧줄</b>(RagdollRope)이 물리로 끌고 루트는 NpcRagdoll.TickRootFollow가
-        // 따라붙인다. 여기서 <c>transform.position</c>을 함께 대입하면 같은 프레임에 위치를 다퉈
-        // 몸이 떨거나 몸을 두고 루트만 날아간다.
-        //
-        // <b>return이 아니라 건너뛰기다</b> — 아래 m_stun.Tick()이 기절 타이머를 굴리므로 여기서
-        // 끊으면 끌려가는 동안 기절이 영영 안 풀린다.
         if (m_ragdoll == null || !m_ragdoll.IsRagdollActive)
             m_rope.Tick();
 
-        // 줄이 풀리며 일어나는 구간 — 밧줄 장력과 같은 이유로 아래 게이트보다 **먼저** 돈다 (#513).
-        // 뒤로 내리면 일어나는 도중 기절·넉백을 맞은 대상의 예약이 영원히 남는다.
         m_standUp.Tick();
 
-        // 넉백 비행 중에는 FSM을 돌리지 않는다 — NavMeshAgent를 꺼 둔 채라 상태 클래스가
-        // SetDestination/isStopped를 부르면 "agent not on NavMesh" 에러가 쏟아진다 (#232)
         if (m_knockback.IsKnockedBack)
         {
             m_knockback.Tick();
             return;
         }
 
-        // 스턴 오버레이 중에는 FSM을 돌리지 않는다 — 상태는 그대로 둔 채 제자리에 얼린다.
-        // 넉백 게이트 뒤에 두는 게 중요하다: 둘이 겹치면 넉백이 이긴다 (#292)
         if (m_stun.HasStunOverlay)
         {
             m_stun.Tick();
@@ -325,32 +226,28 @@ public class NpcController : NetworkBehaviour
         m_stateMachine.Tick();
     }
 
-    // 서버(또는 오프라인)의 FSM 전이를 밖으로 전파한다
     private void HandleFsmStateChanged(NpcState state)
     {
-        // 커스터디를 벗어나면 신병에 매달린 표식부터 내린다 — 전이와 같은 프레임에 맞아야 한다.
-        // 묶임(#513)은 표현(누운 자세)이, 반출(#517)은 E 분기가 이 값을 본다.
         if (state != NpcState.Escorted && state != NpcState.Captured)
         {
             m_rope.ClearTethers();
-            m_custody.SetSecuredByPlayer(false); // 도주·배회로 돌아갔다 — 더는 누구의 신병도 아니다 (#637)
-            m_custody.ClearEscortTarget(); // 사망·넉백처럼 ReleaseDrag를 안 거치는 이탈도 장부를 남기지 않는다 (#643)
+            m_custody.SetSecuredByPlayer(false);
+            m_custody.ClearEscortTarget();
         }
 
         if (!IsSpawned)
         {
-            OnStateChanged?.Invoke(state); // 오프라인 — 동기화 없이 바로 로컬 이벤트
+            OnStateChanged?.Invoke(state);
             return;
         }
 
-        // 클라이언트에서 실수로 FSM을 전이시켜도 서버 권위 변수 쓰기 예외로 터지지 않게 막는다
         if (!IsServer)
         {
             Debug.LogWarning($"NpcController: 클라이언트에서 FSM 전이 시도({state}) — 서버 권위라 무시됨", this);
             return;
         }
 
-        m_networkState.Value = state; // OnValueChanged를 거쳐 모든 피어에서 OnStateChanged가 발생한다
+        m_networkState.Value = state;
     }
 
     private void HandleNetworkStateChanged(NpcState previous, NpcState current)
@@ -358,16 +255,12 @@ public class NpcController : NetworkBehaviour
         OnStateChanged?.Invoke(current);
     }
 
-    /// <summary>기절에서 일어나기 시작할 때 발행 — 전 피어에서 발생한다(서버는 로컬 발행 + ClientRpc 중계).
-    /// 일어나는 구간은 FSM 상태가 여전히 Stunned라(그 동안 움직이지 않는다) 상태 동기화만으로는
-    /// 클라이언트가 알 수 없다 — 스윙(<see cref="NpcReaction.OnAttackSwing"/>)과 같은 순간 이벤트로 전달한다. (#269)</summary>
     public event Action OnStandUp;
 
-    /// <summary>일어나는 모션을 전 피어에 알린다 — 서버(또는 오프라인)에서만 호출한다.
-    /// 기절 해제(#269)와 밧줄 풀림(#513) 두 경로가 쓴다.</summary>
+    /// <summary>일어나는 모션을 전 피어에 알린다. 서버(또는 오프라인) 전용.</summary>
     public void RaiseStandUp()
     {
-        OnStandUp?.Invoke(); // 서버·오프라인 로컬 발행
+        OnStandUp?.Invoke();
         if (IsSpawned && IsServer)
             PlayStandUpClientRpc();
     }
@@ -375,61 +268,35 @@ public class NpcController : NetworkBehaviour
     [ClientRpc]
     private void PlayStandUpClientRpc()
     {
-        // 서버(호스트)는 위에서 이미 발행했으므로 원격 클라에서만 중계
         if (IsServer)
             return;
         OnStandUp?.Invoke();
     }
 
-    /// <summary>라운드 종료 정지 — 서버(또는 오프라인)에서 호출. FSM 틱과 NavMesh 이동을 멈춘다.
-    /// 서버에서 멈추면 NetworkTransform이 정지 위치를 복제해 모든 클라이언트에서도 멈춘 것으로 보인다.</summary>
+    /// <summary>라운드 종료 시 FSM 틱과 NavMesh 이동을 멈추거나 재개한다. 서버(또는 오프라인) 전용.</summary>
     public void SetFrozen(bool frozen)
     {
-        // FSM/이동은 서버 권위 — 클라이언트 호출은 다른 제어 메서드와 동일하게 무시한다
         if (IsSpawned && !IsServer)
             return;
 
         m_frozen = frozen;
 
-        // 에이전트를 멈춘다 — 비활성/NavMesh 밖이면 isStopped 접근이 예외를 던지므로 가드
         if (AgentReady)
             m_agent.isStopped = frozen;
     }
 
-    /// <summary>
-    /// 지금 에이전트를 <b>만져도 되는가</b> — <c>isStopped</c>·<c>SetDestination</c>·<c>ResetPath</c>는
-    /// 비활성이거나 NavMesh 밖이면 Unity가 예외를 던진다. (#557)
-    ///
-    /// ⚠ <b>"왜 못 쓰는가"가 아니라 "쓸 수 있는가"를 묻는 값이다.</b> 에이전트를 꺼 두는 구간이
-    /// 넷으로 늘었고(넉백 비행·밧줄 끌기·사망·<b>기절 래그돌</b>, #572) 앞으로도 늘 수 있어서,
-    /// 원인을 열거해 추론하면 새 구간이 생길 때마다 조용히 틀린다 —
-    /// <c>NpcEscortedState.Enter</c>가 <c>IsRoped</c>로 추론하다 정확히 그렇게 깨졌다.
-    /// </summary>
     public bool AgentReady => m_agent != null && m_agent.enabled && m_agent.isOnNavMesh;
 
-    // 워프 기준점 주변에서 NavMesh를 찾을 때의 기본 탐색 반경(m).
     private const float k_warpSnapRadius = 2f;
 
-    /// <summary>
-    /// 에이전트가 준비됐을 때만 <c>isStopped</c>를 바꾼다 (#913) — 준비되지 않은 몸에 대입하면
-    /// Unity가 "not placed on a NavMesh" 예외를 던진다.
-    ///
-    /// 상태 클래스가 직접 대입하지 않고 이 길로 오는 이유는 <b>Enter/Exit</b>다: 틱은 코어의 게이트가
-    /// 막아 주지만, 전이는 밖(피격·밧줄·이벤트)에서도 들어와 NavMesh 밖인 몸의 Enter가 그대로 돈다.
-    /// </summary>
+    /// <summary>에이전트가 준비됐을 때만 isStopped를 바꾼다.</summary>
     internal void SetAgentStopped(bool stopped)
     {
         if (AgentReady)
             m_agent.isStopped = stopped;
     }
 
-    /// <summary>
-    /// 기준점 주변에서 NavMesh 위 지점을 찾아 에이전트를 붙인다 — 붙었으면 true. (#503)
-    ///
-    /// 밧줄 놓기(#369)와 감옥 방출(#537)이 함께 쓰는 공용 유틸이라 코어에 둔다 (계획서 § 3-6) —
-    /// 부품에 딸려 보내면 "Custody가 Rope를 참조한다"는 가짜 의존이 생긴다.
-    /// 실패하면 <b>호출부가</b> 대응한다 — 대안 지점이냐 제자리냐는 도메인마다 다르다.
-    /// </summary>
+    /// <summary>origin 주변 NavMesh 지점을 찾아 에이전트를 붙인다. 붙었으면 true.</summary>
     internal bool TryWarpNear(Vector3 origin)
     {
         if (!NavMesh.SamplePosition(origin, out NavMeshHit hit, k_warpSnapRadius, NavMesh.AllAreas))
@@ -438,28 +305,19 @@ public class NpcController : NetworkBehaviour
         return m_agent.Warp(hit.position) && m_agent.isOnNavMesh;
     }
 
-    // 벽 스윕 히트 버퍼 — 스윕은 서버(또는 오프라인) 전용이라 공유해도 안전하다 (프레임마다의 할당 방지)
     private static readonly RaycastHit[] s_sweepBuffer = new RaycastHit[16];
 
-    // 이번 프레임 수평 이동 구간에 벽이 있는지 — 몸통 굵기로 훑는다.
-    // 넉백 비행(#232)과 밧줄 끌기(#369)가 함께 쓰는 공용 유틸이라 코어에 둔다 (계획서 § 3-6) —
-    // 판정만 공유하고 대응은 호출부가 정한다: 넉백은 그 자리에 떨어지고, 끌기는 벽을 따라 미끄러진다.
-    // NavMesh를 충돌 프록시로 쓰면 안 된다 — 실측(Test Scene)에서 벽이 11.8m 밖인 방향이 NavMesh
-    // 기준 2.0m에서 "막힘"으로 나왔고, 그걸 벽으로 치면 넉백이 제자리 점프가 된다 (#232).
-    // 캐릭터(플레이어·다른 NPC)는 벽으로 치지 않는다 — 플레이어 몸통이 환경과 같은 Default 레이어라
-    // 마스크로는 못 거르는데, 군중을 벽으로 오판하면 폭발 넉백이 죄다 제자리에 툭 떨어진다 (#339/#313).
     internal bool SweepHitsObstacle(Vector3 direction, float distance, out RaycastHit obstacle)
     {
         obstacle = default;
 
         float radius = m_agent.radius;
         Vector3 origin = transform.position + Vector3.up * Mathf.Max(radius, m_agent.height * 0.5f);
-        int mask = m_commonConfig.KnockbackObstacleMask & ~(1 << gameObject.layer); // 자기 콜라이더에 걸리지 않게
+        int mask = m_commonConfig.KnockbackObstacleMask & ~(1 << gameObject.layer);
 
         int count = Physics.SphereCastNonAlloc(origin, radius, direction, s_sweepBuffer, distance, mask,
                                                QueryTriggerInteraction.Ignore);
 
-        // 버퍼 포화 = 반환되지 못한 히트(그중 진짜 벽 포함 가능)가 있을 수 있다 — 나오면 확대 신호 (#313 리뷰와 동일)
         if (count == s_sweepBuffer.Length)
             Debug.LogWarning($"NpcController: 스윕 버퍼 포화({count}) — 히트 누락 가능", this);
 
@@ -470,17 +328,13 @@ public class NpcController : NetworkBehaviour
             if (hit == null)
                 continue;
             if (hit.GetComponentInParent<PlayerHealth>() != null)
-                continue; // 플레이어 — 벽이 아니다, 뚫고 날아간다
+                continue;
             if (hit.GetComponentInParent<NpcController>() != null)
-                continue; // 다른 NPC — 군중 속 폭발에서 서로를 벽으로 보지 않게
+                continue;
 
-            // 시작 지점에서 이미 겹친 히트(거리 0)는 버린다 — 법선이 진행 방향 반대로 잡혀 어느 쪽으로
-            // 움직여도 계속 막히므로, 한 번 끼면 영영 빠져나오지 못한다 (밧줄 끌기에서 실제로 낀 사례, #369).
-            // 이미 안에 있는 이상 막는 것보다 빠져나갈 기회를 주는 편이 항상 낫다.
             if (s_sweepBuffer[i].distance <= 0.001f)
                 continue;
 
-            // 캐릭터가 아닌 무언가 = 벽/환경. 여럿이면 가장 가까운 것을 남긴다.
             if (!found || s_sweepBuffer[i].distance < obstacle.distance)
             {
                 obstacle = s_sweepBuffer[i];
@@ -491,55 +345,16 @@ public class NpcController : NetworkBehaviour
         return found;
     }
 
-    // ---- 도로 통행 정책 (#634 후속) ----
-
-    /// <summary>
-    /// 이 몸에 지금 허용된 통행 마스크 — <b>도로 정책이 적용되기 전</b>의 값이다.
-    /// 프리팹이 정한 마스크에 <see cref="SetGrantedAreas"/>로 열어 준 영역을 얹은 것.
-    ///
-    /// "이 몸을 NavMesh 어디에 놓을 수 있는가"를 묻는 쪽(넉백 착지·래그돌 기상)이 쓴다.
-    /// 그건 "지금 걸어도 되는 곳인가"와 다른 질문이라 <see cref="NavMeshAgent.areaMask"/>를
-    /// 쓰면 안 된다 — 배회 중이라 마스크가 좁아진 몸이 도로 위에 떨어지면 착지점을 못 찾는다.
-    /// (Jail 제외는 부여받지 않은 몸에는 그대로 살아 있어 #415의 이유가 지켜진다)
-    /// </summary>
     internal int BaseAreaMask => m_prefabAreaMask | m_grantedAreas;
 
-    /// <summary>
-    /// 유치장에 드나드는 동안 <b>추가로</b> 열어 줄 통행 영역 — 서버(또는 오프라인) 전용. (#744/#838)
-    ///
-    /// 시민 프리팹의 마스크는 Jail을 빼고 있어(배회 시민이 셀에 걸어 들어오지 못하게) 수감자만 그동안
-    /// 열어 줘야 한다. 부르는 곳은 둘이고 <b>덮어쓰기</b>다(누적이 아니다):
-    /// 수감 시 <c>JailMask</c>, 셀을 나서면 0.
-    ///
-    /// <b>한때 본부 실내(<c>HQ</c>)도 여기를 지났다</b> — #838에서 그 영역이 통행을 가르지 않게 되며
-    /// 빠졌다. 부여받을 것이 하나로 줄었어도 구조는 그대로 둔다: 아래 "잃는 것은 발밑을 비운 뒤"가
-    /// 셀 하나만으로도 그대로 필요하다.
-    ///
-    /// <b>프리팹 마스크가 아니라 이 값을 갈아 끼우는 이유</b>는 <see cref="ApplyRoadPolicy"/>가 상태
-    /// 전이마다 <see cref="BaseAreaMask"/>로 되돌리기 때문이다 — 에이전트의 <c>areaMask</c>를 직접
-    /// 건드리면 다음 전이에서 지워진다.
-    /// </summary>
+    /// <summary>유치장 출입 동안 추가로 허용할 통행 영역을 덮어쓴다. 서버(또는 오프라인) 전용.</summary>
     internal void SetGrantedAreas(int areas)
     {
         m_requestedAreas = areas;
         ApplyGrantedAreas();
     }
 
-    /// <summary>
-    /// 요구받은 영역을 실제로 반영한다 — <b>얻는 것은 즉시, 잃는 것은 발밑을 비운 뒤.</b> (#744)
-    ///
-    /// <b>잃는 쪽을 미루는 이유</b>는 도로와 같다(<see cref="ApplyRoadPolicy"/>): 서 있는 폴리곤이
-    /// 마스크 밖이 되면 경로 계산이 통째로 실패해(<c>PathInvalid</c>) 그 자리에서 굳는다. 도로와
-    /// 다른 점은 굳는 자리가 <b>셀 안</b>이라는 것이다 — 도로처럼 스스로 걸어 나올 수도 없다.
-    ///
-    /// <b>얻는 쪽을 함께 미루면 안 된다.</b> 지금은 부여받는 것이 Jail 하나뿐이라 이 갈래가 도는
-    /// 경로가 없지만, 규칙은 남긴다 — 워프는 마스크를 보지 않으므로(<see cref="TryWarpNear"/>는
-    /// <c>AllAreas</c>로 붙인다) 받을 영역이 다시 생기는 날 순서가 뒤집히면 <b>못 걷는 폴리곤 위에
-    /// 몸을 내려놓는다</b>. 실제로 #744가 그 순서로 셀→본부 워프를 통과시켰다.
-    ///
-    /// 이 구조라 <b>워프 실패도 저절로 수습된다</b> — 셀에 남으면 다음 확인에서 발밑이 여전히 Jail이라
-    /// 그 통행이 계속 유지된다.
-    /// </summary>
+    /// <summary>추가 통행 영역을 반영한다 — 얻는 것은 즉시, 잃는 것은 발밑 영역을 벗어난 뒤.</summary>
     private void ApplyGrantedAreas()
     {
         int losing = m_grantedAreas & ~m_requestedAreas;
@@ -551,27 +366,16 @@ public class NpcController : NetworkBehaviour
 
         m_grantedAreas = next;
 
-        // 지금 상태 기준으로 다시 건다 — 이 호출은 상태 전이 밖에서도 오므로(수감·방출) 여기서
-        // 걸지 않으면 다음 전이까지 옛 마스크가 남는다.
         ApplyRoadPolicy(m_stateMachine.CurrentState);
     }
 
-    /// <summary>
-    /// 평소 시민 생활로 돌아오면 유치장 통행을 반납한다 — <see cref="NpcStateMachine.OnBeforeEnter"/>. (#744)
-    ///
-    /// <b>Idle·Walk가 기준인 이유</b>는 그 둘이 "이 사람의 볼일이 끝났다"는 유일한 공통 종착지라서다 —
-    /// 탈옥 도주도, 반출 도주도, 잔류도 결국 여기로 가라앉는다. 방출 경로마다 회수를 배선하면
-    /// 새 경로가 생길 때마다 빠뜨린다.
-    ///
-    /// 여기서는 "이제 필요 없다"만 알린다 — 실제로 언제 빠지는지는 <see cref="ApplyGrantedAreas"/>가 정한다.
-    /// </summary>
+    /// <summary>Idle·Walk로 돌아오면 유치장 통행 영역 반납을 요청한다.</summary>
     private void RevokeGrantedAreasOnCityLife(NpcState next)
     {
         if (next is NpcState.Idle or NpcState.Walk)
             SetGrantedAreas(0);
     }
 
-    // 미뤄 둔 회수가 가능해졌는지 확인한다 — 서버(또는 오프라인) 전용. 도로 이탈과 같은 주기로 본다. (#744)
     private void TickAreaGrant()
     {
         if (m_grantedAreas == m_requestedAreas)
@@ -585,20 +389,9 @@ public class NpcController : NetworkBehaviour
         ApplyGrantedAreas();
     }
 
-    // 도로 이탈 확인 주기(초) — 대기 중인 개체만, 그것도 간격을 두고 본다.
-    // 매 프레임 NavMesh를 샘플하면 군중 규모에서 그대로 비용이 된다.
     private const float k_roadEgressProbeInterval = 0.25f;
 
-    /// <summary>
-    /// 상태에 맞는 통행 마스크를 건다 — <see cref="NpcStateMachine.OnBeforeEnter"/>에서 호출. (#634 후속)
-    ///
-    /// 도로를 밟으면 안 되는 상태인데 <b>지금 도로 위</b>라면 좁히지 않고 미룬다:
-    /// 서 있는 폴리곤이 마스크 밖이 되면 경로 계산이 통째로 실패해(<c>PathInvalid</c>)
-    /// <b>차도 한복판에서 영영 굳는다</b> — 고치려던 것보다 나쁜 증상이다.
-    /// 미루는 동안에도 목적지 쪽은 이미 도로를 빼고 뽑으므로(<see cref="NpcWalkState"/>가
-    /// <c>NpcNavAreas.ExcludeRoad</c>를, <see cref="NpcSpawner"/>가 <c>ExcludeSpawnAreas</c>를 쓴다)
-    /// 스스로 도로를 벗어난다.
-    /// </summary>
+    /// <summary>상태에 맞는 통행 마스크를 건다. 지금 도로 위라면 좁히기를 미룬다.</summary>
     private void ApplyRoadPolicy(NpcState next)
     {
         if (NpcNavAreas.AllowsRoad(next))
@@ -612,7 +405,7 @@ public class NpcController : NetworkBehaviour
         {
             m_roadEgressPending = true;
             m_roadEgressProbeSeconds = 0f;
-            SetAreaMask(BaseAreaMask); // 벗어날 때까지는 도로를 쓸 수 있어야 나갈 수 있다
+            SetAreaMask(BaseAreaMask);
             return;
         }
 
@@ -620,10 +413,7 @@ public class NpcController : NetworkBehaviour
         SetAreaMask(NpcNavAreas.ExcludeRoad(BaseAreaMask));
     }
 
-    /// <summary>
-    /// 도로를 벗어나기를 기다렸다가 마스크를 좁힌다 — 서버(또는 오프라인) 전용. (#634 후속)
-    /// 추격이 끝나 배회로 돌아온 NPC가 마침 차도 위였던 경우가 이 경로다.
-    /// </summary>
+    /// <summary>도로를 벗어나면 미뤄 둔 통행 마스크 좁히기를 적용한다. 서버(또는 오프라인) 전용.</summary>
     private void TickRoadEgress()
     {
         if (!m_roadEgressPending)
@@ -634,8 +424,6 @@ public class NpcController : NetworkBehaviour
             return;
         m_roadEgressProbeSeconds = 0f;
 
-        // 그새 도로를 밟아도 되는 상태로 바뀌었다면 대기 자체가 무의미하다.
-        // (ApplyRoadPolicy가 이미 껐겠지만, 전이 없이 여기까지 오는 경로가 생겨도 새지 않게 둔다)
         if (NpcNavAreas.AllowsRoad(m_stateMachine.CurrentState))
         {
             m_roadEgressPending = false;
@@ -652,56 +440,26 @@ public class NpcController : NetworkBehaviour
         DriveOffRoad();
     }
 
-    // 도로에서 물러날 거리(m) — <b>가장 가까운 도로 밖이 아니다.</b> 그건 경계선 바로 너머
-    // 몇 cm라, 한 발짝 떼자마자 도착 판정이 나 NPC가 차도 경계에 붙어 선다(관측된 증상).
-    // 폭 10m 도로 한복판에서 인도까지가 5m이므로(실측) 10m면 수직으로 나갈 때 5m 안쪽에 선다.
     private const float k_roadEgressDistance = 10f;
 
-    // 목적지에 요구하는 도로 여유(m) — 이 반경 안에 도로가 없어야 "충분히 물러났다"고 본다.
-    // <b>후보를 거리로 고르면 안 되는 이유가 여기 있다:</b> 후보는 전부 등거리라 거리로는
-    // 우열이 안 갈리고, 실제로 대각선 후보가 뽑혀 여유 0.7m에 서는 것이 관측됐다.
-    // 값은 실측 상한에 맞춘다 — 한복판에서 10m 수직 이동의 여유가 5m이므로 그보다 낮아야 한다.
     private const float k_roadEgressClearance = 2.5f;
 
-    // 이탈 목적지 후보 방향 수 — 도로는 띠 모양이라 어느 쪽이 가까운 인도인지 모른다. 빙 둘러 보고
-    // 도로 밖으로 나온 것 중 가장 가까운 것을 쓴다.
     private const int k_roadEgressDirections = 8;
 
-    // 후보를 NavMesh에 붙일 때의 스냅 반경(m) — 넓히면 후보가 죄다 같은 지점으로 뭉친다.
     private const float k_roadEgressSnapRadius = 2f;
 
-    /// <summary>
-    /// 도로에서 <b>걸어 나가게 한다</b> — 기다리는 것만으로는 못 나오기 때문이다. (#634 후속)
-    ///
-    /// <b>Idle이 문제다.</b> 추격이 끝나면 <see cref="NpcDutyAgent.EndPenaltyDuty"/>가 Idle로
-    /// 되돌리는데, <see cref="NpcIdleState"/>는 <c>isStopped = true</c>로 1~3초(15% 확률로 5~10초)
-    /// 서 있는다. 그 자리가 차도 한복판이면 그 시간이 그대로 사망이다 — 실제로 관측된 증상이 이것이고,
-    /// 마스크를 좁히지 못해 굳는 것과 <b>보이는 그림이 똑같아</b> 더 나쁘다.
-    ///
-    /// <b>그래서 정지를 덮어쓰는 게 아니라 상태를 옮긴다.</b> 에이전트만 밀면 FSM은 Idle인 채
-    /// 몸만 이동해 <b>미끄러진다</b> — <see cref="NpcAnimationDriver"/>는 NpcState 값을 그대로
-    /// Animator 번호로 쓰므로 Idle이면 속도와 무관하게 Idle 모션이 나온다. 걸어 나가는 중이면
-    /// 그건 Walk다. 상태를 맞춰 두면 모션은 따라오고 드라이버는 손댈 필요가 없다.
-    ///
-    /// 목적지는 Walk가 스스로 뽑은 배회 지점이 아니라 <b>가장 가까운 도로 밖</b>으로 덮어쓴다 —
-    /// 배회 지점은 반경 3~10m라 도로 폭(10m)을 넘어 건너편이 걸릴 수 있고, 차도 위에서 그건
-    /// 가장 오래 걸리는 경로다.
-    /// </summary>
+    /// <summary>도로 위에 멈춘 NPC를 Walk 상태로 전환해 가장 가까운 도로 밖으로 걸어 나가게 한다.</summary>
     private void DriveOffRoad()
     {
         if (!AgentReady)
             return;
 
-        // 이미 도로 밖을 향해 걷고 있으면 놔둔다 — 매 틱 목적지를 새로 잡으면 경로가 계속 리셋된다
         if (!m_agent.isStopped && m_agent.hasPath && !NpcNavAreas.IsOnRoad(m_agent.destination))
             return;
 
-        // 나갈 곳을 먼저 찾는다 — 못 찾았는데 상태부터 옮기면 Idle↔Walk를 오가며 떨기만 한다
         if (!TryFindRoadExit(out Vector3 exit))
-            return; // 다음 틱에 다시 시도한다
+            return;
 
-        // Walk로 옮긴 뒤 목적지를 덮는다 — 순서가 중요하다. ChangeState는 Enter()까지 돌고 오므로
-        // (NpcWalkState.Enter가 자기 배회 지점을 잡는다) 먼저 걸면 그쪽이 이겨 버린다.
         if (m_stateMachine.CurrentState == NpcState.Idle)
             m_stateMachine.ChangeState(NpcState.Walk);
 
@@ -709,17 +467,7 @@ public class NpcController : NetworkBehaviour
         m_agent.SetDestination(exit);
     }
 
-    /// <summary>
-    /// 도로를 벗어나 <b>충분히 안쪽</b>에 있는 지점을 찾는다 — 빙 둘러 보고 고른다.
-    ///
-    /// 가장 가까운 도로 밖 지점(<c>SamplePosition</c> 한 번)으로는 안 된다: 그건 경계선 바로 너머라
-    /// 한 발짝 만에 도착 판정이 나고, NPC가 차도 경계에 붙어 선 채 Idle로 돌아간다.
-    ///
-    /// 후보 사이의 우열은 <b>거리가 아니라 도로 여유</b>로 가른다 — 후보는 전부 등거리라 거리로는
-    /// 갈리지 않고, 그렇게 두면 도로를 비스듬히 스치는 대각선 후보가 뽑힌다.
-    /// 여유를 갖춘 후보가 하나도 없으면(좁은 골목 등) 도로 밖이기만 한 후보라도 쓴다 —
-    /// 차도에 서 있는 것보다는 언제나 낫다.
-    /// </summary>
+    /// <summary>주변을 둘러 도로에서 충분히 떨어진 지점을 찾는다.</summary>
     private bool TryFindRoadExit(out Vector3 exit)
     {
         exit = default;
@@ -743,15 +491,11 @@ public class NpcController : NetworkBehaviour
             if (!NavMesh.SamplePosition(candidate, out NavMeshHit hit, k_roadEgressSnapRadius, offRoadMask))
                 continue;
 
-            // 스냅이 도로로 되돌아온 후보는 버린다 — 마스크로 걸러도 경계에 걸치면 다시 도로다
             if (NpcNavAreas.IsOnRoad(hit.position))
                 continue;
 
             float sqr = (hit.position - origin).sqrMagnitude;
 
-            // 도로에서 충분히 떨어졌는가 — 반경 안에 도로가 <b>없어야</b> 한다.
-            // 여기서는 Road 마스크로 직접 샘플하는 것이 맞다: 묻는 것이 "이 폴리곤이 도로인가"가
-            // 아니라 "이 근처에 도로가 있는가"이기 때문이다 (NpcNavAreas.IsOnRoad와 반대다).
             if (!NavMesh.SamplePosition(hit.position, out NavMeshHit _, k_roadEgressClearance,
                                         NpcNavAreas.RoadMask))
             {
@@ -779,13 +523,7 @@ public class NpcController : NetworkBehaviour
         return foundAny;
     }
 
-    /// <summary>
-    /// 통행 마스크를 갈아 끼우고, 바뀌었으면 <b>지금 경로를 다시 계산시킨다.</b>
-    ///
-    /// <c>areaMask</c>를 바꿔도 이미 계산된 경로는 그대로 남는다 — 도로를 지나는 옛 경로가 살아 있으면
-    /// 좁힌 의미가 없다. 다시 계산해 부분 경로가 나오면 각 상태의 막힘 감지가 목적지를 새로 뽑는다
-    /// (<see cref="NpcWalkState"/>는 제자리 2초로 잡는다).
-    /// </summary>
+    /// <summary>통행 마스크를 바꾸고, 바뀌었으면 현재 경로를 다시 계산시킨다.</summary>
     private void SetAreaMask(int mask)
     {
         if (m_agent.areaMask == mask)
@@ -797,69 +535,23 @@ public class NpcController : NetworkBehaviour
             m_agent.SetDestination(m_agent.destination);
     }
 
-    // ---- 걸어 나올 수 없는 자리에 멈춘 몸 (#557/#913) ----
-
-    // 굳은 몸을 정리하기까지의 유예(초). 정상 경로(넉백 착지·기절 해제·래그돌 기상)는 성공하면
-    // 같은 프레임에 NavMesh로 돌아오지만, 굳었다고 본 몸이 뒤늦게 스스로 빠져나오는 경우가 있어
-    // 넉넉히 잡는다 — 3초는 너무 짧았다 (#913).
     private const float k_stuckFatalSeconds = 8f;
 
-    // 판정 주기(초) — SamplePosition을 NPC 수만큼 매 프레임 돌릴 이유가 없다. 유예도 이 단위로 쌓인다.
     private const float k_stuckProbeInterval = 0.5f;
 
-    // 발밑 NavMesh를 찾는 반경(m) — 이 안에 없으면 그것만으로 굳은 것이다.
     private const float k_stuckProbeRadius = 2f;
 
-    // 발밑 NavMesh보다 이만큼(m) 높으면 구조물 <b>위에 올라탄</b> 것으로 본다 (#913) — 철조망·컨테이너
-    // 위에 떨어진 몸은 에이전트가 여전히 "NavMesh 위"라고 답해 높이를 안 보면 영영 안 걸린다.
     private const float k_stuckHeightAboveMesh = 1.5f;
 
-    // 맵 안팎을 가르는 반경(m) — 이 안에 NavMesh가 있으면 <b>맵 안</b>(구조물 위·틈새)이고, 없으면
-    // 맵 밖으로 나간 것이다 (#913). 둘을 갈라야 하는 이유는 시체다: 맵 안에서 죽은 몸은 눈에 보이는
-    // 자리에 그대로 남아야 하고(사라지면 본 사람이 버그로 읽는다), 맵 밖은 아무도 못 보므로 지운다.
     private const float k_insideMapRadius = 15f;
 
-    // 한 판정 주기(0.5초) 동안 이만큼(m) 넘게 움직였으면 아직 <b>가는 중</b>이다 (#913) — 날아가는
-    // 몸·구르는 몸·미끄러지는 몸이 여기서 빠진다. 걸린 몸은 멈춰 있는 몸뿐이다.
     private const float k_stuckStillEpsilon = 0.15f;
 
     private float m_offNavMeshSeconds;
     private float m_stuckProbeSeconds;
     private Vector3 m_lastProbePosition;
 
-    /// <summary>
-    /// <b>걸어 나올 수 없는 자리에 멈춰 있는 몸</b>을 서버가 정리한다. 서버(또는 오프라인) 전용. (#557/#913)
-    ///
-    /// 판정은 셋을 <b>모두</b> 만족해야 선다: ① 남이 쥐고 있지 않다(밧줄·넉백 비행·시체가 아니다),
-    /// ② 판정 주기 사이에 움직이지 않았다, ③ 그 자리가 NavMesh 밖이거나 발밑 NavMesh보다 한참 위다.
-    /// 셋이 8초간 이어지면 정리한다 — 맵 밖이면 행방불명, 맵 안이면 시체로 남긴다.
-    ///
-    /// 이 상태를 만드는 넷(밧줄 놓기·넉백 착지·기절 해제·<b>래그돌 기상</b>)이 전부 실패 시 경고만
-    /// 남기고 포기해, 이후 <c>isStopped</c>·<c>SetDestination</c>이 조용히 실패하며 NPC가 굳었다
-    /// (빌드 2 이슈 E의 재발). 호출부마다 폴백을 다는 대신 <b>결과 상태 하나</b>를 여기서 본다.
-    ///
-    /// <b>NavMesh 밖만 보는 게 아니다</b> (#913) — 철조망·구조물 <b>위에</b> 떨어진 몸은
-    /// <c>isOnNavMesh</c>가 계속 참이라 그것만으로는 안 걸린다. 발밑 NavMesh와의 높이 차도 함께 본다.
-    ///
-    /// <b>NavMesh로 끌어다 붙이지 않는다</b> (#913) — 예전에는 8m 안의 NavMesh로 워프시켰는데,
-    /// 진압봉 홈런으로 맵 밖까지 날아간 몸이 제자리로 순간이동하는 쪽이 더 이상했다. 대신
-    /// <b>행방불명</b>으로 끝낸다: 죽이고, 수배 포스터를 행방불명으로 바꾸고, 몸을 지운다.
-    ///
-    /// <b>멈춰 있을 때만 센다</b> (#913) — 전봇대·난간에 걸린 몸과 아직 날아가는 몸은 한 프레임만
-    /// 보면 구분되지 않는다. 판정 주기 사이의 이동량이 기준이고, 조금이라도 가고 있으면 유예를
-    /// 처음부터 다시 센다. 그래서 포물선을 그리며 날아가는 5초는 유예에 들어가지 않는다.
-    ///
-    /// <b>래그돌인 몸도 센다</b> (#913) — 에이전트가 꺼져 있다고 건너뛰면 기절이 풀릴 때까지 기다렸다가
-    /// 거기서부터 유예를 세게 되고, 그 사이 기상 복귀가 몸을 먼저 끌어다 붙인다. 홈런으로 날아간
-    /// 몸은 대개 래그돌인 채로 구조물에 걸리므로, 그 구간을 빼면 이 정리가 늘 진다.
-    ///
-    /// 남이 위치를 쥐고 있는 구간(넉백 비행·<b>밧줄 끌기</b>)과 이미 죽은 몸은 건너뛴다 —
-    /// 끌려가는 중에 죽이면 플레이어가 쥔 몸이 손에서 사라진다.
-    ///
-    /// ⚠ <b>그래서 에이전트를 꺼 둔 쪽은 반드시 스스로 켜야 한다.</b> 래그돌이 아닌 채로 꺼 놓고
-    /// 아무도 켜지 않으면 이 정리는 <b>영영 오지 않는다</b>
-    /// (<see cref="NpcRagdoll"/>의 기상이 실패해도 에이전트를 켜 두는 이유가 이것이다, #572).
-    /// </summary>
+    /// <summary>NavMesh 밖(또는 구조물 위)에 8초간 멈춰 있는 몸을 행방불명·시체로 정리한다. 서버(또는 오프라인) 전용.</summary>
     private void TickStuckOffNavMesh()
     {
         m_stuckProbeSeconds += Time.deltaTime;
@@ -881,7 +573,6 @@ public class NpcController : NetworkBehaviour
 
         m_offNavMeshSeconds = 0f;
 
-        // 맵 밖으로 나갔는가, 맵 안에서 어딘가에 올라가 박혔는가 — 뒤처리가 여기서 갈린다
         bool offMap = !NavMesh.SamplePosition(
             transform.position,
             out NavMeshHit _,
@@ -889,8 +580,6 @@ public class NpcController : NetworkBehaviour
             NavMesh.AllAreas
         );
 
-        // "무엇이 밀어냈는가"는 아직 미확인이다(#559 — 납치 반출이 맵 밖 25m까지 끌고 나간다) —
-        // 이 로그가 원인 추적의 유일한 단서라 종류까지 남긴다
         Debug.LogWarning(
             $"NpcController: {k_stuckFatalSeconds}초간 걸어 나올 수 없던 NPC를 정리했다 "
                 + $"({(offMap ? "맵 밖 — 행방불명" : "맵 안 — 시체로 남긴다")}, {kind}): "
@@ -898,56 +587,43 @@ public class NpcController : NetworkBehaviour
             this
         );
 
-        // ① 사망 — 호송·이벤트가 쥔 참조를 사망 정리(NpcDeath)가 끊는다. 여기까지는 둘 다 같다.
         m_health.ServerKillStuck();
 
-        // ② 맵 안이면 여기서 끝이다 — 시체는 보이는 자리에 그대로 남는다. 몸이 사라지는 것은
-        //    맵 밖(아무도 볼 수 없는 자리)에서만 할 일이다.
         if (!offMap)
             return;
 
-        // ③ 수배 중이었다면 포스터를 행방불명으로 바꾼다 — 없어진 대상이 그대로 걸려 있으면 본부가 헛돈다
         WantedListManager wanted = App.Game.WantedList;
         if (wanted != null)
             wanted.MarkMissing(NetworkObjectId);
 
-        // ④ 몸을 지운다 — 맵 밖 시체는 보이지도, 유치장까지 끌고 갈 수도 없다. VFX는 없다(아무도 못 본다)
         SuddenEventUtil.DespawnOrDestroy(gameObject, playVfx: false);
     }
 
-    // 굳은 자리의 종류 — 로그에 남겨 원인(맵 밖으로 밀림 / 구조물에 올라탐)을 가른다. (#913)
     private enum EStuckKind
     {
-        None,        // 정상 — 발밑에 NavMesh가 있다
-        OffNavMesh,  // 에이전트가 NavMesh에 붙어 있지 않다
-        AboveMesh,   // 붙어는 있지만 발밑 NavMesh보다 한참 위다 — 구조물에 올라탄 몸
+        None,
+        OffNavMesh,
+        AboveMesh,
     }
 
-    // 걸어 나올 수 없는 자리인가 — NavMesh 밖이거나, 발밑 NavMesh보다 한참 위(구조물에 올라탄 것).
     private EStuckKind ProbeStuck()
     {
         Vector3 previous = m_lastProbePosition;
         m_lastProbePosition = transform.position;
 
-        // 남이 쥐고 있는 몸은 굳은 것이 아니다 — 시체·밧줄·넉백 비행이 여기서 빠진다
         if (m_death.IsDead || m_rope.IsRoped || m_knockback.IsKnockedBack)
             return EStuckKind.None;
 
-        // 래그돌은 에이전트가 꺼져 있어도 센다 — 위 주석의 "래그돌인 몸도 센다"가 이 줄이다
         bool ragdolled = m_ragdoll != null && m_ragdoll.IsRagdollActive;
         if (!m_agent.enabled && !ragdolled)
             return EStuckKind.None;
 
-        // 아직 가고 있으면 걸린 것이 아니다 — 래그돌 내부 상태가 아니라 이동량으로 본다.
-        // 잣대가 하나라 비행·낙하·미끄러짐·에이전트 이동이 한꺼번에 덮인다.
         if ((transform.position - previous).sqrMagnitude > k_stuckStillEpsilon * k_stuckStillEpsilon)
             return EStuckKind.None;
 
-        // 에이전트가 꺼진 동안에는 isOnNavMesh가 늘 거짓이라 위치로만 판단한다
         if (m_agent.enabled && !m_agent.isOnNavMesh)
             return EStuckKind.OffNavMesh;
 
-        // 마스크는 AllAreas다 — 통행이 막힌 영역(Jail) 위에 서 있는 것은 "올라탄" 것이 아니다
         if (!NavMesh.SamplePosition(transform.position, out NavMeshHit hit, k_stuckProbeRadius, NavMesh.AllAreas))
             return EStuckKind.OffNavMesh;
 

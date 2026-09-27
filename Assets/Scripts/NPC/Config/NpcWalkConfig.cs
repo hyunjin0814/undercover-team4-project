@@ -1,8 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// Walk(배회 이동) 상태 튜닝 값. (#259 — NpcController에서 분리)
-/// 다음 배회 지점을 뽑는 반경·최소거리. 추격(Chase)의 사냥 모드 배회도 이 값을 공유한다.
+/// Walk(배회) 상태 튜닝 SO — 다음 배회 지점의 반경·최소거리.
 /// </summary>
 [CreateAssetMenu(fileName = "NpcWalkConfig", menuName = "Undercover/NPC/Walk Config")]
 public class NpcWalkConfig : ScriptableObject

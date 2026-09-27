@@ -2,23 +2,17 @@ using UnityEditor;
 using UnityEngine;
 
 /// <summary>
-/// 몽타주 레이어를 찍는 렌더 리그 (#607) — 마네킹·카메라·조명을 한 벌 세워 두고 레이어를 한 장씩 뽑는다.
-///
-/// 굽기(<see cref="MontageLayerBaker"/>)와 해상도 비교 시트(#619)가 이 클래스를 함께 쓴다. 비교 시트는
-/// "이 해상도로 구우면 이렇게 나온다"를 보여 주는 물건이라 <b>실제 굽기와 같은 코드로 찍혀야</b> 뜻이 있다 —
-/// 렌더 방식이 갈리는 순간, 시트를 보고 정한 해상도가 실물과 어긋난다.
-///
-/// 해상도는 리그마다 고정이다. 여러 해상도를 보려면 리그를 그만큼 세운다.
+/// 몽타주 레이어를 찍는 렌더 리그 — 마네킹·카메라·조명을 세워 두고 레이어를 한 장씩 렌더한다.
+/// 굽기와 해상도 비교 시트가 함께 쓰며, 해상도는 리그마다 고정이다.
 /// </summary>
 public sealed class MontageBakeRig : System.IDisposable
 {
-    /// <summary>바디를 어떻게 찍을지 — 레이어마다 바디의 역할이 다르다.</summary>
     private enum EBodyState
     {
-        Original, // 프리팹 그대로 — 실물 렌더(RenderSubject)용
-        Flat,     // 평면 흰색 — 살 실루엣
-        Occluder, // 평면 검정 — 프롭을 찍을 때 가림(depth)만 남긴다
-        Custom,   // 바깥에서 지정한 머티리얼 — 아틀라스 스왑 비교용 (#619)
+        Original,
+        Flat,
+        Occluder,
+        Custom,
     }
 
     private readonly GameObject m_root;
@@ -36,10 +30,8 @@ public sealed class MontageBakeRig : System.IDisposable
 
     private EBodyState m_bodyState = EBodyState.Original;
 
-    /// <summary>프롭을 붙일 머리 본. 찾지 못했으면 리그가 쓸모없다(<see cref="IsValid"/>).</summary>
     public Transform Head => m_head;
 
-    /// <summary>머리 본을 찾아 카메라까지 세워졌는가.</summary>
     public bool IsValid => m_head != null;
 
     public MontageBakeRig(
@@ -55,9 +47,8 @@ public sealed class MontageBakeRig : System.IDisposable
         m_resolution = resolution;
         m_flatMaterial = flatMaterial;
 
-        // DontSave — 찍는 동안만 존재하는 리그라 열려 있는 씬을 더럽히지 않는다
         m_root = new GameObject("~MontageBakeRig") { hideFlags = HideFlags.HideAndDontSave };
-        m_root.transform.position = new Vector3(0f, -10000f, 0f); // 씬의 다른 것이 화면에 들어오지 않게 멀리 둔다
+        m_root.transform.position = new Vector3(0f, -10000f, 0f);
 
         m_subject = (GameObject)PrefabUtility.InstantiatePrefab(subjectPrefab, m_root.transform);
         m_subject.transform.localPosition = Vector3.zero;
@@ -67,7 +58,6 @@ public sealed class MontageBakeRig : System.IDisposable
         if (m_head == null)
             return;
 
-        // 바디 머티리얼을 갈아 끼운 뒤에도 되돌릴 수 있어야 어떤 순서로든 레이어를 찍을 수 있다
         m_bodyRenderers = m_subject.GetComponentsInChildren<Renderer>(true);
         m_originalMaterials = new Material[m_bodyRenderers.Length][];
         for (int i = 0; i < m_bodyRenderers.Length; i++)
@@ -76,7 +66,6 @@ public sealed class MontageBakeRig : System.IDisposable
         if (flatMaterial != null)
         {
             m_occluderMaterial = new Material(flatMaterial) { hideFlags = HideFlags.HideAndDontSave };
-            // 셰이더에 따라 색 프로퍼티 이름이 갈린다 (URP는 _BaseColor, 레거시 Unlit은 _Color)
             if (m_occluderMaterial.HasProperty("_BaseColor"))
                 m_occluderMaterial.SetColor("_BaseColor", Color.black);
             if (m_occluderMaterial.HasProperty("_Color"))
@@ -87,7 +76,6 @@ public sealed class MontageBakeRig : System.IDisposable
         m_light = CreateLight();
     }
 
-    /// <summary>바디 변형 수 — SciFi 프리팹의 통짜 바디 종수.</summary>
     public int BodyCount => m_subject.GetComponentsInChildren<SkinnedMeshRenderer>(true).Length;
 
     /// <summary>바디 변형 중 하나만 남긴다 — SciFi 프리팹처럼 통짜 바디가 여러 벌 들어 있는 대상용.</summary>
@@ -113,8 +101,7 @@ public sealed class MontageBakeRig : System.IDisposable
         return Whiten(RenderPixels());
     }
 
-    /// <summary>알파만 남기고 RGB를 순백으로 민다 — 평면 머티리얼로 찍어도 남는 음영(입체 눈썹·눈꺼풀)이
-    /// 피부색 틴트에 회색 줄로 비쳐 마네킹 두상에 이목구비를 되살리기 때문이다.</summary>
+    /// <summary>알파만 남기고 RGB를 순백으로 만든다.</summary>
     private static Color[] Whiten(Color[] pixels)
     {
         var result = new Color[pixels.Length];
@@ -123,11 +110,7 @@ public sealed class MontageBakeRig : System.IDisposable
         return result;
     }
 
-    /// <summary>
-    /// 대상을 프리팹 그대로 한 장 — 부위를 떼어낼 수 없는 통짜 메시(SciFi)를 사람이 오려 쓰기 위한 렌더.
-    /// <paramref name="bodyMaterial"/>을 주면 바디 머티리얼을 그것으로 갈아 찍는다 — 아틀라스 스왑
-    /// 24종이 같은 모델을 어떻게 바꾸는지 보는 용도다 (#619).
-    /// </summary>
+    /// <summary>대상 프리팹을 그대로 한 장 렌더한다. bodyMaterial을 주면 바디 머티리얼을 바꿔 찍는다.</summary>
     public Color[] RenderSubject(Material bodyMaterial = null)
     {
         if (bodyMaterial != null)
@@ -137,7 +120,7 @@ public sealed class MontageBakeRig : System.IDisposable
                 if (renderer != null)
                     ApplyMaterial(renderer, bodyMaterial);
             }
-            m_bodyState = EBodyState.Custom; // 다음 상태 전환에서 반드시 다시 칠하게 한다
+            m_bodyState = EBodyState.Custom;
         }
         else
         {
@@ -148,18 +131,7 @@ public sealed class MontageBakeRig : System.IDisposable
         return RenderPixels();
     }
 
-    /// <summary>
-    /// 프롭 레이어 한 장 — 실루엣과 색을 따로 찍어 합친다.
-    ///
-    /// <paramref name="silhouette"/>면 흰색으로만 찍는다(머리스타일 — 머리색 축이 칠할 자리다). 아니면
-    /// <b>실제 머티리얼에 옵션 색까지 얹어</b> 찍는다 — 노랑·검정 고글처럼 두 색으로 된 프롭을 단색 틴트로
-    /// 칠하면 화면과 어긋난다. 색을 실물로 찍으면 바디(검정)와 밝기로 구분할 수 없으므로, 같은 프롭을
-    /// 흰색으로 한 번 더 찍어 그것을 오려내는 마스크로 쓴다.
-    ///
-    /// <paramref name="occluderPrefab"/>을 주면 그 프롭을 <b>검정 가림막으로 함께 붙여</b> 찍는다.
-    /// 바디를 검정으로 남기는 것과 같은 원리라, 결과에는 그 프롭에 가려지지 않고 <b>밖으로 나온 부분만</b>
-    /// 남는다 — 모자 밖으로 삐져나오는 머리가 있는지 재는 데 쓴다 (#619).
-    /// </summary>
+    /// <summary>프롭 레이어 한 장을 렌더한다 — 실루엣(흰색) 또는 실제 색으로 찍고, occluder가 있으면 가림막으로 함께 찍는다.</summary>
     public Color[] RenderProp(GameObject propPrefab, Color color, bool silhouette, GameObject occluderPrefab = null)
     {
         BeginPropPass();
@@ -193,10 +165,7 @@ public sealed class MontageBakeRig : System.IDisposable
             Object.DestroyImmediate(m_occluderMaterial);
     }
 
-    /// <summary>
-    /// 프롭을 찍는 상태로 — 바디를 끄지 않고 검정으로 남긴다.
-    /// 끄면 머리 뒤에 가려야 할 뒷머리·모자 뒤통수까지 찍혀서 얼굴 위를 덮는다.
-    /// </summary>
+    /// <summary>프롭 렌더 상태로 전환한다 — 바디를 검정으로 남겨 가림막으로 쓴다.</summary>
     private void BeginPropPass()
     {
         SetBodyState(EBodyState.Occluder);
@@ -228,7 +197,6 @@ public sealed class MontageBakeRig : System.IDisposable
         m_bodyState = state;
     }
 
-    // 실제 NPC와 같은 방식으로 붙여야 위치가 어긋나지 않는다 (NpcAppearance.ApplyPropAxis와 동일)
     private GameObject InstantiateProp(GameObject prefab, Material material)
     {
         var prop = (GameObject)PrefabUtility.InstantiatePrefab(prefab, m_head);
@@ -244,7 +212,6 @@ public sealed class MontageBakeRig : System.IDisposable
         return prop;
     }
 
-    // NpcAppearance.TintRenderers와 같은 방식 — 공유 머티리얼을 건드리지 않는다
     private static void TintProp(GameObject prop, Color color)
     {
         var block = new MaterialPropertyBlock();
@@ -275,10 +242,8 @@ public sealed class MontageBakeRig : System.IDisposable
         camera.clearFlags = CameraClearFlags.SolidColor;
         camera.nearClipPlane = 0.01f;
         camera.farClipPlane = cameraDistance * 4f;
-        camera.enabled = false; // Render()로만 돈다
+        camera.enabled = false;
 
-        // yaw는 대상 주위를 도는 각도다 — 0이 정면. 묶은 머리처럼 뒤로 넘어간 것은 정면 렌더에
-        // 안 나오므로, 실물을 눈으로 분류할 때는 옆·뒤도 봐야 한다 (#619).
         Vector3 view = Quaternion.AngleAxis(yaw, Vector3.up) * m_subject.transform.forward;
 
         Vector3 focus = m_head.position + Vector3.up * headOffset;
@@ -299,11 +264,7 @@ public sealed class MontageBakeRig : System.IDisposable
         return light;
     }
 
-    /// <summary>
-    /// 한 장 렌더해 픽셀로 돌려준다.
-    /// 배경을 흰색·검정 두 번 찍어 알파를 역산한다 — URP는 불투명 패스가 알파를 그대로 두지 않아
-    /// 투명 배경으로 한 번 찍는 방식이 파이프라인 설정에 따라 통째로 불투명하게 나온다.
-    /// </summary>
+    /// <summary>한 장을 렌더해 픽셀로 돌려준다. 흰·검정 배경 두 번 렌더로 알파를 역산한다.</summary>
     private Color[] RenderPixels()
     {
         var rt = new RenderTexture(m_resolution, m_resolution, 24, RenderTextureFormat.ARGB32) { antiAliasing = 1 };
@@ -347,11 +308,7 @@ public sealed class MontageBakeRig : System.IDisposable
 
     private static float Luminance(Color color) => 0.2126f * color.r + 0.7152f * color.g + 0.0722f * color.b;
 
-    /// <summary>
-    /// 흰색 렌더(mask)에서 <b>바디에 가려지지 않은</b> 부분만 오려낸다 — 바디는 검정으로 찍혀 오므로
-    /// 밝은 픽셀이 곧 보이는 프롭이다. 머리 뒤로 넘어간 뒷머리·모자 뒤통수는 바디에 가려 걷힌다.
-    /// color를 주면 그 색을, 안 주면 흰색(표시할 때 칠할 실루엣)을 쓴다.
-    /// </summary>
+    /// <summary>흰색 마스크 렌더에서 바디에 가려지지 않은 부분만 오려낸다.</summary>
     private static Color[] CutOutProp(Color[] mask, Color[] color)
     {
         var result = new Color[mask.Length];

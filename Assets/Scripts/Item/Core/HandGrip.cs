@@ -1,11 +1,10 @@
 /// <summary>
-/// 1인칭 FP 손 손가락 프리셋 — 장착 아이템에 맞춰 손 모양을 바꾼다. PlayerHandView가 적용한다. (#265)
+/// 1인칭 FP 손 손가락 프리셋 — 장착 아이템에 맞춰 손 모양을 바꾼다. PlayerHandView가 적용한다.
 /// </summary>
-// 값은 프리팹에 int로 직렬화되므로 추가는 반드시 끝에 — 중간에 끼우면 기존 아이템의 그립이 밀린다.
 public enum HandGrip
 {
-    Relaxed, // 빈손·기본 — 자연스럽게 살짝 쥔 손
-    Trigger, // 총류 — 검지 펴고 나머지 감쌈
-    Wide, // 스캐너·박스 등 큰 물건 — 손 넓게 편 채로
-    Handle, // 진압봉 등 자루형 — 다섯 손가락으로 자루를 꽉 말아 쥐고 엄지를 그 위에 덮는다 (#217)
+    Relaxed,
+    Trigger,
+    Wide,
+    Handle,
 }

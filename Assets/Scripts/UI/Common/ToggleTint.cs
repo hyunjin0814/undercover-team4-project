@@ -2,11 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// 체크박스 배경을 켜짐/꺼짐에 따라 갈아 칠한다 (#894) — 켜지면 배경이 골드로 차고 체크 표시는 흰색으로 남는다.
-/// Toggle이 켜고 끄는 그림(graphic)은 하나뿐이라, 배경색까지 뒤집으려면 이렇게 따로 칠해야 한다.
-///
-/// <b>SetIsOnWithoutNotify로 값을 넣는 쪽은 <see cref="Refresh"/>를 불러야 한다</b> —
-/// 알림 없이 넣으면 onValueChanged가 깨어나지 않아 색만 이전 상태로 남는다.
+/// 체크박스 배경색을 켜짐/꺼짐에 따라 바꾼다. SetIsOnWithoutNotify 후에는 Refresh를 호출할 것.
 /// </summary>
 [RequireComponent(typeof(Toggle))]
 public class ToggleTint : MonoBehaviour
@@ -38,7 +34,6 @@ public class ToggleTint : MonoBehaviour
             m_toggle.onValueChanged.RemoveListener(HandleValueChanged);
     }
 
-    // 켜진 채로 창이 열릴 수 있다 — 켜지는 시점에 한 번 맞춘다
     private void OnEnable() => Refresh();
 
     /// <summary>지금 Toggle 상태로 배경색을 맞춘다.</summary>

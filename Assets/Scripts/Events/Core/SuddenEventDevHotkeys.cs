@@ -2,27 +2,13 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 
 /// <summary>
-/// 돌발 이벤트 개발자 단축키 — <b>에디터 전용</b>. 추첨을 기다리지 않고 F1~F12·넘패드 1~9로 즉시 발동시킨다.
-///
-/// <b>F9는 비어 있다</b> — 청탁 발행 키였고, 청탁이 사라지면서 주인이 없어졌다.
-/// 그래서 열둘 중 열하나만 쓰고, F10부터는 인덱스가 하나씩 앞당겨진다 (F8=8번째, F10=9번째).
-///
-/// 순서 기준은 <see cref="SuddenEventManager"/>의 <b>인스펙터 이벤트 풀</b>이다. 꺼 둔 항목은 풀에
-/// 아예 안 들어가므로 번호가 밀린다 — 그래서 외우라고 만들지 않고 Play 시작 때 실제 매핑을 콘솔에
-/// 한 번 찍는다. 풀을 건드렸으면 그 로그만 보면 된다.
-///
-/// 발동은 <see cref="SuddenEventManager.ForceTrigger"/>가 하므로 <b>서버(또는 오프라인)에서만</b>
-/// 듣는다. MPPM 클론에서 눌러도 아무 일도 일어나지 않는다 — 키 입력은 로컬이고 발생은 서버 판정이라,
-/// 개발용 키는 모두 같은 규칙을 따른다.
-///
-/// 이미 진행 중이거나 조건(CanTrigger)이 안 맞는 이벤트는 무시되고 그 이유가 콘솔에 남는다.
+/// 돌발 이벤트를 F1~F12·넘패드 키로 즉시 발동하는 에디터 전용 단축키.
+/// 번호는 인스펙터 이벤트 풀 순서이며, 시작 시 매핑을 콘솔에 출력한다. 서버에서만 동작한다.
 /// </summary>
 [RequireComponent(typeof(SuddenEventManager))]
 public class SuddenEventDevHotkeys : MonoBehaviour
 {
 #if UNITY_EDITOR
-    // 순서가 곧 이벤트 풀 인덱스다. F9는 청탁 몫이었던 자리라 목록에서 빠져 있다.
-    // F 열이 다 차서 넘버패드로 이어 붙였다 — 12번째부터는 넘패드 1~9다 (#991).
     private static readonly Key[] k_keys =
     {
         Key.F1, Key.F2, Key.F3, Key.F4, Key.F5, Key.F6, Key.F7, Key.F8,
@@ -52,7 +38,6 @@ public class SuddenEventDevHotkeys : MonoBehaviour
         if (!m_enabled || m_manager == null)
             return;
 
-        // 키보드가 없는 구성(원격 데스크톱 등)에서는 조용히 넘어간다
         Keyboard keyboard = Keyboard.current;
         if (keyboard == null)
             return;
@@ -78,7 +63,7 @@ public class SuddenEventDevHotkeys : MonoBehaviour
         {
             string eventName = m_manager.EventNameAt(i);
             if (eventName == null)
-                break; // 풀이 여기서 끝났다 — 남은 키에는 물릴 이벤트가 없다
+                break;
 
             sb.AppendLine();
             sb.Append($"  {k_keys[i]} -> {eventName}");

@@ -7,17 +7,15 @@ using UnityEngine.Localization.Settings;
 using UnityEngine.UI;
 
 /// <summary>
-/// 본부 시민 인명부 패널 (#223) — E로 펼치는 열람 UI. DirectoryManager의 동기화 리스트를 읽어 행으로 그린다.
-/// 정렬(이름순/세력순, 같은 버튼 재클릭 시 오름/내림 토글)과 페이지 넘김(첫 페이지=다음만, 마지막=이전만)을 제공한다.
-/// 여는 동안 게임플레이 입력을 정지하고 커서를 푼다 — 읽는 동안 몸이 움직이면 안 된다. Esc로 닫는다.
-/// 로컬 UI — 상호작용한 본인 클라에서만 열린다. 데이터 갱신은 NetworkList.OnListChanged로 따라간다.
+/// 본부 시민 인명부 열람 패널 — DirectoryManager의 리스트를 정렬·페이지 단위로 그린다.
+/// 열려 있는 동안 게임플레이 입력을 정지하고 커서를 푼다.
 /// </summary>
 public class CitizenDirectoryView : HqPanelView
 {
     private DirectoryManager Manager => App.Game.Directory;
 
     [SerializeField]
-    private RectTransform m_entryContainer; // ScrollRect Content
+    private RectTransform m_entryContainer;
 
     [SerializeField]
     private DirectoryEntryView m_entryPrefab;
@@ -37,7 +35,7 @@ public class CitizenDirectoryView : HqPanelView
     private Button m_nextButton;
 
     [SerializeField]
-    private TMP_Text m_pageLabel; // "1 / 3" (선택)
+    private TMP_Text m_pageLabel;
 
     [Header("설정")]
     [SerializeField]
@@ -73,13 +71,13 @@ public class CitizenDirectoryView : HqPanelView
     private void SetSort(SortKey key)
     {
         if (m_sortKey == key)
-            m_ascending = !m_ascending; // 같은 기준 재클릭 → 방향 토글
+            m_ascending = !m_ascending;
         else
         {
             m_sortKey = key;
             m_ascending = true;
         }
-        m_page = 0; // 정렬 바뀌면 첫 페이지로
+        m_page = 0;
         Rebuild();
     }
 
@@ -96,7 +94,6 @@ public class CitizenDirectoryView : HqPanelView
         if (m_entryPrefab == null || m_entryContainer == null || Manager == null)
             return;
 
-        // 동기화 리스트 → 로컬 복사 후 정렬 (NetworkList는 정렬 불가)
         m_sorted.Clear();
         NetworkList<DirectoryEntry> directory = Manager.Directory;
         for (int i = 0; i < directory.Count; i++)
@@ -111,7 +108,6 @@ public class CitizenDirectoryView : HqPanelView
         int end = Mathf.Min(start + perPage, m_sorted.Count);
         int visible = Mathf.Max(0, end - start);
 
-        // 행 수를 현재 페이지 항목 수에 맞춘다 (재사용)
         while (m_rows.Count < visible)
             m_rows.Add(Instantiate(m_entryPrefab, m_entryContainer));
         while (m_rows.Count > visible)
@@ -125,7 +121,6 @@ public class CitizenDirectoryView : HqPanelView
         for (int i = 0; i < visible; i++)
             m_rows[i].Bind(m_sorted[start + i]);
 
-        // 페이지 버튼: 첫 페이지=다음만, 마지막=이전만, 중간=둘 다
         if (m_prevButton != null)
             m_prevButton.gameObject.SetActive(m_page > 0);
         if (m_nextButton != null)
@@ -140,7 +135,7 @@ public class CitizenDirectoryView : HqPanelView
         if (m_sortKey == SortKey.Faction)
         {
             c = ((int)a.Faction).CompareTo((int)b.Faction);
-            if (c == 0) // 같은 세력이면 이름순 보조 정렬
+            if (c == 0)
                 c = string.Compare(
                     a.Name.ToString(),
                     b.Name.ToString(),
@@ -164,8 +159,6 @@ public class CitizenDirectoryView : HqPanelView
         if (Manager != null)
             Manager.Directory.OnListChanged += HandleListChanged;
 
-        // 행의 타입·세력 표기가 테이블에서 오므로 언어가 바뀌면 다시 그린다 — 행마다 구독하는 대신
-        // 로케일 변경 한 곳에 걸고 통째로 다시 채운다 (ShopStand와 같은 방식). (#497)
         LocalizationSettings.SelectedLocaleChanged += HandleLocaleChanged;
 
         Rebuild();
@@ -176,7 +169,6 @@ public class CitizenDirectoryView : HqPanelView
         if (Manager != null)
             Manager.Directory.OnListChanged -= HandleListChanged;
 
-        // 종료 중에는 설정 에셋을 되살리지 않는다 — HasSettings로 먼저 확인한다 (ShopStand 관례)
         if (LocalizationSettings.HasSettings)
             LocalizationSettings.SelectedLocaleChanged -= HandleLocaleChanged;
     }

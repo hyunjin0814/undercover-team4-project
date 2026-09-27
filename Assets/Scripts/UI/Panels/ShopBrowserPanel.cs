@@ -7,30 +7,20 @@ using UnityEngine.Localization.Settings;
 using UnityEngine.UI;
 
 /// <summary>
-/// 장비 주문창 (#843) — 카탈로그 아이템(<see cref="ShopCatalogItem"/>)을 쓰면 열리는 브라우저 창.
-/// 이번 라운드 진열 칸을 그리드로 그리고, 우상단에 팀 잔액을 띄운다.
-///
-/// <b>이 창은 권한이 아니다.</b> 열려 있다는 사실은 서버에서 아무것도 보장하지 않는다 — 주문 버튼을
-/// 누르면 <see cref="ShopLineup"/>에 칸 번호를 보내고, 가격·품절·자금은 서버가 자기 NetworkList로
-/// 처음부터 다시 판정한다 (<see cref="LootPanel"/>과 같은 방침).
-///
-/// 진열대가 없어진 뒤로 이름·가격·설명이 보이는 곳은 여기뿐이다.
-///
-/// 화면은 탭 둘로 갈린다 (#840) — 진열 그리드와 구매 내역(<see cref="ShopPurchaseHistoryView"/>).
-/// 창을 열 때마다 진열 탭에서 시작한다.
+/// 장비 주문창 — 이번 라운드 진열 칸 그리드와 팀 잔액, 구매 내역 탭을 표시한다.
+/// 주문은 ShopLineup에 칸 번호로 요청하고 서버가 판정한다.
 /// </summary>
 public class ShopBrowserPanel : PanelBase
 {
     private const string k_commonTable = "CommonTable";
     private const string k_shopTable = "ShopTable";
 
-    // 구매 응답 사유는 규약 키로 조회한다 — 서버가 보내는 것은 enum뿐이다 (#525)
     private const string k_replyPrefix = "Shop.Reply.";
     private const string k_moneyKey = "Common.Unit.Money";
 
     public override bool CanCloseWithESC => true;
 
-    public override bool IsStackable => true; // 창처럼 겹치는 모달
+    public override bool IsStackable => true;
 
     [Header("목록")]
     [Tooltip("이번 라운드 진열 칸을 들고 있는 홀더 — 같은 씬이라 인스펙터로 잡는다")]
@@ -99,32 +89,24 @@ public class ShopBrowserPanel : PanelBase
     [SerializeField]
     private float m_openFromScale = 0.94f;
 
-    private PlayerInputHandler m_input; // 창을 연 플레이어의 입력 — 닫을 때 되돌린다
+    private PlayerInputHandler m_input;
     private TeamFund m_teamFund;
 
-    // 커서 Push/Pop 짝을 지키는 래치 (LootPanel과 같은 사정, #352)
-
-    // 구독해 둔 홀더 — 해제 기준을 지금 인스펙터 값이 아니라 실제로 구독한 그 참조로 잡는다
     private ShopLineup m_bound;
 
-    // 알림 자동 숨김 예약의 세대 번호 — 새 알림·지우기가 번호를 올리면 먼저 걸린 예약은 스스로 물러난다
     private int m_noticeVersion;
 
-    // 열기 연출용 — 패널 루트에서 잡는다 (없으면 붙인다)
     private RectTransform m_rootRect;
     private CanvasGroup m_rootGroup;
 
-    // 열기 연출의 세대 번호 — 알림과 같은 방식이다
     private int m_openVersion;
 
-    // 지금 구매 내역 탭인가 — 창을 열 때마다 진열로 되돌린다
     private bool m_historyShown;
 
     protected override void Awake()
     {
         base.Awake();
 
-        // base.Awake가 m_panelRoot를 확정한 뒤라야 잡을 수 있다
         m_rootRect = m_panelRoot.transform as RectTransform;
         m_rootGroup = m_panelRoot.GetComponent<CanvasGroup>();
         if (m_rootGroup == null)
@@ -147,7 +129,6 @@ public class ShopBrowserPanel : PanelBase
         if (m_historyTab != null)
             m_historyTab.onClick.AddListener(HandleHistoryTabClicked);
 
-        // 여기서는 어느 쪽을 켤지만 정한다 — 라벨은 로컬라이제이션이 준비된 뒤 OnOpen이 채운다
         SwapTabViews(false);
     }
 
@@ -181,9 +162,8 @@ public class ShopBrowserPanel : PanelBase
         BindLineup();
         BindFund();
         ClearNotice();
-        ShowTab(false); // 열 때는 늘 진열부터
+        ShowTab(false);
 
-        // 언어가 바뀌면 칸을 통째로 다시 채운다 — 칸마다 StringChanged를 걸지 않는 이유가 이것이다
         LocalizationSettings.SelectedLocaleChanged += HandleLocaleChanged;
 
         SetBlocked(true);
@@ -202,14 +182,13 @@ public class ShopBrowserPanel : PanelBase
     public override void ClosePanel()
     {
         if (!IsOpened)
-            return; // 중복 호출로 CursorLock 참조 수가 어긋나지 않게
+            return;
 
         base.ClosePanel();
 
         ResetOpenVisual();
         SetBlocked(false);
 
-        // 종료 중에는 설정 에셋을 되살리지 않는다 (ShopStand 관례)
         if (LocalizationSettings.HasSettings)
             LocalizationSettings.SelectedLocaleChanged -= HandleLocaleChanged;
 
@@ -220,17 +199,13 @@ public class ShopBrowserPanel : PanelBase
         ClearNotice();
     }
 
-    /// <summary>
-    /// 파괴·비활성되는 마지막 순간의 안전망 — 씬 전환이 대표적이다.
-    /// 창이 열린 채 사라지면 정지시킨 입력과 커서 해제 요청을 되돌릴 주체가 없어진다.
-    /// </summary>
+    /// <summary>창이 열린 채 비활성·파괴될 때 입력 정지와 커서 해제를 되돌린다.</summary>
     private void OnDisable()
     {
         ClosePanel();
-        SetBlocked(false); // 창이 이미 닫힌 뒤라도 래치가 켜져 있으면 짝이 안 맞은 것이다
+        SetBlocked(false);
     }
 
-    /// <summary>입력을 멈출 대상 — 공용 SetBlocked(PanelBase)가 읽는다.</summary>
     protected override PlayerInputHandler BlockTarget => m_input;
 
     private void Update()
@@ -238,19 +213,15 @@ public class ShopBrowserPanel : PanelBase
         if (!IsOpened)
             return;
 
-        // 창을 연 플레이어가 디스폰(퇴장·라운드 종료)되면 정지된 입력을 되돌릴 대상이 사라진다
         if (m_input == null)
         {
             ClosePanel();
             return;
         }
 
-        // 자금 홀더는 세션 상주물이라 보통 이미 스폰돼 있지만, 원격 클라는 늦게 도착할 수 있다
         if (m_teamFund == null)
             BindFund();
     }
-
-    // ---- 슬롯 ----
 
     private void BindLineup()
     {
@@ -281,8 +252,6 @@ public class ShopBrowserPanel : PanelBase
         m_bound = null;
     }
 
-    // 칸을 다시 채운다. 진열 칸이 그리드 칸보다 많으면 남는 칸은 그리지 않는다 — 배선 실수는
-    // 칸이 비는 것으로 드러나고, 적으면 남는 칸이 빈 칸으로 표시된다.
     private void RefreshSlots()
     {
         int slotCount = m_lineup != null ? m_lineup.SlotCount : 0;
@@ -310,20 +279,16 @@ public class ShopBrowserPanel : PanelBase
             RefreshBalance(m_teamFund.Balance);
     }
 
-    // ---- 탭 ----
-
     private void HandleCatalogTabClicked() => ShowTab(false);
 
     private void HandleHistoryTabClicked() => ShowTab(true);
 
-    // 탭 하나만 켜고 나머지를 끈다. 구매 내역 뷰는 꺼져 있는 동안 구독도 함께 풀린다(OnDisable).
     private void ShowTab(bool history)
     {
         SwapTabViews(history);
         RefreshTabLabels();
     }
 
-    // 라벨을 건드리지 않는 절반 — Awake처럼 로컬라이제이션이 아직 준비되지 않은 시점에서 쓴다
     private void SwapTabViews(bool history)
     {
         m_historyShown = history;
@@ -357,8 +322,6 @@ public class ShopBrowserPanel : PanelBase
         }
     }
 
-    // ---- 잔액 ----
-
     private void BindFund()
     {
         TeamFund fund = App.Game.TeamFund;
@@ -386,13 +349,7 @@ public class ShopBrowserPanel : PanelBase
             m_balanceText.text = LocalizedStrings.Get(k_commonTable, k_moneyKey, balance);
     }
 
-    // ---- 주문 ----
-
-    /// <summary>
-    /// 주문 버튼을 눌렀다 — 서버에 요청한다. <see cref="ShopOrderSlotView"/>가 호출.
-    /// 성공하면 칸 상태가 바뀌고 <see cref="RefreshSlots"/>가 칸을 품절로 다시 그린다.
-    /// 실패 사유는 서버가 요청자에게만 보내 알림줄에 뜬다.
-    /// </summary>
+    /// <summary>해당 칸의 주문을 서버에 요청한다.</summary>
     internal void RequestOrder(int slot)
     {
         if (m_lineup == null)
@@ -401,7 +358,6 @@ public class ShopBrowserPanel : PanelBase
         m_lineup.RequestPurchase(slot);
     }
 
-    // 서버는 사유만 보내고 문구는 여기서 자기 로케일로 조회한다 — 규약 키 Shop.Reply.<enum 이름> (#525)
     private void ShowNotice(EShopReply reply)
     {
         if (m_noticeText == null)
@@ -418,7 +374,6 @@ public class ShopBrowserPanel : PanelBase
             cancellationToken: this.GetCancellationTokenOnDestroy()
         );
 
-        // 그 사이 새 알림·지우기가 번호를 올렸으면 낡은 예약이므로 물러난다
         if (version != m_noticeVersion)
             return;
 
@@ -427,15 +382,12 @@ public class ShopBrowserPanel : PanelBase
 
     private void ClearNotice()
     {
-        m_noticeVersion++; // 걸려 있던 예약 무효화
+        m_noticeVersion++;
 
         if (m_noticeText != null)
             m_noticeText.text = string.Empty;
     }
 
-    // ---- 열기 연출 ----
-
-    // 시간 배율에 걸리지 않게 unscaled로 돈다 — 창이 열려 있는 동안 게임이 멎을 수 있다.
     private async UniTaskVoid PlayOpenAsync(int version)
     {
         if (m_openSeconds <= 0f)
@@ -447,7 +399,6 @@ public class ShopBrowserPanel : PanelBase
         float elapsed = 0f;
         while (elapsed < m_openSeconds)
         {
-            // 그 사이 닫히거나 다시 열렸으면 낡은 연출이므로 물러난다 — 마무리는 새 쪽이 한다
             if (version != m_openVersion)
                 return;
 
@@ -463,7 +414,7 @@ public class ShopBrowserPanel : PanelBase
 
     private void ApplyOpenProgress(float progress)
     {
-        float eased = 1f - (1f - progress) * (1f - progress); // 처음이 빠르고 끝이 잦아든다
+        float eased = 1f - (1f - progress) * (1f - progress);
 
         if (m_rootGroup != null)
             m_rootGroup.alpha = eased;
@@ -472,7 +423,6 @@ public class ShopBrowserPanel : PanelBase
             m_rootRect.localScale = Vector3.one * Mathf.LerpUnclamped(m_openFromScale, 1f, eased);
     }
 
-    // 연출 중에 닫혀도 다음에 열 때 찌그러진 채로 남지 않게 되돌린다
     private void ResetOpenVisual()
     {
         m_openVersion++;

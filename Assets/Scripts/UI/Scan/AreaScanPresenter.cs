@@ -3,16 +3,7 @@ using UnityEngine;
 using UnityEngine.Localization;
 
 /// <summary>
-/// 구역 스캔 오너 토스트. (#490)
-/// 문구는 <c>App.UI.Toast</c>(#493)를 그대로 쓴다 — <see cref="ArrestNoticeBroadcaster"/>의
-/// <c>m_noticeMessage</c>와 같은 관례로, 인스펙터에 배선한 <see cref="LocalizedString"/>에
-/// <c>Arguments</c>를 채워 넘긴다. 아이템(<see cref="AreaScanner"/>)은 이벤트만 발행하고 문구는
-/// UI가 소유한다는 방향(#525, <see cref="Scanner.OnDepletedUseAttempt"/>)과 일치한다.
-///
-/// <b>오너 로컬 전용</b> — Player 프리팹에 붙어 전 클라이언트에 복제되므로 오너가 아니면 통째로
-/// 끈다(<see cref="ScanResultPresenter"/>와 같은 방침). 실제로는 구독 대상 이벤트 자체가 로컬
-/// C# 델리게이트라(RPC가 아니다) 오너가 입력을 넣은 클라에서만 발행되지만, 쓰지 않을 구독을
-/// 남의 플레이어 인스턴스에 만들어 두지 않는 편이 명확하다.
+/// 구역 스캔 결과를 오너 화면 토스트로 띄운다. 오너가 아니면 비활성화된다.
 /// </summary>
 public class AreaScanPresenter : NetworkBehaviour
 {
@@ -38,7 +29,7 @@ public class AreaScanPresenter : NetworkBehaviour
     private float m_toastSeconds = 2f;
 
     private PlayerItemUser m_itemUser;
-    private AreaScanner m_scanner; // 현재 장착된 인스턴스에 바인딩. 미장착이면 null.
+    private AreaScanner m_scanner;
 
     public override void OnNetworkSpawn()
     {
@@ -48,7 +39,6 @@ public class AreaScanPresenter : NetworkBehaviour
             return;
         }
 
-        // 아이템유저는 플레이어 루트에 있다 — 부모까지 탐색 (ScanResultPresenter와 동일 관례).
         m_itemUser = GetComponentInParent<PlayerItemUser>();
         if (m_itemUser == null)
         {
@@ -68,10 +58,8 @@ public class AreaScanPresenter : NetworkBehaviour
         BindScanner(null);
     }
 
-    // 장착 아이템이 구역 스캐너면 바인딩, 아니면 해제한다.
     private void HandleEquippedItemChanged(ItemBase item) => BindScanner(item as AreaScanner);
 
-    // 구독 대상 인스턴스를 교체한다 — 이전 것은 구독 해제하고 새 것(있으면)을 구독한다.
     private void BindScanner(AreaScanner scanner)
     {
         if (m_scanner == scanner)
@@ -99,18 +87,17 @@ public class AreaScanPresenter : NetworkBehaviour
         if (m_cooldownMessage == null || m_cooldownMessage.IsEmpty)
             return;
 
-        m_cooldownMessage.Arguments = new object[] { Mathf.CeilToInt(remaining) }; // Show보다 먼저
-        App.UI.Toast?.Show(m_cooldownMessage, m_toastSeconds); // HUD 없으면 무동작
+        m_cooldownMessage.Arguments = new object[] { Mathf.CeilToInt(remaining) };
+        App.UI.Toast?.Show(m_cooldownMessage, m_toastSeconds);
     }
 
-    // 링이 발밑에서 퍼지고 색으로만 갈려 안 읽혔다 — 같은 결과를 글자로 한 번 더 말한다 (#915)
     private void HandleScanResult(bool found, float radius)
     {
         LocalizedString message = found ? m_hitMessage : m_missMessage;
         if (message == null || message.IsEmpty)
             return;
 
-        message.Arguments = new object[] { Mathf.RoundToInt(radius) }; // Show보다 먼저
+        message.Arguments = new object[] { Mathf.RoundToInt(radius) };
         App.UI.Toast?.Show(message, m_toastSeconds);
     }
 

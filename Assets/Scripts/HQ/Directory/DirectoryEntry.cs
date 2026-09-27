@@ -3,12 +3,11 @@ using Unity.Collections;
 using Unity.Netcode;
 
 /// <summary>
-/// 본부 인명부 항목 (#223) — 스폰된 시민 1명의 정본 신원. 서버가 배정 후 채워 전 클라에 동기화한다.
-/// 현장 스캔(표시값)과 대조해 위조 여부를 판단하는 기준. 문양(심볼)은 #222 연동 시 추가한다.
+/// 본부 인명부 항목 — 스폰된 시민 1명의 정본 신원. 서버가 채워 전 클라에 동기화한다.
 /// </summary>
 public struct DirectoryEntry : INetworkSerializable, IEquatable<DirectoryEntry>
 {
-    public FixedString64Bytes Name; // 정본 이름 — 대조 기준
+    public FixedString64Bytes Name;
     public OfficialRecords.CitizenType Type;
     public OfficialRecords.Faction Faction;
 

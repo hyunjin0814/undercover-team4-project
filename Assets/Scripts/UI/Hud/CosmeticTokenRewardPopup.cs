@@ -5,13 +5,7 @@ using UnityEngine;
 using UnityEngine.Localization;
 
 /// <summary>
-/// 치장 토큰 지급 축하 (#850) — 상점에 들어서면 코인이 짜잔 하고 떴다가 스스로 사라진다.
-///
-/// 정산에서 바로 띄우지 않는 이유는 그 순간 정산 패널이 화면을 덮고 있어서다. 대신
-/// <see cref="CosmeticInventory.QueueRewardNotice"/>가 적어 둔 것을 상점 진입 때 소비한다.
-/// 못 보고 껐어도 토큰은 이미 계정에 들어가 있다 — 여기서 잃는 것은 알림뿐이다.
-///
-/// 패널이 아니라 그냥 표시다 — ESC로 닫을 것도, 스택에 쌓을 것도 없다.
+/// 상점 진입 시 대기 중인 치장 토큰 지급 축하 팝업을 잠깐 띄운다.
 /// </summary>
 public class CosmeticTokenRewardPopup : MonoBehaviour
 {
@@ -45,7 +39,7 @@ public class CosmeticTokenRewardPopup : MonoBehaviour
         Hide();
 
         App.OnSceneLoaded += HandleSceneLoaded;
-        HandleSceneLoaded(App.CurrentScene); // 구독 전에 이미 들어와 있는 씬이 있다
+        HandleSceneLoaded(App.CurrentScene);
     }
 
     private void OnDestroy()
@@ -58,7 +52,6 @@ public class CosmeticTokenRewardPopup : MonoBehaviour
     {
         if (scene != EScene.Shop)
         {
-            // 상점을 벗어나면 남은 연출을 접는다 — 적어 둔 것은 이미 소비했으므로 다시 뜨지 않는다
             Cancel();
             Hide();
             return;
@@ -80,7 +73,6 @@ public class CosmeticTokenRewardPopup : MonoBehaviour
         if (m_group != null)
             m_group.alpha = 1f;
 
-        // 살짝 크게 튀었다가 제자리로 — 짜잔 하는 맛은 이 되돌아오는 구간에서 난다
         await ScaleAsync(0.6f, k_overshoot, k_popSeconds * 0.6f, ct);
         await ScaleAsync(k_overshoot, 1f, k_popSeconds * 0.4f, ct);
 
@@ -124,7 +116,6 @@ public class CosmeticTokenRewardPopup : MonoBehaviour
         }
     }
 
-    // 몇 개를 받았는지는 적지 않는다 — 라운드당 1개라 개수를 쓰면 늘 "+1"이다
     private void SetText()
     {
         if (m_label == null || m_format.IsEmpty)

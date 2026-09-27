@@ -5,15 +5,8 @@ using UnityEngine;
 using Random = UnityEngine.Random;
 
 /// <summary>
-/// 범인 확정 후 전 NPC에 외형 특징 조합을 배정한다 — 디코이 보장 배치. (#74)
-/// 범인별 외형 확정 → 범인별 공개 축 선택 → 각 몽타주에 부합하는 NPC가 정확히 k명(해당 범인 포함)이
-/// 되도록 범인마다 디코이 k−1명에게 공개 특징 일치 조합을 주고, 나머지는 모든 범인과 공개 특징이
-/// 최소 1개 다르게 배정한다. k값으로 난이도를 조절한다 (GDD 6-5 분포=난이도).
-/// 진범이 여러 명이면(#127) 몽타주도 범인 수만큼 생성된다. 다만 발행(OnMontageGenerated)은
-/// 이미 공개된 수배만 — 대기 중인 예비 용의자(#102)는 RevealMontage로 나중에 발행된다.
-/// 배정은 서버 권위 — NpcAppearance.SetProfile이 인덱스만 전 클라이언트에 동기화한다 (#56).
-/// 몽타주(GDD 10-3 글 방식)의 원본은 범인 프로필 + 공개 축이고, 문장 조립은 표시하는 쪽
-/// (본부 수배 UI #58)이 자기 언어로 한다 — 여기서 문장을 만들어 보관하지 않는다 (#497).
+/// 범인 확정 후 전 NPC에 외형 조합을 배정한다 — 각 몽타주에 부합하는 NPC가 정확히 k명이 되도록 디코이를 배치한다(GDD 6-5).
+/// 배정은 서버 권위이며, 공개된 수배의 몽타주만 OnMontageGenerated로 발행한다.
 /// </summary>
 [DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
 public class AppearanceAssigner : CommonManagerBase
@@ -29,11 +22,10 @@ public class AppearanceAssigner : CommonManagerBase
     [Range(1, AppearanceProfile.k_axisCount)]
     [SerializeField] private int m_revealedAxisCount = 2;
 
-    // 비부합 프로필 재추첨 한도 — 옵션 수 대비 범인이 많으면 몇 번은 실패한다
     private const int k_nonMatchingAttempts = 16;
 
     [Header("바디 성별")]
-    [Tooltip("수염이 붙은 NPC가 여성 바디를 받을 확률. Generic 바디 13개 중 8개가 여성이라, 수염 값이 흔하면 도시가 남성으로 쏠린다 — 이 확률만큼은 여성에게도 수염을 남긴다. 0이면 수염=여성이 절대 안 겹친다")]
+    [Tooltip("수염이 붙은 NPC가 여성 바디를 받을 확률. 0이면 수염과 여성 바디가 겹치지 않는다")]
     [Range(0f, 1f)]
     [SerializeField] private float m_femaleFacialHairChance = 0.03f;
 
@@ -44,30 +36,12 @@ public class AppearanceAssigner : CommonManagerBase
     private readonly List<AppearanceProfile> m_criminalProfiles = new List<AppearanceProfile>();
     private readonly List<RevealedAxisSet> m_criminalRevealedAxes = new List<RevealedAxisSet>();
 
-    /// <summary>
-    /// 범인별 몽타주 공개 축 — <see cref="CriminalProfiles"/>와 같은 순서. 배정 전에는 비어 있다.
-    /// 공개 축은 <b>범인마다 따로</b> 뽑는다. 한 몽타주가 말할 수 있는 축은 그 범인의 외형에 달렸는데
-    /// (대머리면 머리색을 말할 수 없고 #556, 그림 없는 값은 포트레이트로 그릴 수 없다 #607),
-    /// 전 범인 공통으로 두면 그 제약이 전부 합쳐져 아무도 안 걸린 축까지 함께 사라진다 —
-    /// 범인이 늘수록 몽타주가 조용히 빈약해진다.
-    /// </summary>
     public IReadOnlyList<RevealedAxisSet> CriminalRevealedAxes => m_criminalRevealedAxes;
 
-    /// <summary>범인별 외형 특징 조합 — CriminalAssigner.CriminalNpcs와 같은 순서. 배정 전에는 비어 있다. (#127)</summary>
     public IReadOnlyList<AppearanceProfile> CriminalProfiles => m_criminalProfiles;
 
-    /// <summary>
-    /// 외형 축별 옵션 정의 — 인덱스를 표시 이름으로 옮길 때 쓴다. 읽기 전용.
-    /// 수배 UI(#58)가 몽타주 문장을 조립하는 출처이기도 하다 — 클라이언트에도 씬에 배선돼 있다 (#497).
-    /// </summary>
     public AppearanceDatabase Database => m_appearanceDatabase;
 
-    /// <summary>
-    /// 몽타주 공개 이벤트 — 수배 UI(#58)가 구독한다. 범인마다 한 번씩 발행된다. (#127)
-    /// 문장이 아니라 프로필을 넘긴다 — 표시하는 피어가 자기 언어로 조립하기 때문이다 (#497).
-    /// 공개 축을 함께 넘기는 것은 그것이 범인마다 다르기 때문이다 — 받는 쪽이 따로 조회하면
-    /// 어느 범인의 축인지 짝을 다시 맞춰야 한다.
-    /// </summary>
     public event Action<NpcController, AppearanceProfile, RevealedAxisSet> OnMontageGenerated;
 
     private void Start()
@@ -78,18 +52,15 @@ public class AppearanceAssigner : CommonManagerBase
             return;
         }
 
-        // 범인 확정 이벤트 구독 — 매니저 간 구독은 모든 매니저의 Awake(App 등록)가 끝난 Start에서 한다.
-        // 실제 배정은 스폰 완료(수 프레임 뒤) 이후에 발화하므로 Start 구독으로 놓치지 않는다.
         Assigner.OnCriminalAssigned += AssignAll;
 
-        // 구독 전에 배정이 이미 끝난 경우 보정
         if (Assigner.CriminalNpcs.Count > 0 && m_criminalProfiles.Count == 0)
             AssignAll(Assigner.CriminalNpcs);
     }
 
     protected override void OnDestroy()
     {
-        base.OnDestroy(); // App 등록 해제
+        base.OnDestroy();
 
         if (Assigner != null)
             Assigner.OnCriminalAssigned -= AssignAll;
@@ -112,34 +83,29 @@ public class AppearanceAssigner : CommonManagerBase
 
         AppearanceModelCatalog catalog = FindCatalog(npcs);
 
-        // 1. 범인 배정
         m_criminalProfiles.Clear();
         foreach (NpcController c in criminals)
         {
             NpcCatalogAppearance cat = c.GetComponent<NpcCatalogAppearance>();
             if (cat != null && catalog != null)
             {
-                // 그림 몽타주가 가진 두상은 인간형 하나뿐이다 — 그 두상으로 안 읽히는 모델이 범인으로
-                // 걸리면 여기서 갈아끼운다. 프로필을 담기 전이라야 아래 실현 단계와 어긋나지 않는다.
                 int modelIndex = cat.ModelIndex;
                 if (!catalog.CanDepict(modelIndex))
                 {
                     modelIndex = PickDepictableModel(catalog, modelIndex);
                     cat.SetModelIndex(modelIndex);
                 }
-                m_criminalProfiles.Add(catalog.GetProfile(modelIndex)); // Sci-fi
+                m_criminalProfiles.Add(catalog.GetProfile(modelIndex));
             }
             else
-                m_criminalProfiles.Add(m_appearanceDatabase.CreateRandomProfile()); // Generic
+                m_criminalProfiles.Add(m_appearanceDatabase.CreateRandomProfile());
         }
         PickRevealedAxes();
 
-        // 2. 디코이 선정
         Dictionary<NpcController, int> decoyOwners = PickDecoys(npcs, criminals);
         var criminalIndexOf = new Dictionary<NpcController, int>();
         for (int i = 0; i < criminals.Count; i++) criminalIndexOf[criminals[i]] = i;
 
-        // 3. 역할별 실현
         var logBuilder = new StringBuilder();
         foreach (var npc in npcs)
         {
@@ -163,11 +129,6 @@ public class AppearanceAssigner : CommonManagerBase
             logBuilder.AppendLine($"  {DescribeProfile(applied)}{role}");
         }
 
-        // 4. 몽타주 공개 — 이미 공개된 수배만 발행한다. 예비 용의자(#102)는 IsCriminal = false로
-        //    대기하다가 승격 시 RevealMontage가 m_criminalProfiles의 같은 프로필을 발행한다.
-        //    공개 축은 범인마다 라운드 내내 고정이라 그 시점에 다시 뽑지 않는다 — 다시 뽑으면
-        //    본부에 이미 떠 있던 몽타주가 무효가 된다. 문장을 보관하지 않는 이유도 같다:
-        //    보관할 원본은 프로필이고, 문장은 표시하는 쪽이 자기 언어로 조립한다 (#497).
         int revealedCount = 0;
         var montageLog = new StringBuilder();
         for (int i = 0; i < criminals.Count; i++)
@@ -188,12 +149,7 @@ public class AppearanceAssigner : CommonManagerBase
         Debug.Log($"외형 배정 완료 ({npcs.Count}명, 용의자 {criminals.Count}명 중 공개 {revealedCount}명) | 몽타주: {montageLog}\n{logBuilder}");
     }
 
-    /// <summary>
-    /// 대기 중이던 용의자의 몽타주를 지금 발행한다 — 제보 전화 승격(#102) 전용. 서버(또는 오프라인) 전용.
-    /// 라운드 시작에 확정해 둔 프로필을 그대로 쓰므로 공개 축은 바뀌지 않는다.
-    /// 발행 자체는 라운드 시작 때와 같은 경로(OnMontageGenerated)라, WantedListManager의
-    /// NetworkList 추가와 TotalWanted++ 가 그대로 따라온다 — 별도 등록 경로를 만들지 않는 이유다.
-    /// </summary>
+    /// <summary>대기 중이던 용의자의 몽타주를 지금 발행한다(제보 전화 승격). 서버(또는 오프라인) 전용.</summary>
     public void RevealMontage(NpcController npc)
     {
         if (npc == null)
@@ -206,7 +162,6 @@ public class AppearanceAssigner : CommonManagerBase
             return;
         }
 
-        // CriminalNpcs와 m_criminalProfiles는 같은 순서다 — 인덱스로 짝을 찾는다
         for (int i = 0; i < criminals.Count; i++)
         {
             if (criminals[i] != npc)
@@ -231,7 +186,6 @@ public class AppearanceAssigner : CommonManagerBase
         NpcCatalogAppearance cat = npc.GetComponent<NpcCatalogAppearance>();
         if (cat != null && catalog != null)
         {
-            // 1단계에서 담아 둔 것을 그대로 쓴다 — 모델을 갈아끼운 경우 여기서 다시 읽으면 갈라진다
             AppearanceProfile p = m_criminalProfiles[criminalIndex];
             AssignIdentity(npc, p);
             return p;
@@ -285,9 +239,6 @@ public class AppearanceAssigner : CommonManagerBase
         NpcAppearance app = npc.GetComponent<NpcAppearance>();
         if (app != null)
         {
-            // 바디를 프로필에 맞춘다 — 수염이 붙었으면 남성 바디에서 뽑는다 (#619).
-            // 반대로 바디를 보고 수염을 지우면 프로필이 바뀌어, 디코이가 범인의 공개 축을 복사해 두는
-            // 몽타주 부합 보장이 깨진다. 프로필은 그대로 두고 바디를 맞추는 쪽은 그 보장을 안 건드린다.
             bool hasFacialHair = profile.FacialHairIndex > 0;
             app.ServerPickBody(!hasFacialHair || Random.value < m_femaleFacialHairChance);
             app.SetProfile(profile);
@@ -308,7 +259,6 @@ public class AppearanceAssigner : CommonManagerBase
     {
         foreach (int m in ShuffledIndices(catalog.Count))
         {
-            // 그림 몽타주로 안 그려지는 모델은 디코이가 못 된다 — 현장에서 후보로 안 보여 k가 헛돈다
             if (!catalog.CanDepict(m)) continue;
 
             AppearanceProfile p = catalog.GetProfile(m);
@@ -351,7 +301,6 @@ public class AppearanceAssigner : CommonManagerBase
         return null;
     }
 
-    // 비부합은 그냥 시민이라 NonHumanoid도 그대로 쓴다 — 도시 다양성이 여기서 유지된다
     private int PickNonMatchingModel(AppearanceModelCatalog catalog)
     {
         foreach (int m in ShuffledIndices(catalog.Count))
@@ -371,16 +320,7 @@ public class AppearanceAssigner : CommonManagerBase
             m_criminalRevealedAxes.Add(PickRevealedAxesFor(m_criminalProfiles[i], i));
     }
 
-    /// <summary>
-    /// 이 범인이 말할 수 있는 축을 셔플해 앞에서 공개 수만큼 고른다. 담기는 순서는 뜻이 없다 — 집합이다.
-    /// 판정은 <b>이 범인의 값만</b> 본다 — 다른 범인이 헬멧을 썼다고 이 범인의 모자 축까지 버릴 이유가 없다.
-    ///
-    /// 빠지는 축은 둘이다:
-    /// - 머리색 — 이 범인의 머리가 화면에 안 보이면(대머리·가림) 뺀다 (#556). 머리 프롭이 없으면
-    ///   머리색은 화면에 나타날 자리가 없어 몽타주에만 남고, 현장에서 눈으로 대조할 수 없는 특징이
-    ///   무전에 실리면 대조가 성립하지 않은 채 오검거로 이어진다.
-    /// - 포트레이트로 그릴 수 없는 값이 걸린 축 (#607, <see cref="AppearanceDatabase.CanDepict"/>).
-    /// </summary>
+    /// <summary>이 범인이 공개할 수 있는 축을 셔플해 공개 수만큼 고른다.</summary>
     private RevealedAxisSet PickRevealedAxesFor(in AppearanceProfile profile, int criminalIndex)
     {
         bool hairVisible = m_appearanceDatabase.HasVisibleHair(profile);
@@ -415,10 +355,7 @@ public class AppearanceAssigner : CommonManagerBase
         return revealed;
     }
 
-    /// <summary>
-    /// 범인을 제외한 NPC를 셔플해 범인마다 k−1명씩 디코이로 겹치지 않게 배분한다.
-    /// 후보가 모자라면 뒤쪽 범인의 디코이가 줄어든다. 반환: 디코이 NPC → 담당 범인 인덱스.
-    /// </summary>
+    /// <summary>범인 외 NPC를 셔플해 범인마다 k−1명씩 디코이로 배분한다. 디코이 → 담당 범인 인덱스를 돌려준다.</summary>
     private Dictionary<NpcController, int> PickDecoys(IReadOnlyList<NpcController> npcs, IReadOnlyList<NpcController> criminals)
     {
         var criminalSet = new HashSet<NpcController>(criminals);
@@ -461,14 +398,7 @@ public class AppearanceAssigner : CommonManagerBase
         return profile;
     }
 
-    /// <summary>
-    /// 모든 범인의 몽타주에 비부합인 프로필을 만든다 — 각 범인은 <b>자기 공개 축</b>으로 판정한다.
-    ///
-    /// 공개 축이 범인마다 다르면 한 축을 고쳐 전원을 한 번에 떼어낼 수 없다 —
-    /// 그 축을 공개 축으로 갖지 않는 범인은 영향을 안 받고, 한 범인을 떼려고 바꾼 값이
-    /// 다른 범인과의 부합을 되살릴 수도 있다. 그래서 범인마다 떼어낸 뒤 전체를 다시 확인하고,
-    /// 실패하면 다시 뽑는다.
-    /// </summary>
+    /// <summary>모든 범인의 몽타주에 부합하지 않는 프로필을 만든다.</summary>
     private AppearanceProfile CreateNonMatchingProfile()
     {
         AppearanceProfile profile = default;
@@ -488,7 +418,6 @@ public class AppearanceAssigner : CommonManagerBase
                 return profile;
         }
 
-        // 옵션 수 대비 범인이 너무 많아 비부합을 만들 수 없다
         Debug.LogWarning("AppearanceAssigner: 공개 축 옵션이 범인 외형 값들로 가득 차 비부합 프로필을 만들 수 없다 — AppearanceDatabase 옵션 수나 진범 수를 조정할 것", this);
         return profile;
     }
@@ -499,11 +428,10 @@ public class AppearanceAssigner : CommonManagerBase
         AppearanceProfile criminal = m_criminalProfiles[criminalIndex];
         foreach (AppearanceAxis axis in m_criminalRevealedAxes[criminalIndex])
         {
-            // Generic 경로이므로 SciFiOnly가 아닌 값 중에서만 대체값을 찾는다 (가림 등 재유입 방지)
             List<int> selectable = m_appearanceDatabase.GetGenericSelectableIndices(axis);
             selectable.Remove(criminal.GetIndex(axis));
             if (selectable.Count == 0)
-                continue; // 이 축은 대체값이 없다 — 다른 축에서 시도
+                continue;
 
             profile.SetIndex(axis, selectable[Random.Range(0, selectable.Count)]);
             return;
@@ -521,7 +449,6 @@ public class AppearanceAssigner : CommonManagerBase
         return false;
     }
 
-    // 배정 결과 로그용 — 전 축의 표시 이름을 나열한다
     private string DescribeProfile(in AppearanceProfile profile)
     {
         var builder = new System.Text.StringBuilder();

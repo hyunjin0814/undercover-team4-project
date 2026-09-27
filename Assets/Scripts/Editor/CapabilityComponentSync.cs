@@ -5,21 +5,8 @@ using UnityEditor;
 using UnityEngine;
 
 /// <summary>
-/// 능력 컴포넌트(<see cref="ChannelGauge"/> 등)를 프리팹 자산에 반영·점검한다.
-///
-/// <b>왜 필요한가.</b> 능력 선택의 단일 출처는 소비자 클래스의 <c>[RequireComponent]</c> 선언이지만,
-/// Unity의 자동 보정은 <b>에디터 인메모리 동작이라 프리팹 자산에 저장되지 않는다</b> — 콘솔에
-/// "Creating missing ... component"가 찍혀도 .prefab 파일은 그대로다. 저장하지 않은 채 빌드하면
-/// 런타임에 컴포넌트가 없다. 이 스크립트가 그 선언을 실제 자산에 밀어 넣는다.
-///
-/// <b>판정은 반드시 직렬화된 YAML로 한다.</b> <see cref="PrefabUtility.LoadPrefabContents"/>가
-/// 돌려주는 사본에는 자동 보정이 이미 적용돼 있어, <c>GetComponent</c>로 물으면 누락이 항상
-/// "없음"으로 나온다 — 로드된 오브젝트로 점검하면 눈을 감는다. 그래서 .prefab 텍스트에 스크립트
-/// guid가 실제로 있는지를 본다.
-///
-/// 런타임 AddComponent는 절대 금지다 — NGO는 스폰 시점의 NetworkBehaviour 인덱스로 RPC를
-/// 라우팅하므로 실행 중 추가하면 피어 간 인덱스가 어긋난다. 그래서 에디터에서만 반영한다.
-/// 상속에서 합성으로 옮긴 경위는 docs/channeled-interaction-split.md 참고.
+/// 소비자의 [RequireComponent] 선언대로 능력 컴포넌트를 프리팹 자산에 실제로 추가·점검한다.
+/// 누락 판정은 로드된 오브젝트가 아니라.prefab YAML의 스크립트 guid로 한다.
 /// </summary>
 public static class CapabilityComponentSync
 {
@@ -27,8 +14,6 @@ public static class CapabilityComponentSync
     private const string k_menuApply = "Tools/능력 컴포넌트/프리팹 반영";
     private const string k_prefabFolder = "Assets/Prefabs";
 
-    // 이 스크립트가 붙여도 되는 타입 — 무관한 RequireComponent(Rigidbody 등)까지 임의로 추가하지 않기
-    // 위한 화이트리스트다. 능력 컴포넌트를 새로 만들면 여기 추가한다.
     private static readonly Type[] s_capabilities =
     {
         typeof(ChannelGauge),
@@ -53,7 +38,6 @@ public static class CapabilityComponentSync
         {
             string path = AssetDatabase.GUIDToAssetPath(prefabGuid);
 
-            // 자동 보정이 닿지 않는 유일한 정본 — 디스크에 직렬화된 내용
             string serialized = File.ReadAllText(path);
 
             GameObject root = PrefabUtility.LoadPrefabContents(path);
@@ -69,13 +53,11 @@ public static class CapabilityComponentSync
                 foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
                     missing |= Inspect(child.gameObject, path, serialized, found, problems);
 
-                // 로드 사본에는 자동 보정으로 컴포넌트가 이미 올라와 있으므로, 저장만 하면 반영된다
                 if (apply && missing)
                     PrefabUtility.SaveAsPrefabAsset(root, path);
             }
             finally
             {
-                // 실패로 빠져나가도 임시 씬이 남지 않게 한다 (LoadPrefabContents는 숨은 씬을 만든다)
                 PrefabUtility.UnloadPrefabContents(root);
             }
         }
@@ -83,7 +65,6 @@ public static class CapabilityComponentSync
         Report(apply, found, problems);
     }
 
-    // 이 오브젝트가 선언한 능력이 직렬화 텍스트에 실제로 들어 있는지 본다.
     private static bool Inspect(
         GameObject go,
         string path,
@@ -97,7 +78,7 @@ public static class CapabilityComponentSync
         {
             Component component = go.GetComponent(type);
             if (component == null)
-                continue; // 자동 보정이 돌았다면 여기 오지 않는다
+                continue;
 
             string scriptGuid = ScriptGuidOf(component);
             if (string.IsNullOrEmpty(scriptGuid))
@@ -107,7 +88,7 @@ public static class CapabilityComponentSync
             }
 
             if (serialized.Contains(scriptGuid))
-                continue; // 이미 자산에 있다
+                continue;
 
             found.Add($"{type.Name} → {path} ({go.name})");
             missing = true;
@@ -115,16 +96,14 @@ public static class CapabilityComponentSync
         return missing;
     }
 
-    // 이 오브젝트의 컴포넌트들이 [RequireComponent]로 요구하는 능력 타입.
     private static HashSet<Type> DeclaredCapabilities(GameObject go)
     {
         HashSet<Type> required = new();
         foreach (MonoBehaviour behaviour in go.GetComponents<MonoBehaviour>())
         {
             if (behaviour == null)
-                continue; // 스크립트가 깨진 컴포넌트 — 여기서 판단할 수 없다
+                continue;
 
-            // inherit: true — HomeRunBaton·ToyHammer처럼 상속으로 물려받은 선언까지 본다
             object[] attributes = behaviour
                 .GetType()
                 .GetCustomAttributes(typeof(RequireComponent), inherit: true);
@@ -146,7 +125,6 @@ public static class CapabilityComponentSync
             into.Add(type);
     }
 
-    // 이름 검색이 아니라 인스턴스에서 역추적한다 — 동명 타입에 걸리지 않는다.
     private static string ScriptGuidOf(Component component)
     {
         if (component is not MonoBehaviour behaviour)

@@ -3,8 +3,7 @@ using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// 한 사람의 치장 — 슬롯별 카탈로그 인덱스 묶음 (#818). <see cref="PlayerColorSet"/>과 같은 모양이다.
-/// <b>0은 "안 씀"</b>이라 기본값이 그대로 안전한 상태다 — 색과 달리 미배정 플래그가 필요 없다.
+/// 한 사람의 치장 — 슬롯별 카탈로그 인덱스 묶음. 0은 "안 씀"이다.
 /// </summary>
 [Serializable]
 public struct AccessorySet : INetworkSerializable, IEquatable<AccessorySet>
@@ -102,6 +101,5 @@ public struct AccessorySet : INetworkSerializable, IEquatable<AccessorySet>
         return hash;
     }
 
-    // 카탈로그 길이는 여기서 보지 않는다 — 범위 밖 인덱스는 카탈로그가 null로 잘라 "안 씀"이 된다
     private static byte ToIndex(int index) => (byte)Mathf.Clamp(index, 0, byte.MaxValue);
 }

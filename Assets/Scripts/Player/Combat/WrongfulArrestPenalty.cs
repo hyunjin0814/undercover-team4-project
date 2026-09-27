@@ -5,44 +5,21 @@ using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// 오검거 페널티 (GDD 7-3, #101 → 2단계 #276) — 팀 공유 오검거 카운트를 서버 권위로 누적하고,
-/// 허용 횟수(k_maxWrongful) 초과 시 원한 구역에 수용된 오검거 시민들을 추격대로 출동시킨다.
-///
-/// 흐름: 오검거 판정 → 시민을 원한 구역 수용(#277, 구역 인원 = 팀 카운트) → 임계치 초과 순간
-/// 구역 전원 출동 + <b>팀 카운트 즉시 리셋</b>(#278 — 추격 중 새 오검거는 새 카운트로 쌓여 새 추격대가 된다)
-/// → 추격 NPC에게 잡힌 플레이어(원인 제공자가 아니어도!)가 페널티 확정 → <b>포획 시점에 미해소였던</b>
-/// 페널티 NPC 전원이 수렴한 뒤 2명이 양옆에서 광장까지 끌고 가고(#279) → 30초 매달기(행동불능) 후 자동 복귀.
-///
-/// <b>추격에 시간 제한은 없다(팀 결정)</b> — 못 잡으면 사냥 모드로 계속 배회하며 노린다.
-/// 페널티는 잡히거나 격퇴로 미뤄질 뿐 사라지지 않는다. 폴백(#101 텔레포트 집행)은 한 겹만 남는다:
-/// 출동 시점에 구역이 비어 추격대를 꾸릴 수 없는 예외 상황 — 기존 매달기 로직이 최후 보루다.
-///
-/// 호루라기(#250)는 이번 범위 밖 — 격퇴 진입점(<see cref="RepelChasers"/>)만 열어 둔다.
-/// 판정·카운트·추격·호송은 모두 서버에서만 일어나고 결과(팀 카운트·NPC 상태·행동불능)만 동기화된다(#56).
-/// 행동불능 상태 자체는 PlayerIncapacitation(#105)이, 플레이어 끌려가기 표현은 오너 추종
-/// (PlayerPenaltyView→PlayerTowedMotion.BeginEscortFollow — NetworkTransform 오너 권한)이 담당한다.
-///
-/// <b>⚠ 발동은 기본적으로 꺼져 있다 (#612).</b> 추격·호송·매달기가 정보 격차를 망가뜨린다는 판단으로
-/// 게임에서 뺐지만, 클래스와 호송 파이프라인은 남는다 — 납치 이벤트(#371)가 통째로 재사용하기 때문이다
-/// (<see cref="NpcDutyAgent"/>·<see cref="CarryEscortSequence"/>·PlayerTowedMotion). 인스펙터의
-/// m_penaltyEnabled를 켜면 아래 흐름이 그대로 되살아난다. 꺼진 동안 오검거는 <b>집계만</b> 되고
-/// 시민은 그 자리에서 석방된다 — 정산 "최다 오검거"는 계속 나온다.
-///
-/// 개인별 오검거 집계는 정산 "최다 오검거" 코믹 스탯(GDD 7-3)용으로 팀 카운트와 별개로 유지한다.
-/// 오검거는 팀 자금·라운드 종료와 무관하다(GDD 7-3 확정) — 여기서 자금/라운드를 건드리지 않는다.
+/// 오검거 페널티(GDD 7-3) — 팀 오검거 카운트를 서버 권위로 누적하고, 초과 시 원한 구역 시민을 추격대로 출동시킨다.
+/// 발동은 기본적으로 꺼져 있어 오검거는 집계만 되며, 호송 파이프라인은 납치 이벤트가 재사용한다.
 /// </summary>
 [RequireComponent(typeof(NetworkObject))]
 [DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
 public partial class WrongfulArrestPenalty : NetworkedManagerBase
 {
-    private const int k_maxWrongful = 1; // 이 값을 "초과"하면(2회째) 추격대 출동
-    private const float k_hangSeconds = 30f; // 광장 매달기(행동불능) 지속 시간 — NPC 수와 무관하게 고정 (#276 확정)
+    private const int k_maxWrongful = 1;
+    private const float k_hangSeconds = 30f;
 
-    private const float k_carrierGap = 1.1f; // 양옆 끌기 담당의 선두 기준 좌우 간격(m)
-    private const float k_plazaArriveDistance = 2f; // 호송 선두의 광장 도착 판정 거리(m)
-    private const float k_carryTravelTimeoutSeconds = 90f; // 호송 이동 안전 상한(초) — 넘으면 스냅 텔레포트로 마무리
-    private const float k_warningSeconds = 8f; // 출동 알림 표시 시간(초) — 카운트다운이 아니라 잠깐 뜨는 경고
-    private const float k_detentionSlotSpacing = 1.1f; // 원한 구역에서 시민끼리 벌어질 간격(m) — 캡슐 지름 0.8m + 여유
+    private const float k_carrierGap = 1.1f;
+    private const float k_plazaArriveDistance = 2f;
+    private const float k_carryTravelTimeoutSeconds = 90f;
+    private const float k_warningSeconds = 8f;
+    private const float k_detentionSlotSpacing = 1.1f;
 
     [Header("페널티 발동 (#612)")]
     [Tooltip(
@@ -82,26 +59,18 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
 
     private ArrestJudge Judge => App.Game.ArrestJudge;
 
-    // 서버만 쓰고 전 클라가 읽는 팀 공유 카운트 = 페널티 게이지. (정산 개인 집계와 별개)
     private readonly NetworkVariable<int> m_teamCountSynced = new NetworkVariable<int>();
 
-    // 정산 코믹 스탯용 개인 집계 — clientId별 실제 오검거 횟수. 서버에서만 누적(표시·동기화는 정산 UI 이슈).
     private readonly Dictionary<ulong, int> m_perPlayerCounts = new Dictionary<ulong, int>();
 
-    // 원한 구역 대기 인원(#277) — 불변식: 이 목록 수 == 팀 카운트. 출동 시 통째로 추격대가 되며 비워진다.
     private readonly List<NpcController> m_detained = new List<NpcController>();
 
-    // 미해소 페널티 NPC 전원(전 출동분 합산) — 포획 시점의 스냅샷이 수렴 대상이 된다(독박, #276 확정).
     private readonly List<NpcController> m_activeNpcs = new List<NpcController>();
 
-    // 현재 호송(수렴~광장) 처리 중인 대상 — 동시에 하나만. 추격 상태의 늦은 포획 통보는 무시된다
-    // (호송 중 새로 출동한 추격대는 계속 추격하다가, 이 호송이 끝난 뒤의 포획부터 다시 접수된다).
     private Transform m_carryTarget;
 
-    /// <summary>팀 공유 오검거 카운트(페널티 게이지). 전 피어 읽기 가능.</summary>
     public int TeamWrongfulCount => m_teamCountSynced.Value;
 
-    /// <summary>정산용 개인 오검거 집계(clientId→횟수). 서버에서만 채워진다.</summary>
     public IReadOnlyDictionary<ulong, int> PerPlayerCounts => m_perPlayerCounts;
 
     /// <summary>라운드 사이 초기화 — 개인 오검거 집계만 비운다(팀 카운트는 별개 성격이라 안 건드림). 서버(또는 오프라인) 전용.</summary>
@@ -115,8 +84,6 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
 
     public override void OnNetworkSpawn()
     {
-        // 판정은 서버 권위이므로 서버에서만 구독한다 (WantedListManager 관례).
-        // 재시작(Shutdown 후 StartHost) 시 씬 NetworkObject에 이전 세션 값이 남으므로 새로 0에서 시작한다.
         if (IsServer)
         {
             m_teamCountSynced.Value = 0;
@@ -141,24 +108,11 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
             Judge.OnArrestJudged -= HandleArrestJudged;
     }
 
-    // ---- 오검거 접수: 개인 집계 + 수용 + 출동 판단 (서버 전용) ----
-
-    // 오검거 판정 수신 — 시민을 원한 구역에 수용하고(#277), 카운트를 올리고, 임계치 초과면 출동시킨다(#278).
-    // 수용·카운트·출동이 한 구독자 안에 있어야 순서가 보장된다 — CustodyRouter가 오검거 신병을 이쪽에 넘기는 이유.
     private void HandleArrestJudged(ArrestResult result)
     {
         if (result.Verdict != ArrestVerdict.WrongfulArrest)
             return;
 
-        // 오검거 카운트는 매 인계마다 오른다 — 무고한 시민을 다시 잡아 인계하면 또 한 번의 오검거다 (#358).
-        // IsFirstDelivery로 막지 않는 이유: 시민은 석방(ReleaseFromCustody)돼도 ClearDelivered가 불리지 않아
-        // IsDelivered가 영구 true로 남는다 → 가드를 걸면 첫 인계 이후 오검거가 영영 안 세진다. 재판정 스팸은
-        // 유치장이 <b>방문당 한 번만</b> 판정해서 막는다 (#492 JailIntake — 나갔다 다시 들어와야 재판정된다).
-
-        // 개인 집계는 실제 오검거 기록 — 페널티 결과와 무관하게 항상 +1 (정산 코믹 스탯용).
-        // 밧줄이 걸린 채 유치장까지 들어갔으면 전원이 관여자다 (#390 규칙 4) — 줄다리기로 남이 밀어넣었어도
-        // 손을 떼는 수단(E 놓고 걸어가 줄 끊기 / 자기 줄 풀기)이 있었고, 실제로는 유치장까지 따라가는 동안
-        // 거리 초과로 줄이 먼저 끊기므로 "끝까지 붙어 있었다"만 남는다.
         foreach (PlayerEscorter deliverer in result.DeliveredBy)
         {
             if (deliverer == null)
@@ -169,13 +123,6 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
             m_perPlayerCounts[clientId] = prev + 1;
         }
 
-        // 발동이 꺼져 있으면(#612 — 기본값) 여기서 끝난다: 집계만 남고 추격·호송·매달기는 없다.
-        // 팀 카운트(게이지)도 올리지 않는다 — 안 쓰이는 채로 쌓여 있다가 플레이테스트 도중 다시 켜는 순간
-        // 임계치를 넘겨 빈 원한 구역 폴백(텔레포트 매달기)이 터지는 것을 막는다.
-        //
-        // 석방을 여기서 직접 하는 이유: 매니저가 살아 있으므로 CustodyRouter의 석방 폴백은 막혀 있다
-        // (그쪽은 App.Game.WrongfulArrestPenalty가 null인 씬만 처리한다). 신병을 이쪽에 넘긴 이상
-        // 배회 복귀까지 이쪽 책임이다 — 안 풀면 시민이 Captured로 굳는다.
         if (!m_penaltyEnabled)
         {
             Debug.Log(
@@ -186,7 +133,6 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
             return;
         }
 
-        // 팀 카운트(페널티 게이지) +1 — 원한 구역 수용과 함께 오르므로 "구역 인원 = 팀 카운트"가 유지된다.
         m_teamCountSynced.Value += 1;
 
         Debug.Log($"[오검거] 팀 카운트 {m_teamCountSynced.Value} — {FormatPerPlayerCounts()}");
@@ -197,30 +143,12 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
             LaunchSquad(CollectTargets(result.DeliveredBy));
     }
 
-    /// <summary>
-    /// <b>시체</b> 오검거 집계 — <see cref="ArrestJudge.JudgeCorpse"/>가 수감 버튼 경로에서 부른다. 서버 전용.
-    ///
-    /// <b>왜 따로 있나.</b> 시체 판정은 <see cref="ArrestJudge.OnCorpseJudged"/>로 나가는데 그 훅은
-    /// <b>표시·기록 전용</b>이라 이 매니저가 구독하지 않는다(구독하면 상태를 건드리는 쪽이 섞인다).
-    /// 그래서 판정이 직접 부른다 — 위 <see cref="HandleArrestJudged"/>의 시체판이고, 개인 집계 기준도
-    /// 같다: <b>인계자 전원</b>(줄을 쥔 사람들 + 버튼을 누른 사람).
-    ///
-    /// <b>죽는 순간에는 아무것도 세지 않는다.</b> 예전에는 사살 즉시 셌다(#571) — "죽여서 페널티를
-    /// 회피하는 것이 최적 전략이 되면 안 된다"가 근거였는데, 오검거가 페널티 없이 횟수만 집계하게 되면서
-    /// 회피할 대상이 없어졌다. 이제 무고한 시민을 죽이고 <b>버려 두면 아무 일도 일어나지 않고</b>,
-    /// 시체를 유치장 문 앞까지 끌고 와 누르면 그때 한 번 센다.
-    ///
-    /// <b>원한 구역에 수용하지 않는다.</b> 시체는 걸어갈 수 없다. 그래서 발동이 켜진 경우
-    /// <c>"구역 인원 == 팀 카운트"</c> 불변식이 깨지는데, <see cref="LaunchSquad"/>가 이미 그 상황을
-    /// 받는다: 구역에 남은 인원만 출동하고, 아무도 없으면 광장 매달기 폴백으로 집행된다.
-    /// </summary>
-    /// <param name="deliverers">인계자 — 개인 집계와 추격 대상의 근거. 비어 있으면 팀 카운트만 오른다.</param>
+    /// <summary>시체 오검거를 인계자 전원 기준으로 집계한다. 서버 전용.</summary>
     public void ServerCountWrongfulCorpse(List<PlayerEscorter> deliverers)
     {
         if (IsSpawned && !IsServer)
             return;
 
-        // 개인 집계 — 산 채로 인계한 경우와 같은 기준이다(정산 코믹 스탯).
         if (deliverers != null)
         {
             foreach (PlayerEscorter deliverer in deliverers)
@@ -234,8 +162,6 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
             }
         }
 
-        // 산 채로 인계한 경로와 같은 가름 — 발동이 꺼져 있으면 집계만 남는다 (#612).
-        // 시체는 원한 구역에 보내지도, 석방하지도 않는다(이미 Dead 상태를 든다).
         if (!m_penaltyEnabled)
         {
             Debug.Log(
@@ -253,7 +179,6 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
             LaunchSquad(CollectTargets(deliverers));
     }
 
-    // 추격 대상 트랜스폼만 뽑아낸다 — 인계자 전원이 대상이다 (#390 규칙 5).
     private static List<Transform> CollectTargets(List<PlayerEscorter> deliverers)
     {
         var targets = new List<Transform>();
@@ -267,7 +192,6 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
         return targets;
     }
 
-    // 원한 구역 수용(#277) — 석방 대신 전용 구역으로 보내 출동 대기시킨다.
     private void DetainNpc(NpcController npc)
     {
         if (npc == null)
@@ -279,10 +203,6 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
                 this
             );
 
-        // 설 자리는 여기서 나눠 준다 — 구역 지점은 하나뿐이고, 이송 중에는 회피를 끄므로
-        // (NpcDetainedState.Enter) 겹침을 흩어 줄 주체가 없다. 구역 로스터를 쥔 이쪽이 도착 순번으로
-        // 배정하는 게 맞다: 0번은 지점 정중앙, 이후는 바깥으로 한 겹씩 퍼진다.
-        // 출동(LaunchSquad)으로 구역이 비면 순번도 0부터 다시 시작한다 — 앞 무리는 이미 떠났다.
         Vector3 slotOffset = GatherSlot.Offset(m_detained.Count, k_detentionSlotSpacing);
 
         m_detained.Add(npc);
@@ -290,21 +210,14 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
         Debug.Log($"[오검거] 원한 구역 수용: {npc.name} — 대기 {m_detained.Count}명");
     }
 
-    // ---- 출동 (#278) ----
-
-    // 구역 전원을 추격대로 출동시킨다. 팀 카운트는 이 순간 리셋 — 이후 오검거는 새 게이지로 쌓인다 (#276 확정).
-    // 대상이 여럿이면(줄다리기로 함께 인계, #390) 추격 NPC마다 <b>자기와 가장 가까운</b> 대상을 문다 —
-    // 전원이 한 사람에게 몰리면 나머지는 벌을 안 받고, 한 명은 감당 못 할 수를 맞는다.
     private void LaunchSquad(List<Transform> targets)
     {
         m_teamCountSynced.Value = 0;
         PruneDead(m_detained);
 
-        // 아래에서 네 번 도는 목록이라 여기서 한 번만 정규화한다 — null 목록·죽은 항목 둘 다.
         targets ??= new List<Transform>();
         targets.RemoveAll(t => t == null);
 
-        // 폴백 ① — 구역이 비어 추격대를 꾸릴 수 없다(리셋 타이밍 등 예외 상황). 기존 텔레포트 집행 (#101)
         if (m_detained.Count == 0)
         {
             Debug.LogWarning("[오검거] 원한 구역이 비어 있음 — 텔레포트 집행 폴백", this);
@@ -318,13 +231,10 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
         {
             m_activeNpcs.Add(npc);
             npc.Penalty.OnPenaltyCaught += HandlePenaltyCaught;
-            // null이면 사냥 모드로 시작해 범위에 드는 플레이어를 문다
             npc.Penalty.StartPenaltyChase(NearestTarget(npc.transform.position, targets));
         }
         m_detained.Clear();
 
-        // 대상 본인들에게 알림(잠깐 표시 후 자동 소멸). 추격에 시간 제한은 없다(팀 결정) —
-        // 못 잡으면 사냥 모드로 계속 배회하며 노리므로, 페널티는 잡히거나 격퇴로 미뤄질 뿐 사라지지 않는다.
         foreach (Transform target in targets)
             ShowWarning(target, k_warningSeconds);
 
@@ -335,7 +245,6 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
         Debug.Log($"[오검거] 추격대 출동 — {launched}명, 초기 타겟 {targetNames}");
     }
 
-    // 출동 지점에서 가장 가까운 대상 — 대상이 없으면 null(사냥 모드).
     private static Transform NearestTarget(Vector3 from, List<Transform> targets)
     {
         if (targets == null || targets.Count == 0)
@@ -356,11 +265,7 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
         return nearest;
     }
 
-    /// <summary>
-    /// 격퇴 — 호루라기(#250 후속)의 연결고리. user 주변 반경의 추격 NPC들이 도주 후
-    /// 재추격 쿨다운 동안 그 플레이어를 노리지 않는다. 페널티는 취소되지 않는다 — 유예·전가만 된다. (#278)
-    /// 서버(또는 오프라인)에서만 유효.
-    /// </summary>
+    /// <summary>user 주변 추격 NPC를 격퇴해 재추격 쿨다운을 건다. 서버(또는 오프라인) 전용.</summary>
     public void RepelChasers(Transform user)
     {
         if (IsSpawned && !IsServer)
@@ -376,9 +281,6 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
         }
     }
 
-    // ---- 매달기 (#101 유지 — 폴백 겸 호송 마무리) ----
-
-    // 광장 스냅 + 30초 행동불능 → 자동 복귀. 호송 마무리(위치 보정)와 폴백 집행이 공유한다. (서버 전용)
     private async UniTask HangAsync(Transform target)
     {
         if (target == null)
@@ -387,17 +289,6 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
         PlayerMovement movement = target.GetComponent<PlayerMovement>();
         PlayerIncapacitation incap = target.GetComponent<PlayerIncapacitation>();
 
-        // <b>다른 사유로</b> 이미 무력화된 몸은 매달지 않는다. 아래 Incapacitate는 Die를 못 덮게 막혀 있지만
-        // (#364) <b>텔레포트는 그 가드 밖</b>이라, 안 막으면 상태만 그대로 둔 채 광장으로 옮겨진다 —
-        // Die면 본부 부활 장치에 안치해 둔 몸이 동료 눈앞에서 사라지고 운반 중이었으면 이탈 거리에 걸려
-        // 줄이 끊기며(#365), 납치 호송 중이면 끌려가던 몸이 광장으로 순간이동한다(#371).
-        //
-        // Penalty만 통과시키는 이유는 그것이 <b>자기 상태</b>이기 때문이다 — 호송 마무리 경로
-        // (CarryToPlazaAsync)는 포획 때 이미 Penalty를 걸어 두고 여기로 들어온다.
-        //
-        // 포획 경로는 HandlePenaltyCaught에서 이미 걸러진다. 여기가 막는 것은 추격대를 꾸리지 못해
-        // 곧장 집행되는 폴백 경로다(위 LaunchSquad — 원한 구역이 빈 예외 상황).
-        // 이 폴백에서는 페널티가 미뤄지는 게 아니라 이번 집행분이 넘어간다 — 예외 경로라 그대로 둔다.
         if (incap != null && incap.IsIncapacitated && incap.Cause != IncapacitationCause.Penalty)
         {
             Debug.Log(
@@ -416,16 +307,12 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
         Quaternion rot = m_plazaPoint != null ? m_plazaPoint.rotation : Quaternion.identity;
 
         if (movement != null)
-            movement.ServerTeleport(pos, rot); // 오너 권한 경로 — 호스트·원격 클라 모두 이동
-        // 폴백 경로(구역이 비어 추격대 없이 집행)에서는 여기서 무력화가 처음 걸린다.
-        // 같은 원인이면 무동작이지만 <b>다른 원인은 덮어쓴다</b> — 다운·기능 정지만은 덮이지 않게
-        // Incapacitate 쪽에서 막는다(#364, #725). 안 막으면 30초 뒤 아래 Recover()가 다운·Die까지 풀어 공짜 부활이 된다.
+            movement.ServerTeleport(pos, rot);
         if (incap != null)
             incap.Incapacitate(IncapacitationCause.Penalty);
 
         Debug.Log($"[오검거] 광장 매달기 — {target.name} → {pos}, {k_hangSeconds}초");
 
-        // 씬 전환·파괴 시 토큰으로 안전 중단한다.
         try
         {
             await UniTask.Delay(
@@ -435,20 +322,12 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
         }
         catch (OperationCanceledException)
         {
-            return; // 매니저 파괴 — 복귀 처리 없이 종료(대상도 함께 정리되는 상황)
+            return;
         }
 
-        // 자동 복귀 — 대상이 퇴장·파괴됐을 수 있어 fake-null 가드.
-        // Cause 확인이 두 번째 가드다: 30초를 기다리는 사이 다른 무력화가 이 상태를 덮어썼을 수 있는데,
-        // 그걸 이 타이머가 풀면 남의 진행 도중에 조작권이 돌아간다(납치 호송이면 끌려가는 중에 풀린다, #371).
-        // 납치 쪽 AbductionEvent.CarryToManholeAsync가 쓰는 것과 같은 가드다.
         if (incap != null && incap.Cause == IncapacitationCause.Penalty)
             incap.Recover();
     }
-
-    // ---- 정리 헬퍼 ----
-    // (임무 해제 헬퍼 ReleaseNpc/ReleaseAll은 WrongfulArrestPenalty.Carry.cs에 있고,
-    //  수렴·대형·끌기 연출은 CarryEscortSequence로 빠졌다 — 납치 이벤트와 공용이다, #371)
 
     private static void PruneDead(List<NpcController> list) => list.RemoveAll(npc => npc == null);
 
@@ -462,7 +341,6 @@ public partial class WrongfulArrestPenalty : NetworkedManagerBase
             view.ShowWarning(seconds);
     }
 
-    // 개인 집계 전체를 "client N:x회" 형태로 이어붙인다 — 정산 코믹 스탯이 붙기 전까지 로그로 확인용.
     private string FormatPerPlayerCounts()
     {
         if (m_perPlayerCounts.Count == 0)

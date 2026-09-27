@@ -5,11 +5,8 @@ using UnityEngine;
 using Random = UnityEngine.Random;
 
 /// <summary>
-/// 세력별 '진짜 문양' index를 세션 시작 시 1회 선정해 전 클라이언트에 동기화한다. (#222)
-/// 세션-상주 오브젝트(SessionObjectSpawner가 destroyWithScene:false로 스폰)라 라운드·씬이 바뀌어도
-/// 값이 유지된다 — 방을 새로 팔 때만 새로 선정된다. TeamFund와 동일한 상주 패턴.
-/// 정직한 시민은 이 진짜 index의 문양을, 위조범은 그와 다른 가짜 index의 문양을 단다(CriminalAssigner, #223).
-/// 본부 대조자료 뷰(#222)는 RealIndex로 이번 세션의 진짜 문양을 표시한다.
+/// 세력별 진짜 문양 index를 세션 시작 시 한 번 뽑아 전 클라이언트에 동기화하는 세션 상주 오브젝트.
+/// 정직한 시민은 진짜 문양을, 위조범은 가짜 문양을 단다.
 /// </summary>
 [RequireComponent(typeof(NetworkObject))]
 [DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
@@ -20,7 +17,6 @@ public class FactionSymbolManager : NetworkedManagerBase
 
     private readonly NetworkList<byte> m_realIndices = new NetworkList<byte>();
 
-    /// <summary>진짜 index가 정해지거나 바뀐 시점 — 본부 대조자료 뷰(#222)가 구독해 다시 그린다.</summary>
     public event Action OnRealIndicesChanged;
 
     public override void OnNetworkSpawn()
@@ -30,7 +26,6 @@ public class FactionSymbolManager : NetworkedManagerBase
         if (IsServer)
             RollRealIndices();
 
-        // 늦게 접속한 클라도 이 시점엔 초기 동기화가 끝나 있다 — 최초 표시를 위해 한 번 알린다.
         OnRealIndicesChanged?.Invoke();
     }
 
@@ -56,7 +51,7 @@ public class FactionSymbolManager : NetworkedManagerBase
         }
     }
 
-    /// <summary>지정 세력의 이번 세션 진짜 문양 index. 미동기화·미선정이면 0. (#222)</summary>
+    /// <summary>지정 세력의 이번 세션 진짜 문양 index. 미동기화·미선정이면 0.</summary>
     public int RealIndex(OfficialRecords.Faction faction)
     {
         int i = (int)faction;

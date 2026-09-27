@@ -2,22 +2,8 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// 납치 호송 중 캐리어 NPC의 손과 내 몸을 잇는 밧줄 표시 — 순수 로컬 연출. (#371/#901)
-///
-/// <see cref="RopeDragView"/>와 같은 방침(각 피어가 이미 동기화된 값을 보고 스스로 그린다)이지만
-/// 방향이 반대다 — 그쪽은 "내가 남을 끄는" 쪽이고, 이것은 "남이 나를 끄는" 쪽이다.
-///
-/// <b>캐리어 참조는 <see cref="PlayerTowedMotion"/>이 아니라 <see cref="PlayerPenaltyView"/>에서
-/// 읽는다.</b> PlayerTowedMotion의 호송 앵커(m_escortAnchorA/B)는 [Rpc(SendTo.Owner)]로만 채워지는
-/// <b>오너 전용 로컬 상태</b>다(위치는 NetworkTransform이 오너→전 피어로 대신 복제해 주니 그것으로
-/// 충분했다) — 그래서 처음엔 여기서도 그걸 읽었는데, 그러면 끌려가는 <b>본인 화면에서만</b> 밧줄이
-/// 보이고 동료·관전자 화면에는 안 보이는 문제가 났다. PlayerPenaltyView.CarrierA/B는 서버가 쓰고
-/// 전 피어가 읽는 NetworkVariable이라 이 문제가 없다.
-///
-/// 오검거 호송(#279)·UFO 흡입(#819)에는 그리지 않는다 — 캐리어가 없거나(UFO는 앵커를 비워 둔다)
-/// 임무가 납치가 아니면(오검거) 숨긴다. 물리(CC 충돌 여부, #902)와는 서로 다른 조건이다 — 맨홀
-/// 하강(#775) 구간은 CC를 다시 끄지만(물리는 직접 이동) 임무는 여전히 납치이므로 밧줄은 하강
-/// 중에도 계속 보인다(끝까지 끌려가는 그림).
+/// 납치 호송 중 캐리어 NPC의 손과 끌려가는 플레이어를 잇는 밧줄을 각 피어가 로컬로 그린다.
+/// 캐리어 참조는 PlayerPenaltyView의 NetworkVariable에서 읽는다.
 /// </summary>
 [RequireComponent(typeof(PlayerPenaltyView))]
 public class AbductionRopeView : MonoBehaviour
@@ -45,18 +31,16 @@ public class AbductionRopeView : MonoBehaviour
     [Tooltip("몸통 뼈를 못 찾을 때 내 몸의 대체 매듭 높이(m) — 루트(발밑) 기준")]
     [SerializeField] private float m_knotHeight = 0.5f;
 
-    // 밧줄 하나분의 표시 — 선과 매듭(캐리어 손) 뼈 캐시. 슬롯 단위로 재사용한다.
     private class RopeVisual
     {
         public LineRenderer Line;
-        public Transform HandSource; // 이 캐시가 가리키는 캐리어 — 바뀌면 뼈를 다시 잡는다
-        public Transform HandAnchor; // 못 찾았으면 null로 캐시해 재검색을 막는다
+        public Transform HandSource;
+        public Transform HandAnchor;
     }
 
     private PlayerPenaltyView m_penaltyView;
     private readonly List<RopeVisual> m_visuals = new();
 
-    // 내 몸(플레이어) 쪽 매듭점 캐시 — self는 바뀌지 않으니 한 번만 찾으면 된다
     private bool m_selfKnotResolved;
     private Transform m_selfKnotAnchor;
 
@@ -65,7 +49,6 @@ public class AbductionRopeView : MonoBehaviour
         m_penaltyView = GetComponent<PlayerPenaltyView>();
     }
 
-    // 앵커 위치는 Update에서 갱신되므로 이번 프레임의 최종 위치를 잇는다 (RopeDragView와 같은 이유)
     private void LateUpdate()
     {
         NpcController carrierA = ResolveAbductionCarrier(m_penaltyView.CarrierA);
@@ -90,8 +73,6 @@ public class AbductionRopeView : MonoBehaviour
 
     private void OnDisable() => HideAll();
 
-    // 이 캐리어가 납치 임무 중인가 — 오검거 호송은 null을 돌려받아 표시가 숨는다.
-    // UFO(#819)는 애초에 PlayerPenaltyView.CarrierA/B가 채워지지 않으므로 여기까지 오지 않는다.
     private static NpcController ResolveAbductionCarrier(NpcController carrier) =>
         carrier != null && carrier.Penalty.IsAbductionDuty ? carrier : null;
 
@@ -99,7 +80,7 @@ public class AbductionRopeView : MonoBehaviour
     {
         RopeVisual visual = EnsureVisual(index);
         if (visual == null)
-            return; // 머티리얼이 없어 그릴 수 없다
+            return;
 
         Vector3 hand = HandPoint(visual, carrier.transform);
         visual.Line.enabled = true;
@@ -115,12 +96,11 @@ public class AbductionRopeView : MonoBehaviour
         {
             float t = (float)i / m_segments;
             Vector3 point = Vector3.Lerp(hand, knot, t);
-            point.y -= sag * Mathf.Sin(t * Mathf.PI); // 양 끝 0, 가운데 최대로 처진다
+            point.y -= sag * Mathf.Sin(t * Mathf.PI);
             visual.Line.SetPosition(i, point);
         }
     }
 
-    // 캐리어 NPC 쪽 매듭점 — 오른손 뼈, 없으면 대체 높이 (RopeDragView.KnotPoint와 같은 관례)
     private Vector3 HandPoint(RopeVisual visual, Transform carrier)
     {
         if (carrier != visual.HandSource)
@@ -137,7 +117,6 @@ public class AbductionRopeView : MonoBehaviour
             : carrier.position + Vector3.up * m_handHeight;
     }
 
-    // 내 몸 쪽 매듭점 — 가슴 뼈, 없으면 대체 높이. 대상이 나 자신이라 한 번만 찾으면 된다.
     private Vector3 KnotPoint()
     {
         if (!m_selfKnotResolved)
@@ -169,7 +148,6 @@ public class AbductionRopeView : MonoBehaviour
             m_visuals[index].Line.enabled = false;
     }
 
-    // 슬롯의 표시 인스턴스를 필요할 때 한 번만 만든다 — 끌려가지 않는 플레이어는 비용이 0이다.
     private RopeVisual EnsureVisual(int index)
     {
         while (m_visuals.Count <= index)
@@ -187,7 +165,7 @@ public class AbductionRopeView : MonoBehaviour
     {
         if (m_ropeMaterial == null)
         {
-            enabled = false; // 머티리얼 없이는 그릴 수 없다 — 매 프레임 헛돌지 않게 스스로 꺼진다
+            enabled = false;
             Debug.LogWarning(
                 $"[AbductionRopeView] 밧줄 선 머티리얼이 없어 표시를 끈다. {name} 프리팹에 지정할 것", this);
             return null;
@@ -198,7 +176,7 @@ public class AbductionRopeView : MonoBehaviour
 
         var visual = new RopeVisual();
         visual.Line = ropeObject.AddComponent<LineRenderer>();
-        visual.Line.useWorldSpace = true; // 양 끝이 서로 다른 오브젝트라 월드 좌표로 그린다
+        visual.Line.useWorldSpace = true;
         visual.Line.sharedMaterial = m_ropeMaterial;
         visual.Line.widthMultiplier = m_ropeWidth;
         visual.Line.numCapVertices = 2;

@@ -3,52 +3,33 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// 검거 판정 — 확보한 신병의 실제 신원을 대조해 진범/오검거를 판정한다. (GDD 7-2, #41)
-/// <see cref="JailIntake"/>가 문 앞 E로 신병을 넣는 순간
-/// <see cref="Judge"/>를 부르면 판정하고, 결과를 로그 + OnArrestJudged로 알린다.
-/// 판정 장소 이력: 인계존 도달 자동 판정(#59) → 인계 단말 E(#414) →
-/// <b>유치장 앞 보안 스캐너(#492)</b>. 중간에 '유치장 문턱(Jail 영역 진입)'을 거쳤는데, 유치장
-/// <b>안</b>에서 확정된 오검거가 통행을 잃고 그 자리에 굳어 문 밖 게이트로 다시 물러났다.
-/// 실제 자금 정산(#42)·오검거 페널티(GDD 7-3)·판정 UI(#43)는 이 이벤트를 구독해 후속 구현한다.
-///
-/// <b>시체도 같은 문을 지난다</b> (#571): 죽은 대상은 죽는 순간이 아니라 유치장 문 앞 버튼에서
-/// 판정된다(<see cref="JudgeCorpse"/>). <b>죽는 순간에는 아무것도 하지 않는다</b> — 현상금도
-/// 오검거도 전부 그 버튼에서 확정된다.
-///
-/// 범인 배정(CriminalAssigner)이 서버에서만 이뤄지고 아직 클라이언트에 동기화되지 않으므로(#52/#56 TODO),
-/// 판정도 서버(또는 오프라인)에서만 수행한다 — 인계 NPC의 네트워크 권위로 게이트한다.
+/// 검거 판정 — 유치장 앞에서 인계된 신병(또는 시체)의 신원을 대조해 진범/경범죄/오검거를 판정한다(GDD 7-2).
+/// 결과는 OnArrestJudged·OnCorpseJudged로 알린다. 서버(또는 오프라인) 전용.
 /// </summary>
 [DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
 public class ArrestJudge : CommonManagerBase
 {
     private const int k_wrongfulReward = 0;
 
-    [Tooltip("DeadOrAlive 대상을 시체로 인계할 때 깎는 비율(0.4 = 40% 감액). 100원 단위로 떨어진다(BountyRoll.Reduce). AliveOnly는 이 비율을 타지 않고 ConditionUnmet으로 0원이다 (#766)")]
+    [Tooltip("DeadOrAlive 대상을 시체로 인계할 때 감액 비율(0.4 = 40%). AliveOnly 시체는 0원이다")]
     [Range(0f, 1f)]
     [SerializeField]
     private float m_corpseBountyPenalty = 0.4f;
 
     private RoundManager Round => App.Game.Round;
 
-    // 진범·위조범 보상은 여기서 정하지 않는다 (#395) — NPC마다 다른 현상금을 CriminalAssigner가
-    // 라운드 시작에 뽑아 CitizenIdentity.Bounty에 확정해 두고, 판정은 그 값을 읽기만 한다.
-    // 판정 시점에 뽑으면 재판정(#358)·탈옥 후 재검거(#231)로 금액을 리롤할 수 있게 된다.
-
     public event Action<ArrestResult> OnArrestJudged;
 
-    private readonly Dictionary<ulong, int> m_perPlayerArrests = new Dictionary<ulong, int>(); // 정산 "최다 진범 체포" 집계 (#739)
+    private readonly Dictionary<ulong, int> m_perPlayerArrests = new Dictionary<ulong, int>();
 
-    /// <summary>정산용 개인 진범 체포 집계(clientId→횟수). 서버에서만 채워진다.</summary>
     public IReadOnlyDictionary<ulong, int> PerPlayerArrests => m_perPlayerArrests;
 
-    /// <summary>라운드 사이 초기화. 서버(또는 오프라인) 전용 — ShopManager 진입 지점에서 부른다. (#739)</summary>
+    /// <summary>라운드 사이 초기화. 서버(또는 오프라인) 전용 — ShopManager 진입 지점에서 부른다.</summary>
     public void ServerResetRound()
     {
         m_perPlayerArrests.Clear();
     }
 
-    // 진범 체포만 개인 집계에 올린다 — 재판정으로 부풀지 않게 첫 인계에서만 센다(경범죄 즉결과 달리
-    // 정산 코믹 스탯 성격이라 WrongfulArrestPenalty의 오검거 집계와 기준을 맞춘다).
     private void CreditArrest(ArrestVerdict verdict, bool firstDelivery, List<PlayerEscorter> deliverers)
     {
         if (verdict != ArrestVerdict.WantedCriminal || !firstDelivery)
@@ -65,82 +46,26 @@ public class ArrestJudge : CommonManagerBase
         }
     }
 
-    /// <summary>
-    /// 시체 판정이 났다 — <b>표시 전용 훅이다.</b> 서버(또는 오프라인)에서만 발생한다. (#571)
-    ///
-    /// <see cref="OnArrestJudged"/>와 <b>일부러</b> 갈라 뒀다. 저쪽 구독자 대부분은 "지금 신병을
-    /// 확보했다"를 전제로 <b>상태를 전이시키는데</b>(오검거 수용·석방) 시체에는 성립하지 않고,
-    /// <see cref="NpcStateMachine"/>이 사망 이탈을 막으므로 에러만 난다. 상태를 건드리지 않는
-    /// 후처리(수배 항목 제거·표시)는 양쪽을 함께 구독한다 (#616).
-    ///
-    /// ⚠ <b>여기에 NPC 상태를 바꾸는 구독자를 붙이지 말 것.</b> 지금 구독자는 판정 배너
-    /// (<see cref="ArrestVerdictFeedback"/>) · 전체 알림(<see cref="ArrestNoticeBroadcaster"/>) ·
-    /// 수배 항목 제거(<see cref="WantedListManager"/>)뿐이다 (#616). 셋 다 표시·기록만 손대고
-    /// 신병 라우팅을 하지 않는다 — 그 성격을 유지해야 한다.
-    /// </summary>
     public event Action<ArrestResult> OnCorpseJudged;
 
-    // 판정 완료 표식은 NpcCustody.IsDelivered가 들고 있다 (#230) — NPC와 수명을 같이하므로
-    // 씬 전환·라운드 재시작 시 수동으로 비울 static 상태가 없다.
-    // (App 등록 해제는 베이스 OnDestroy가 처리 — 여기서 오버라이드할 것이 없다)
-
-    /// <summary>
-    /// 판정 — 대상의 신원을 대조해 진범/경범죄/오검거를 확정한다. 서버(또는 오프라인) 전용.
-    ///
-    /// <b>호출 시점은 <see cref="JailIntake"/>가 쥔다</b> (#492): 확보한 신병이 판정 게이트를 지나는
-    /// 순간 한 번 부른다. 상태·구역 검증은 그쪽이 이미 끝냈으므로 여기서 다시 하지 않는다 —
-    /// 예전 인계 단말 경로의 TryDeliver(상태·구역 재검증)는 단말과 함께 제거됐다.
-    ///
-    /// 재판정(#358)은 그대로 허용되지만 <b>그 판단은 여기가 아니다</b>: 같은 통과에 매 틱 다시
-    /// 판정되지 않게 거르는 것은 JailIntake의 통과 기록이고, 게이트를 벗어나면 그 기록이 지워져
-    /// 재판정이 열린다. 반출한 수감자를 다시 앉히려면 게이트를 한 번 더 지나야 한다.
-    /// 반출은 <c>ClearDelivered</c>를 부르지 않는다 — 그건 탈옥 전용이다(JailIntake 주석).
-    /// 재판정 후처리 중복은 <see cref="ArrestResult.IsFirstDelivery"/>가 건다.
-    /// </summary>
-    /// <param name="presser">
-    /// 수감 버튼을 누른 플레이어 — 밧줄을 걸고 있지 않아도 <b>인계자에 포함</b>된다. (#537)
-    ///
-    /// 예전에는 인계자를 밧줄에서만 뽑았다. 신병을 끌고 유치장까지 들어가는 것이 곧 인계였기
-    /// 때문이다. 문 앞 버튼으로 바뀌면서(#537) <b>줄을 풀어 문 앞에 놓고 누르는 것이 정상 경로</b>가
-    /// 됐고, 그때 밧줄 목록이 비어 판정 배너(<see cref="ArrestVerdictFeedback"/>)가 보여줄 대상을
-    /// 잃고 조용히 스킵됐다 — 누른 사람에게 결과가 안 뜬다.
-    ///
-    /// 오검거 페널티도 이 목록을 대상으로 삼으므로, 누른 사람이 함께 책임진다 —
-    /// 무고한 시민을 넣은 것은 버튼을 누른 손이다. 인계 몫(#484)의 귀속 기준과도 같다.
-    /// </param>
+    /// <summary>산 신병의 신원을 대조해 판정을 확정하고 알린다. 서버(또는 오프라인) 전용.</summary>
     public ArrestResult? Judge(NpcController npc, PlayerEscorter presser = null)
     {
         if (npc == null) return null;
         if (npc.IsSpawned && !npc.IsServer) return null;
 
-        // 라운드 진행 중에만 판정한다. 준비 중(Preparing)에는 먼저 입장한 플레이어가 남들이 로딩하는
-        // 사이에 검거해 진행도를 벌어둘 수 있고, 종료 후(Ended)에는 정산이 이미 스냅샷된 뒤다.
-        // 판정을 막으면 MarkDelivered도 서지 않아 라운드가 시작된 뒤 정상적으로 다시 판정된다.
-        // (RoundManager가 없는 단독 테스트 씬은 게이트하지 않는다 — MisdemeanorLoiterer와 같은 관례)
         if (Round != null && Round.Phase != RoundPhase.InProgress)
             return null;
 
-        // 첫 인계 여부를 표식 세우기 전에 잡아 둔다 — 할당량·오검거 카운트가 재판정으로 부풀지 않게 (#358).
         bool firstDelivery = !npc.Custody.IsDelivered;
 
         if (!TryResolveVerdict(npc, isCorpse: false, out ArrestVerdict verdict, out int reward, out CitizenProfile profile))
             return null;
 
-        // 판정 완료로 표시 — 방치 도주 타이머(#230)를 멈춘다. 재판정 자체는 허용하므로(#358)
-        // 여기서 중복을 막지 않는다. 막는 것은 <b>부르는 쪽</b>이다: JailIntake가 게이트 통과당
-        // 한 번만 부른다(m_judgedThisPass). 판정이 E 입력에서 폴링으로 바뀌었으므로(#492) "누른
-        // 횟수만큼만 판정된다"는 옛 근거(#414)는 더 이상 성립하지 않는다.
         npc.Custody.MarkDelivered();
 
-        // 줄다리기로 여러 명이 함께 끌고 왔을 수 있다 (#390) — 관여한 전원이 인계자다.
-        // 오검거 페널티가 이 목록 전원에게 걸린다: 밧줄이 걸린 채 유치장까지 들어갔다는 것은
-        // 막지 못했다는 뜻이고, 손을 떼는 수단(E 놓고 걸어가 줄 끊기 / 자기 줄 풀기)이 양쪽에 있다.
-        // 끌고 있지 않아도 줄이 이어져 있으면 포함된다 — 유치장 안에 내려놓은 뒤 판정되는 경로(#492)에서도
-        // 인계자가 '알 수 없음'이 되지 않는다.
         List<PlayerEscorter> deliverers = PlayerEscorter.FindEscortersOf(npc);
 
-        // 버튼을 누른 사람도 인계자다 (#537) — 줄을 풀어 놓고 누르는 경로에서는 이 사람이 유일하다.
-        // 중복은 거른다: 자기 줄에 걸어 끌고 온 사람이 그대로 누르는 것이 가장 흔한 경우다.
         if (presser != null && !deliverers.Contains(presser))
             deliverers.Add(presser);
 
@@ -149,22 +74,8 @@ public class ArrestJudge : CommonManagerBase
         CreditArrest(verdict, firstDelivery, deliverers);
         LogVerdict(result);
 
-        // 밧줄 해제는 <b>오검거에만</b> 건다 (#492).
-        //
-        // 수감 판정(현상수배범·경범죄)은 판정 후에도 묶인 채 남아야 한다 — 플레이어가 좌석까지
-        // 끌고 가 E로 놓을 때 앉기 때문이다. 여기서 풀면 유치장 문을 통과하는 순간 Captured가 되어
-        // JailIntake가 즉시 착석시켜 버린다.
-        //
-        // 오검거는 반대로 <b>반드시 여기서 풀어야 한다</b>. 아래 OnArrestJudged의 구독자
-        // WrongfulArrestPenalty가 그 자리에서 원한 구역으로 전이시키는데(SendToDetention),
-        // 밧줄이 걸린 동안은 NavMeshAgent가 꺼져 있어(StartRopeDrag) 전이한 상태의 Enter가
-        // 죽은 에이전트에 목적지를 걸고 조용히 실패한다 — 시민이 묶인 채 굳는다.
-        // TickTetherCleanup은 목록에서만 빼고 앵커는 떼지 않으므로 뒤늦게 풀어도 이미 늦다.
-        // 그래서 순서가 강제다: 해제 → 이벤트 발행.
         if (verdict == ArrestVerdict.WrongfulArrest)
         {
-            // 서버 권위로 즉시 푼다 — RequestRelease는 클라 오너 권한이 필요해 비호스트 검거에서 동작하지 않는다.
-            // 판정된 그 NPC의 줄만 전원에게서 푼다 — 같이 끌고 온 다른 대상은 계속 끌린다 (#390).
             if (deliverers.Count > 0)
             {
                 foreach (PlayerEscorter deliverer in deliverers)
@@ -176,46 +87,12 @@ public class ArrestJudge : CommonManagerBase
             }
         }
 
-        // 수갑 회수(#307/#229)는 제거됐다 — 밧줄은 소모형이 아니라 NPC에 채워둔 자원이 없다. (#369)
-
         OnArrestJudged?.Invoke(result);
 
         return result;
     }
 
-    // <b>사망 시점 판정(JudgeDeath)은 없어졌다.</b> 죽는 순간 오검거를 즉시 세던 경로였는데, 그 근거가
-    // "죽여서 페널티를 회피하는 것이 최적 전략이 되면 안 된다"였다. 오검거가 페널티 없이 <b>횟수 집계만</b>
-    // 하게 되면서 회피할 대상이 사라졌고, 즉시 집계가 세우던 표식(MarkDelivered)은 <see cref="JudgeCorpse"/>를
-    // 함께 막아 <b>시체를 문 앞까지 끌고 가도 판정이 조용히 끊기는</b> 부작용을 내고 있었다.
-    // 이제 산 신병과 시체가 같은 문 하나를 지난다 — 결과는 수감 버튼에서만 나온다.
-    //
-    // 환경사(차·폭발)를 걸러 내던 IsPlayerKiller도 함께 사라졌다 (#634). 같은 일을 인계자 기준이 대신 한다:
-    // 아무도 시체를 문 앞까지 끌고 가지 않으면 판정 자체가 일어나지 않는다.
-
-    /// <summary>
-    /// 시체 판정 — 유치장 문 앞까지 끌고 온 시체를 판정한다. 서버(또는 오프라인) 전용. (#571)
-    ///
-    /// <see cref="JailIntake.ServerAdmitHeldBy"/>가 수감 버튼 경로에서 부른다. <see cref="Judge"/>와
-    /// <b>판별은 공유하고 뒤처리는 공유하지 않는다</b>:
-    ///
-    /// <list type="bullet">
-    ///   <item><b><see cref="OnArrestJudged"/> 대신 <see cref="OnCorpseJudged"/>를 발행한다</b> —
-    ///   저쪽에는 신병 라우팅(상태 전이) 구독자가 섞여 있어 시체에 성립하지 않는다. 양쪽 모두에
-    ///   필요한 후처리(수배 항목 제거·표시)는 두 훅을 함께 구독한다.</item>
-    ///   <item><b>재판정이 판정 종류로 갈린다.</b> <see cref="NpcCustody.IsDelivered"/>가 막는 것은
-    ///   <b>계상</b>이지 판정이 아니다 — 계상되는 쪽(진범·경범죄)은 원장에 두 번 오르면 현상금이
-    ///   겹치므로 한 번만 받고, 그 표식을 걷는 <b>밧줄 반출</b>(<c>JailIntake.ServerReleaseCorpse</c>)을
-    ///   거쳐야 다시 넣을 수 있다. <b>오검거는 이 가드를 타지 않는다</b>: 감옥에 들어가지 않아 원장에
-    ///   없고 계상 대신 횟수만 세므로 막을 중복이 없다. 산 신병과 같은 규칙이다 — 다시 인계하면
-    ///   또 한 번의 오검거다 (#358).</item>
-    ///   <item><b>오검거도 여기서 센다.</b> 예전에는 죽는 순간 셌고(JudgeDeath) 그 표식이 무고한 시민의
-    ///   시체를 이 함수에 들어오지도 못하게 막았다 — 버튼을 눌러도 아무 결과가 안 나오던 원인이다.
-    ///   이제 산 신병과 같은 기준으로 <b>인계자</b>에게 붙는다: 시체를 문 앞까지 끌고 와 누른 사람이
-    ///   무고한 시민을 넣은 것이다. 끌고 가지 않으면 아무 일도 일어나지 않는다.</item>
-    /// </list>
-    /// </summary>
-    /// <param name="presser">수감 버튼을 누른 플레이어 — 밧줄을 쥔 사람들과 함께 인계자가 된다.</param>
-    /// <returns>판정 결과 — 판정할 수 없거나 이미 <b>계상된</b> 시체면 null (오검거는 매번 성립한다).</returns>
+    /// <summary>유치장 문 앞까지 끌고 온 시체를 판정하고 OnCorpseJudged를 발행한다. 서버(또는 오프라인) 전용.</summary>
     public ArrestResult? JudgeCorpse(NpcController npc, PlayerEscorter presser)
     {
         if (npc == null)
@@ -228,23 +105,17 @@ public class ArrestJudge : CommonManagerBase
         if (Round != null && Round.Phase != RoundPhase.InProgress)
             return null;
 
-        // 표식은 판별보다 <b>먼저</b> 읽는다 — 아래 계상 가드와 결과의 IsFirstDelivery가 같은 값을 봐야 한다.
         bool firstDelivery = !npc.Custody.IsDelivered;
 
         if (!TryResolveVerdict(npc, isCorpse: true, out ArrestVerdict verdict, out int reward, out CitizenProfile profile))
             return null;
 
-        // 이미 계상된 시체는 다시 계상하지 않는다 — 계상 안 되는 판정(오검거·생포 조건 불충족)은
-        // 감옥에 안 들어가 원장에 없으므로 막을 중복이 없다.
         if (!firstDelivery && verdict.IsCredited())
             return null;
 
-        // 표식도 계상되는 쪽에만 세운다 — 나머지에 세우면 위 가드를 스스로 닫아 재판정이 막힌다.
         if (verdict.IsCredited())
             npc.Custody.MarkDelivered();
 
-        // 인계자 기준은 산 신병과 같다 (#537) — 줄을 쥔 전원 + 버튼을 누른 사람.
-        // 시체 밧줄은 1:1이라(NpcStateRules.CanRopeBind) 목록은 보통 한둘이다.
         List<PlayerEscorter> deliverers = PlayerEscorter.FindEscortersOf(npc);
         if (presser != null && !deliverers.Contains(presser))
             deliverers.Add(presser);
@@ -253,11 +124,6 @@ public class ArrestJudge : CommonManagerBase
 
         CreditArrest(verdict, firstDelivery, deliverers);
 
-        // 오검거 집계는 산 신병과 같은 기준·같은 대상이고, <b>인계마다</b> 오른다 (#358 — 저쪽
-        // HandleArrestJudged가 IsFirstDelivery로 막지 않는 것과 같은 이유).
-        // 훅이 갈려 있어(OnCorpseJudged에는 페널티 매니저가 구독하지 않는다) 여기서 직접 부른다 —
-        // 저쪽 구독을 늘리지 않는 이유는 OnCorpseJudged의 성격(표시·기록 전용, 상태를 안 건드림)을
-        // 지키기 위해서다.
         if (verdict == ArrestVerdict.WrongfulArrest)
             App.Game.WrongfulArrestPenalty?.ServerCountWrongfulCorpse(deliverers);
 
@@ -267,14 +133,7 @@ public class ArrestJudge : CommonManagerBase
         return result;
     }
 
-    /// <summary>
-    /// 신원을 대조해 판정과 보상액을 낸다 — <b>부수효과가 없는 순수 판별</b>이다. (#571에서 분리)
-    ///
-    /// <see cref="Judge"/>(산 신병 인계)와 <see cref="JudgeCorpse"/>(시체 인계)가 공유한다.
-    /// 갈라 둔 이유는 둘이 <b>판별은 같고 뒤처리가 전혀 다르기</b> 때문이다.
-    /// 판별까지 복사하면 진범/위조범/난동꾼 우선순위가 여러 곳으로 갈린다.
-    /// </summary>
-    /// <returns>판정할 수 있으면 참 — 경범죄 마커도 신원도 없으면 거짓.</returns>
+    /// <summary>신원을 대조해 판정과 보상액을 계산하는 부수효과 없는 순수 판별.</summary>
     private bool TryResolveVerdict(
         NpcController npc,
         bool isCorpse,
@@ -287,11 +146,9 @@ public class ArrestJudge : CommonManagerBase
         reward = k_wrongfulReward;
         profile = null;
 
-        // 경범죄 이벤트 NPC(난동꾼)는 신원 대조 이전에 마커로 식별한다 (#106).
         MisdemeanorOffender misdemeanor = npc.GetComponent<MisdemeanorOffender>();
         CitizenIdentity identity = npc.GetComponent<CitizenIdentity>();
 
-        // 경범죄 마커도 신원도 없으면 판정할 수 없다.
         if (misdemeanor == null && identity == null)
         {
             Debug.LogWarning($"ArrestJudge: 신원(CitizenIdentity) 없음 — 판정 불가: {npc.name}", npc);
@@ -302,20 +159,14 @@ public class ArrestJudge : CommonManagerBase
 
         if (misdemeanor != null)
         {
-            // 난동꾼 즉결 처리 — 진범/오검거 대조를 타지 않고 경범죄로 확정, 이벤트가 정한 수익을 준다.
-            // reward는 지급이 아니라 "정산에 실릴 bounty"다 — 실제 자금은 라운드 종료 시 1회 정산된다
-            // (#340). 그래서 재검거 중복지급 방지용 Reward 비우기는 필요 없다(한 번만 세므로) —
-            // 오히려 비우면 재수감된 난동꾼이 0으로 잡혀 정산에서 누락된다.
             verdict = ArrestVerdict.Misdemeanor;
             reward = misdemeanor.Reward;
         }
         else if (identity.IsCriminal)
         {
-            // 진범 우선 — 진범이면서 위조범인 NPC도 현상수배범으로 판정한다 (위조 판정에 가려지지 않음, #320).
             verdict = ArrestVerdict.WantedCriminal;
             reward = ResolveBounty(identity, npc);
 
-            // 수배 조건은 진범에만 걸린다 — 산 채/시체 축은 이 시점에만 알 수 있어 배정 때 못 정한다 (#766)
             if (isCorpse)
             {
                 if (identity.WantedCondition == WantedCondition.AliveOnly)
@@ -333,8 +184,6 @@ public class ArrestJudge : CommonManagerBase
         return true;
     }
 
-    // 배정된 현상금을 읽는다 (#395). 0이면 CriminalAssigner의 배정을 타지 않은 NPC라는 뜻이라 —
-    // 라운드 목표(금액)가 조용히 미달로 흐르지 않게 경고를 남긴다. 값 자체는 그대로 쓴다.
     private static int ResolveBounty(CitizenIdentity identity, NpcController npc)
     {
         if (identity.Bounty <= 0)
@@ -367,15 +216,8 @@ public readonly struct ArrestResult
     public readonly CitizenProfile Profile;
     public readonly int Reward;
 
-    /// <summary>이 대상에 밧줄을 걸고 유치장까지 들어온 플레이어 전원 — 아무도 없으면 빈 목록. (#390)
-    /// 반출한 수감자가 밧줄 없이 따라 들어와 재판정되는 경로(#492)가 그 빈 목록의 실제 사례다.
-    /// 줄다리기로 여러 명이 함께 끌 수 있어 단일 참조에서 목록이 됐다. 검거에 개인 보상은 없고
-    /// (팀 자금은 라운드 종료에 유치장 점유로 1회 정산, #340) 이 목록은 <b>페널티 지정</b>에 쓰인다 —
-    /// 오검거 개인 카운트와 추격대 대상이 여기서 나온다.</summary>
     public readonly List<PlayerEscorter> DeliveredBy;
 
-    // 이 판정이 첫 인계인지 — 재판정(같은 대상을 유치장에 다시 넣음)이면 false. 할당량·오검거 카운트처럼
-    // 1회만 세어야 하는 후처리가 이 값으로 재판정을 걸러 낸다. 탈옥(ClearDelivered) 후 재검거는 다시 true. (#358)
     public readonly bool IsFirstDelivery;
 
     public ArrestResult(NpcController npc, ArrestVerdict verdict, CitizenProfile profile,

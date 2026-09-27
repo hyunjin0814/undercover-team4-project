@@ -1,4 +1,6 @@
-/// <summary>순수 C# 지연 생성 싱글톤 (MonoBehaviour 아님). 도메인 리로드 꺼짐 대비 Reset 제공.</summary>
+/// <summary>
+/// 순수 C# 지연 생성 싱글톤 (MonoBehaviour 아님). 도메인 리로드 꺼짐 대비 Reset 제공.
+/// </summary>
 public class Singleton<T> where T : class, new()
 {
     private static T s_instance;

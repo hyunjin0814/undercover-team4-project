@@ -6,17 +6,7 @@ using UnityEditor;
 #endif
 
 /// <summary>
-/// [디버그/검증 전용] 스폰된 NPC의 외형 프로필과 몽타주 부합 여부를 눈으로 확인한다. (#221/#222 검증용)
-///
-/// 확인해 주는 것:
-/// - <b>화면 외형</b>(IAppearanceProfileSource.Profile)과 <b>정답 외형</b>(CitizenIdentity.Appearance)을
-///   6축 표시 이름으로 나열한다. 둘이 어긋나면(=시각 조립 오류) 경고를 띄운다.
-///   Appearance는 서버 전용이라 <b>호스트에서만</b> 채워진다(클라이언트에선 미표시).
-/// - 이 NPC의 화면 외형으로 몽타주를 다시 만들어 보여 준다(BuildMontageText) — 실제 몽타주와 눈으로 대조용.
-/// - 각 범인의 공개 축(AppearanceAssigner.CriminalRevealedAxes) 기준으로 이 NPC가 그 몽타주에 부합하는지 표시한다.
-///
-/// 게임 로직에 전혀 관여하지 않는 읽기 전용 뷰다. 표시 로직(Scene 라벨)은 에디터에서만 동작하므로
-/// 릴리스 빌드에는 영향이 없다. 검증이 끝나면 NPC 프리팹/오브젝트에서 이 컴포넌트만 떼면 된다.
+/// [디버그 전용] NPC의 화면 외형과 정답 외형, 몽타주 부합 여부를 에디터 씬 라벨로 표시한다.
 /// </summary>
 public class NpcProfileDebugView : MonoBehaviour
 {
@@ -26,7 +16,6 @@ public class NpcProfileDebugView : MonoBehaviour
     [Tooltip("라벨을 그릴 높이 오프셋(m)")]
     [SerializeField] private float m_labelHeight = 2.2f;
 
-    // 같은 GameObject의 소스 컴포넌트 — 디버그 용도라 매번 조회해도 무방하나 캐시해 둔다.
     private CitizenIdentity m_identity;
     private IAppearanceProfileSource m_appearanceSource;
 
@@ -34,7 +23,6 @@ public class NpcProfileDebugView : MonoBehaviour
     private IAppearanceProfileSource AppearanceSource =>
         m_appearanceSource ?? (m_appearanceSource = GetComponent<IAppearanceProfileSource>());
 
-    // 배정기·DB는 플레이 중에만 유효 — App은 순수 C# 싱글톤이라 접근 자체는 안전하나 필드는 null일 수 있다.
     private static AppearanceAssigner Assigner => Application.isPlaying ? App.Game.Appearance : null;
     private static AppearanceDatabase Database
     {
@@ -45,26 +33,25 @@ public class NpcProfileDebugView : MonoBehaviour
         }
     }
 
-    /// <summary>디버그 뷰 한 번치 결과 — 인스펙터와 Scene 라벨이 공유한다.</summary>
     public struct Report
     {
-        public bool HasVisual;          // 화면 외형이 배정됨
-        public string VisualLine;       // 화면 외형 6축
-        public bool TruthKnown;         // 정답 외형을 알 수 있음(호스트 + 배정 완료)
-        public string TruthLine;        // 정답 외형 6축
-        public bool Consistent;         // 화면 == 정답 (TruthKnown일 때만 의미)
-        public string RevealedAxesLine; // 공개 축 이름들
-        public string VisualMontage;    // 화면 외형으로 만든 몽타주 텍스트
-        public bool IsCriminal;         // 서버 전용 값(호스트에서만 true 가능)
-        public List<MontageMatch> Montages; // 실제 범인 몽타주별 부합 여부
-        public string Warning;          // null이면 이상 없음
+        public bool HasVisual;
+        public string VisualLine;
+        public bool TruthKnown;
+        public string TruthLine;
+        public bool Consistent;
+        public string RevealedAxesLine;
+        public string VisualMontage;
+        public bool IsCriminal;
+        public List<MontageMatch> Montages;
+        public string Warning;
     }
 
     public struct MontageMatch
     {
-        public int Index;       // 범인 인덱스(1-base 표시용은 +1)
-        public string Text;     // 몽타주 텍스트
-        public bool Matches;    // 이 NPC의 화면 외형이 공개 축에서 이 몽타주와 일치
+        public int Index;
+        public string Text;
+        public bool Matches;
     }
 
     /// <summary>현재 상태를 한 번에 수집한다. 인스펙터·Scene 라벨이 이 결과를 표시한다.</summary>
@@ -98,7 +85,6 @@ public class NpcProfileDebugView : MonoBehaviour
         AppearanceDatabase db = Database;
         if (assigner != null && db != null)
         {
-            // 공개 축은 범인마다 다르다 — 요약 줄은 합집합으로, 부합 판정은 각 범인의 축으로 한다
             IReadOnlyList<AppearanceProfile> criminals = assigner.CriminalProfiles;
             IReadOnlyList<RevealedAxisSet> criminalAxes = assigner.CriminalRevealedAxes;
 
@@ -113,7 +99,6 @@ public class NpcProfileDebugView : MonoBehaviour
             if (report.HasVisual && !union.IsEmpty)
                 report.VisualMontage = db.BuildMontageText(visual, union);
 
-            // 몽타주 문장은 보관되지 않는다 — 범인 프로필과 공개 축으로 여기서 다시 만든다 (#497)
             for (int i = 0; i < criminals.Count; i++)
             {
                 RevealedAxisSet axes = i < criminalAxes.Count ? criminalAxes[i] : default;

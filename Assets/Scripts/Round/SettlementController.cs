@@ -5,23 +5,19 @@ using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
 
-/// <summary>라운드 정산 화면에 표시할 데이터 묶음 — 서버가 종료 시점에 스냅샷으로 채운다. (#107)</summary>
 public struct SettlementData
 {
-    public RoundResult Result;      // 라운드 결과(성공/실패)
-    public RoundEndReason Reason;   // 종료 사유(할당량 달성/제한시간 초과/전원 다운)
-    public int FundBalance;         // 팀 자금 잔액
-    public int FundDelta;           // 이번 라운드 자금 증감(현재-시작) = 팀이 실제로 챙긴 몫 (#340/#395)
-    public int GrossEarned;         // 종료 시 정산 원장의 현상금 합 = 할당량 차감 전 총 수익 (#395)
-    public int TargetFund;          // 이번 라운드 목표 금액(할당량) — 총 수익에서 이만큼 떼고 남는 게 팀 몫 (#395)
-    // 아래 둘은 <b>유치장 점유가 아니라 정산 원장(JailZone.m_records) 기준</b>이다 (#571) —
-    // 죽은 대상도 계상되므로(JailZone.RecordDeceased) "유치장에 앉아 있는 수"보다 클 수 있다.
-    public int CriminalCount;       // 종료 시 계상된 진범 수 (#340/#571)
-    public int MisdemeanorCount;    // 종료 시 계상된 경범죄자(난동꾼·위조범) 수 (#340/#571)
-    public List<SettlementPlayerTitle> PlayerTitles; // 이번 판 개인 칭호 로스터 (#739)
+    public RoundResult Result;
+    public RoundEndReason Reason;
+    public int FundBalance;
+    public int FundDelta;
+    public int GrossEarned;
+    public int TargetFund;
+    public int CriminalCount;
+    public int MisdemeanorCount;
+    public List<SettlementPlayerTitle> PlayerTitles;
 }
 
-/// <summary>정산 로스터 한 줄 — 플레이어 하나와 칭호(없으면 None). (#739)</summary>
 public struct SettlementPlayerTitle
 {
     public ulong ClientId;
@@ -30,34 +26,22 @@ public struct SettlementPlayerTitle
 }
 
 /// <summary>
-/// 라운드 정산 화면 제어 (#107, GDD 3-2) — 라운드 종료 시 결과·팀 자금 증감·개인 칭호 로스터(코믹 스탯, #739)를
-/// 모아 전 클라이언트의 정산 패널(SettlementPanel)에 띄운다.
-///
-/// 전파 흐름은 RoundEndFeedback(#210)과 동일 — 라운드 진행이 서버 권위이므로(#56):
-///  · 서버·오프라인 — RoundManager.OnRoundEnded를 직접 구독해 데이터를 모으고, 로컬 패널을 띄운 뒤
-///    네트워크 세션이면 커스텀 네임드 메시지로 전 클라이언트에 같은 데이터를 보낸다.
-///  · 클라이언트 — 네임드 메시지를 수신해 동일한 패널을 띄운다.
-/// 팀 자금은 TeamFund NetworkVariable로 이미 동기화되지만, 결과·오검거 개인집계는 서버 전용이라
-/// 종료 시점 스냅샷을 한 번에 묶어 보낸다 — 늦게 접속한 클라와 무관하게 그 순간 값을 그대로 전달한다.
-///
-/// NetworkBehaviour가 아니므로(RoundEndFeedback와 동일) 씬 네트워크 구성(NetworkObject·프리팹 등록)을 건드리지 않는다.
+/// 라운드 종료 시 결과·팀 자금 증감·개인 칭호를 모아 전 클라이언트 정산 패널에 띄운다(GDD 3-2).
+/// 서버가 스냅샷을 네임드 메시지로 보내고 클라는 받아 표시한다.
 /// </summary>
 public class SettlementController : MonoBehaviour
 {
     private const string k_messageName = "RoundSettlement";
-    private const int k_writerSize = 800; // byte*2 + int*6 + byte(로스터 수) + 항목당(ulong+byte+FixedString64) × 최대 6인 여유
-    private const int k_personalSharePercent = 10; // 인계자 개인 몫 — 귀속 현상금의 % (#484)
+    private const int k_writerSize = 800;
+    private const int k_personalSharePercent = 10;
 
     private RoundManager Round => App.Game.Round;
     private TeamFund TeamFund => App.Game.TeamFund;
 
-    // 이번 라운드 시작 시점의 팀 자금 — 정산 증감(현재-시작) 기준. TeamFund가 세션 지속형이라(#214)
-    // 세션 초기값이 아니라 "이 라운드가 시작될 때" 잔액을 스냅샷해야 이번 라운드 증감이 나온다.
     private int m_roundStartFund;
 
     private void OnEnable()
     {
-        // 라운드 종료·시작은 서버·오프라인에서만 발행된다 — 권위 피어가 이 훅들로 자금 스냅샷·정산을 처리한다.
         if (Round != null)
         {
             Round.OnRoundStarted += HandleRoundStarted;
@@ -74,13 +58,11 @@ public class SettlementController : MonoBehaviour
         }
     }
 
-    // 라운드 시작(서버·오프라인) 시점 자금을 기록해 둔다 — 종료 시 증감 계산 기준.
     private void HandleRoundStarted()
     {
         m_roundStartFund = TeamFund != null ? TeamFund.Balance : 0;
     }
 
-    // 네임드 메시지 수신 — 등록·해제 절차는 NamedMessageSubscription이 맡는다.
     private NamedMessageSubscription m_message;
 
     private void Start()
@@ -91,16 +73,11 @@ public class SettlementController : MonoBehaviour
 
     private void OnDestroy() => m_message?.Detach();
 
-    // 서버·오프라인: 종료 후 데이터를 모아 로컬 표시 + 세션이면 전 클라 전파.
     private void HandleRoundEnded(RoundResult result, RoundEndReason reason)
     {
         GatherAndShowAsync(result, reason).Forget();
     }
 
-    // 라운드 종료가 검거 판정(ArrestJudge.OnArrestJudged)과 같은 프레임에 발생하면(할당량 채운 그 검거),
-    // 그 검거의 보상이 팀 자금에 아직 반영되기 전일 수 있다 — 같은 이벤트의 구독자 호출 순서 경쟁 때문.
-    // 한 프레임 미뤄 그 디스패치의 모든 구독자(TeamFund 보상 가산 등)가 끝난 뒤의 확정 자금을 읽는다.
-    // (라운드 종료 후 리셋까지 여유가 있어 한 프레임 지연은 화면상 보이지 않는다)
     private async UniTaskVoid GatherAndShowAsync(RoundResult result, RoundEndReason reason)
     {
         try
@@ -109,7 +86,7 @@ public class SettlementController : MonoBehaviour
         }
         catch (OperationCanceledException)
         {
-            return; // 매니저 파괴 — 정리 중이므로 표시하지 않는다
+            return;
         }
 
         SettlementData data = BuildData(result, reason);
@@ -117,9 +94,6 @@ public class SettlementController : MonoBehaviour
         Broadcast(data);
     }
 
-    // 결과·종료 사유·자금 증감·최다 오검거를 모은다 (서버·오프라인 권위 데이터).
-    // #340: 여기서(서버·오프라인 전용 경로) 라운드 종료 시점의 유치장 점유로 보상을 정산해 자금에 1회
-    // 반영한 뒤 잔액을 스냅샷한다 — 판정 즉시 지급을 대체한다. 탈옥해 유치장에 없는 대상은 계상되지 않는다.
     private SettlementData BuildData(RoundResult result, RoundEndReason reason)
     {
         int criminals = 0;
@@ -129,14 +103,11 @@ public class SettlementController : MonoBehaviour
         if (jail != null)
             (criminals, misdemeanors, gross) = jail.TallySettlement();
 
-        // 할당량은 경찰서에 납부하는 몫이다 — 총 수익에서 목표 금액을 떼고 남은 초과분만 팀이 챙긴다 (#395).
-        // 목표를 못 채웠으면 초과분이 없으므로 0원이다(음수를 자금에서 깎지는 않는다 — GDD 9-2 마이너스 방지).
         int target = Round != null ? Round.TargetFund : 0;
         int payout = Mathf.Max(0, gross - target);
         if (TeamFund != null)
             TeamFund.AddSettlement(payout);
 
-        // 개인 몫은 팀 정산액과 무관하게 별도 발생한다 (#484) — payout을 깎지 않는다
         if (jail != null)
             PayPersonalShares(jail);
 
@@ -157,8 +128,6 @@ public class SettlementController : MonoBehaviour
         };
     }
 
-    // 카테고리별 1위를 뽑아 우선순위(SettlementTitleKind 선언 순서)로 한 사람당 배지 하나만 확정한다 (#739).
-    // 로스터는 현재 접속 중인 전원 + 집계가 남은 clientId 전원의 합집합이다(퇴장한 기록자도 이름은 남긴다).
     private static List<SettlementPlayerTitle> BuildPlayerTitles()
     {
         IReadOnlyDictionary<ulong, int> arrests = App.Game.ArrestJudge?.PerPlayerArrests;
@@ -207,8 +176,6 @@ public class SettlementController : MonoBehaviour
         return titles;
     }
 
-    // 접속 중인 클라이언트의 컴포넌트 값을 clientId별로 모은다 — PlayerKillCredit 등 플레이어당 하나뿐인
-    // 상태를 들고 있는 컴포넌트 공용 (0은 담지 않는다 — TryFindTop과 "집계 없음"의 기준을 맞춘다).
     private static Dictionary<ulong, int> CollectPerPlayer(Func<NetworkObject, int> selector)
     {
         var result = new Dictionary<ulong, int>();
@@ -246,7 +213,6 @@ public class SettlementController : MonoBehaviour
             ids.Add(key);
     }
 
-    // 인계자별 개인 자금 지급 — 귀속 현상금(JailZone)에 비율만 적용한다. 서버·오프라인 전용.
     private static void PayPersonalShares(JailZone jail)
     {
         foreach (KeyValuePair<ulong, int> pair in jail.TallyDelivererCredits())
@@ -255,14 +221,12 @@ public class SettlementController : MonoBehaviour
             if (share <= 0)
                 continue;
 
-            // 접속이 끊긴 인계자는 지갑이 없다 — 그 몫은 사라진다
             PlayerWallet wallet = PlayerWallet.FindByClientId(pair.Key);
             if (wallet != null)
                 wallet.ServerAdd(share);
         }
     }
 
-    // 개인 집계에서 최다자를 뽑는다. 동률이면 먼저 순회된 쪽 — 모든 칭호 카테고리가 공유하는 기준.
     private static bool TryFindTop(IReadOnlyDictionary<ulong, int> counts, out ulong clientId, out int count)
     {
         clientId = 0;
@@ -280,7 +244,6 @@ public class SettlementController : MonoBehaviour
         return count > 0;
     }
 
-    // clientId → 동기화된 표시 이름. 접속이 끊겼거나 이름이 비었으면 "플레이어 N"으로 폴백.
     private static string ResolvePlayerName(ulong clientId)
     {
         NetworkManager nm = NetworkManager.Singleton;
@@ -335,7 +298,6 @@ public class SettlementController : MonoBehaviour
         if (senderClientId != NetworkManager.ServerClientId)
             return;
 
-        // 호스트는 자기 브로드캐스트를 되받을 수 있다 — 이미 ShowLocal로 띄웠으니 무시(중복 방지).
         if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
             return;
 
@@ -389,18 +351,7 @@ public class SettlementController : MonoBehaviour
             Debug.LogWarning("SettlementController: 정산 패널(SettlementPanel)을 찾지 못해 표시하지 못했다");
     }
 
-    /// <summary>
-    /// 라운드를 클리어하면 치장 뽑기 토큰을 1개 준다 (#818 D).
-    ///
-    /// <b>지급 자리가 여기인 이유는 "각 피어에서 정확히 한 번"이기 때문이다</b> — 호스트는
-    /// <see cref="GatherAndShowAsync"/>가, 클라는 <see cref="ReceiveSettlement"/>가 각자 한 번씩
-    /// 여기로 들어온다. 표시와 지급을 한 메서드에 두는 것이 어색하긴 해도, 갈라 두면 두 호출 지점에
-    /// 같은 코드를 두어야 하고 한쪽만 빠지면 그 역할만 토큰을 못 받는다.
-    ///
-    /// 토큰은 <b>계정 소유라 서버가 대신 줄 수 없다</b>(각자의 Cloud Save다) — 그래서 받은 사람이
-    /// 자기 것에 더한다. 무엇을 받았는지는 서버가 보낸 결과가 정하므로, 클라가 라운드 결과를
-    /// 스스로 판단하는 자리는 아니다. 순수 코스메틱이라 이 정도 권위로 충분하다.
-    /// </summary>
+    /// <summary>라운드를 클리어하면 각 피어가 자기 계정에 치장 뽑기 토큰 1개를 더한다.</summary>
     private static void GrantCosmeticToken(RoundResult result)
     {
         if (result != RoundResult.Success)
@@ -408,7 +359,6 @@ public class SettlementController : MonoBehaviour
 
         CosmeticInventory.AddTokens(1);
 
-        // 축하는 상점에서 한다 (#850) — 지금은 정산 패널이 화면을 덮고 있어 알림이 묻힌다.
         CosmeticInventory.QueueRewardNotice(1);
 
         Debug.Log($"[치장] 라운드 클리어 — 뽑기 토큰 +1 (보유 {CosmeticInventory.Tokens}개)");

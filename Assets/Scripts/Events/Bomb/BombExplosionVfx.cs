@@ -1,14 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// 폭발 이펙트의 수명·섬광 관리 — 폭발 지점에 스폰되는 일회용 연출 오브젝트. (#232 표현 계층)
-///
-/// <b>순수 로컬 연출이다.</b> 각 피어의 <see cref="BombExplosionView"/>가 자기 화면에 하나씩 스폰하므로
-/// 동기화가 없다(폭발 사실은 이미 <see cref="BombDevice"/>가 전파했다).
-/// 폭탄 본체는 폭발 몇 초 뒤 디스폰되므로, 이 오브젝트는 <b>폭탄의 자식이 아니라 월드에 독립적으로</b>
-/// 스폰되어 스스로 수명을 끝낸다 — 부모가 사라져도 연기가 중간에 끊기지 않는다.
-/// 파티클은 프리팹에 미리 구성돼 있고, 이 컴포넌트는 파티클이 못 하는 두 가지만 한다:
-/// 점광원 섬광 감쇠와, 다 끝나면 자신을 정리하는 것.
+/// 폭발 지점에 독립 스폰되는 일회용 이펙트 — 점광원 섬광을 감쇠시키고 끝나면 스스로 정리한다.
 /// </summary>
 public class BombExplosionVfx : MonoBehaviour
 {
@@ -43,7 +36,6 @@ public class BombExplosionVfx : MonoBehaviour
     {
         m_elapsed += Time.deltaTime;
 
-        // 섬광은 폭발 순간에만 강하고 빠르게 죽는다 — 제곱 감쇠로 '번쩍'하는 느낌을 만든다
         if (m_flash != null && m_flashSeconds > 0f)
         {
             float t = Mathf.Clamp01(m_elapsed / m_flashSeconds);

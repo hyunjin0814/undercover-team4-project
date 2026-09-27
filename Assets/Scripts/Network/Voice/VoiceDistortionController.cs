@@ -4,12 +4,8 @@ using Unity.Services.Vivox;
 using UnityEngine;
 
 /// <summary>
-/// 먹통 음성 왜곡 (#372) — <see cref="VivoxManager"/>의 부품 (#466).
-/// Vivox 오디오 탭으로 참가자 음성을 AudioSource로 끌어와 필터를 건다. 전부 로컬 처리(동기화 없음).
-/// 음색은 <see cref="VoiceDistortionProfile"/>이 정하고, 이 부품은 '언제 왜곡할지'만 안다.
-///
-/// 배선: VivoxManager와 같은 오브젝트에 붙여 SerializeField로 연결 (architecture.md R3).
-/// 매니저가 아니므로 CommonManagerBase 비상속. 참가자 훅과 정리 순서는 VivoxManager가 소유한다.
+/// 먹통 중 Vivox 오디오 탭으로 참가자 음성을 AudioSource로 끌어와 왜곡 필터를 건다(로컬 처리).
+/// VivoxManager의 부품으로, 음색은 VoiceDistortionProfile이 정한다.
 /// </summary>
 public class VoiceDistortionController : MonoBehaviour
 {
@@ -29,24 +25,19 @@ public class VoiceDistortionController : MonoBehaviour
     private bool m_distorted;
     private float m_nextGlitchTime;
 
-    private bool m_channelsJoined; // ActiveChannels 접근 가드 (예전 m_loggedIn 자리)
+    private bool m_channelsJoined;
     private string m_proximityChannelName;
 
-    // 탭을 건 참가자 → 재생 AudioSource. 해제 시 전부 되돌린다.
     private readonly Dictionary<VivoxParticipant, AudioSource> m_taps = new();
 
-    /// <summary>왜곡 중인지 — 디버그 패널 표시용.</summary>
     public bool IsDistorted => m_distorted;
 
-    // ---- VivoxManager가 부르는 진입점 ----
-
-    /// <summary>왜곡을 켜고 끈다 — <see cref="DeviceBlackoutView"/> → VivoxManager 위임 경로. (#372)</summary>
+    /// <summary>왜곡을 켜고 끈다 — <see cref="DeviceBlackoutView"/> → VivoxManager 위임 경로.</summary>
     public void SetDistorted(bool distorted)
     {
         if (m_distorted == distorted)
             return;
 
-        // 프로파일이 없으면 시작조차 하지 않는다 — 탭만 걸고 필터를 못 얹으면 그 사람이 통째로 무음이 된다
         if (distorted && m_profile == null)
         {
             Debug.LogWarning(
@@ -64,10 +55,7 @@ public class VoiceDistortionController : MonoBehaviour
             ClearAll();
     }
 
-    /// <summary>
-    /// 왜곡 중 재생 볼륨에 설정값 반영 (#225) — 왜곡 중에는 출력 장치 볼륨이 통하지 않는다.
-    /// 값은 복사하지 않고 매번 GameSettings에서 읽는다.
-    /// </summary>
+    /// <summary>왜곡 재생 AudioSource에 설정의 음성 음량을 적용한다.</summary>
     public void ApplyVolume()
     {
         float volume = GameSettings.VoiceVolume;
@@ -79,7 +67,7 @@ public class VoiceDistortionController : MonoBehaviour
         }
     }
 
-    /// <summary>참가자 입장 통보 — 먹통 중에 들어온 사람도 왜곡을 받아야 한다. (#372)</summary>
+    /// <summary>참가자 입장 통보 — 먹통 중에 들어온 사람도 왜곡을 받아야 한다.</summary>
     public void HandleParticipantAdded(VivoxParticipant participant)
     {
         if (m_distorted && ShouldDistortChannel(participant.ChannelName))
@@ -107,15 +95,13 @@ public class VoiceDistortionController : MonoBehaviour
         m_taps.Clear();
     }
 
-    /// <summary>음성 종료(로그아웃·세션 이탈) — 먹통 맥락이 사라지므로 플래그까지 내린다. (#372)</summary>
+    /// <summary>음성 종료(로그아웃·세션 이탈) — 먹통 맥락이 사라지므로 플래그까지 내린다.</summary>
     public void NotifyVoiceEnded()
     {
         m_distorted = false;
         m_channelsJoined = false;
         m_taps.Clear();
     }
-
-    // ---- 내부 ----
 
     private void ApplyToAll()
     {
@@ -138,18 +124,16 @@ public class VoiceDistortionController : MonoBehaviour
     private void Apply(VivoxParticipant participant)
     {
         if (participant == null || participant.IsSelf)
-            return; // 자기 목소리는 어차피 자기에게 재생되지 않는다
+            return;
         if (m_profile == null)
-            return; // 진입점이 둘이라 여기서도 확인
+            return;
         if (m_taps.ContainsKey(participant))
-            return; // 중복 탭 방지
+            return;
 
         bool tapCreated = false;
 
         try
         {
-            // silenceInChannelAudioMix=true — 이 호출이 성공한 순간부터 Vivox 믹스에서는 안 들린다.
-            // 따라서 이후 어느 경로로 실패하든 탭을 되돌려야 한다 (안 하면 그 사람이 세션 내내 무음).
             GameObject tapObject = participant.CreateVivoxParticipantTap(
                 $"BlackoutVoiceTap_{participant.PlayerId}",
                 true
@@ -167,7 +151,7 @@ public class VoiceDistortionController : MonoBehaviour
             }
 
             m_profile.Apply(tapObject, source);
-            source.volume = GameSettings.VoiceVolume; // 새 AudioSource 기본값은 1 (#225)
+            source.volume = GameSettings.VoiceVolume;
 
             m_taps[participant] = source;
         }
@@ -177,13 +161,11 @@ public class VoiceDistortionController : MonoBehaviour
                 $"[VoiceDistortionController] 왜곡 적용 실패 ({participant.PlayerId}): {ex}"
             );
 
-            // 등록에 실패했다면 이미 걸린 탭을 되돌린다 (등록됐다면 해제는 ClearAll이 맡는다)
             if (tapCreated && !m_taps.ContainsKey(participant))
                 SafeDestroyTap(participant);
         }
     }
 
-    // 여기서 난 실패가 나머지 정리를 막지 않게 한다. 탭 오브젝트가 파괴되며 필터도 함께 사라진다.
     private void SafeDestroyTap(VivoxParticipant participant)
     {
         if (participant == null)
@@ -203,15 +185,12 @@ public class VoiceDistortionController : MonoBehaviour
 
     private void ClearAll()
     {
-        // 키 복사본 순회 — SafeDestroyTap이 Vivox 콜백을 동기로 깨우면 HandleParticipantRemoved가
-        // m_taps를 건드려 순회 중 수정 예외가 난다 (#372)
         foreach (VivoxParticipant participant in new List<VivoxParticipant>(m_taps.Keys))
             SafeDestroyTap(participant);
 
         m_taps.Clear();
     }
 
-    // 피치를 주기적으로 튀게 해 "신호가 튄다"는 인상을 준다. 간격·폭은 프로파일이 정한다.
     private void Update()
     {
         if (!m_distorted || m_taps.Count == 0)

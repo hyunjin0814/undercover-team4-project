@@ -4,46 +4,30 @@ using UnityEngine;
 using Random = UnityEngine.Random;
 
 /// <summary>
-/// 시민 한 명분의 신원(이름·타입·세력·문양)을 만든다 — 라운드 시작 배정의 재료 공급처. (#38 · #222)
-///
-/// 이름 풀은 생성자에서 한 번 섞어 인원수만큼 확정한다 — 라운드 안에서 중복이 없어야 하므로
-/// 개별 호출로는 만들 수 없다. 그래서 정적 유틸이 아니라 인스턴스다.
-///
-/// 이름 목록은 <see cref="CitizenNameCatalog"/>(데이터 에셋)에 있고 <see cref="OfficialRecords"/>를
-/// 경유해 온다 — 코드에 박혀 있던 40개로는 스폰 인원(맵에 따라 100)을 못 채워 번호가 붙었다 (#752/#505).
+/// 시민 한 명분의 신원(이름·타입·세력·문양)을 만든다.
+/// 이름 풀은 생성 시 섞어 라운드 안에서 중복되지 않게 한다.
 /// </summary>
 public sealed class CitizenProfileFactory
 {
-    // None(무소속·문양 없음)은 위조 대조 축이 될 수 없어 배정에서 제외한다 (#222 (b)).
-    // enum에 세력을 추가하면 자동으로 후보에 포함된다 — 여기를 고칠 필요 없음.
     private static readonly OfficialRecords.Faction[] s_assignableFactions =
         BuildAssignableFactions();
 
     private readonly OfficialRecords m_records;
 
-    // 라운드 시작에 한 번 섞어 두는 이름 풀 — 뽑기 전에 섞어야 순서가 곧 무작위 배정이 된다.
     private readonly string[] m_shuffledNames;
 
-    // 지금까지 내준 이름 수 = 다음에 내줄 자리. 라운드 중에 스폰되는 이벤트 NPC(#106)도 같은
-    // 인스턴스에서 이어 뽑으므로 중복 회피가 이 커서 한 곳에 남는다 (#505).
     private int m_issuedCount;
 
-    // 세션 중 세력별 '진짜' 문양 index — FactionSymbolManager가 없는 오프라인 테스트용 폴백 캐시.
     private readonly Dictionary<OfficialRecords.Faction, int> m_localRealIndices =
         new Dictionary<OfficialRecords.Faction, int>();
 
-    /// <param name="records">세력 심볼·이름 풀을 담은 공식 기록. null이면 문양 위조가 불가능해 이름 위조로 폴백한다.</param>
     public CitizenProfileFactory(OfficialRecords records)
     {
         m_records = records;
         m_shuffledNames = ShuffledPool(records != null ? records.CitizenNames : null);
     }
 
-    /// <summary>
-    /// 다음 시민의 정본 프로필을 만든다 — 이름은 섞어 둔 풀에서 순서대로, 타입·세력은 추첨한다.
-    /// 한 인스턴스에서 뽑는 동안 이름은 중복되지 않는다 — 호출 시점이 라운드 시작이든 도중이든 같다 (#505).
-    /// 프로필은 에셋이 아닌 런타임 인스턴스다 — 라운드마다 새로 배정된다.
-    /// </summary>
+    /// <summary>다음 시민 프로필을 만든다 — 이름은 섞인 풀에서 순서대로, 타입·세력은 추첨한다.</summary>
     public CitizenProfile Create()
     {
         OfficialRecords.Faction faction = RandomFaction();
@@ -59,9 +43,7 @@ public sealed class CitizenProfileFactory
         return profile;
     }
 
-    /// <summary>
-    /// 이번 세션에 이 세력의 진짜 문양 index. 세션 중이면 동기화 값, 오프라인이면 로컬 폴백. (#222)
-    /// </summary>
+    /// <summary>이번 세션에 이 세력의 진짜 문양 index. 세션 중이면 동기화 값, 오프라인이면 로컬 폴백.</summary>
     public int RealSymbolIndex(OfficialRecords.Faction faction)
     {
         FactionSymbolManager manager = App.Game.FactionSymbol;
@@ -113,14 +95,11 @@ public sealed class CitizenProfileFactory
         return shuffled;
     }
 
-    // 다음 이름 하나. 풀을 다 쓰면 번호를 붙여 재사용한다 — 보기 좋지 않지만 중복 자체는 없다.
-    // 번호가 보이기 시작하면 카탈로그를 늘릴 신호다 (#505/#752).
     private string NextName()
     {
         int index = m_issuedCount++;
         int length = m_shuffledNames.Length;
 
-        // 카탈로그가 없거나 비었을 때의 폴백 — 화면에 그대로 보이므로 배선 누락이 드러난다 (#752)
         if (length == 0)
             return "Citizen " + (index + 1);
 

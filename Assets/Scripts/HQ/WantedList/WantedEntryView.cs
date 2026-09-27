@@ -2,12 +2,7 @@ using TMPro;
 using UnityEngine;
 
 /// <summary>
-/// 수배 리스트의 한 줄 — 검거 대상의 이름 / 몽타주 포트레이트. 표시 전용.
-///
-/// 몽타주는 그림이 정본이다 (#607). 글(#497)은 표시에서 빠지고 비교용 토글로만 남는다 —
-/// 본부가 그림을 보고 자기 말로 무전에 옮기는 것까지가 이 게임의 몫이라, 읽어 주면 되는 문장을 주면 그 과정이 사라진다.
-/// 그림도 글과 같은 규칙이라 완성물이 아니라 재료(공개 축 + 값)만 항목에 실려 오고 각 피어가 조립한다 —
-/// 그래서 AppearanceDatabase를 Bind 인자로 받는다(행마다 배선하지 않기 위해).
+/// 수배 리스트의 한 줄 — 검거 대상 이름과 몽타주 포트레이트를 표시한다(글 몽타주는 비교용 토글).
 /// </summary>
 public class WantedEntryView : MonoBehaviour
 {
@@ -34,9 +29,6 @@ public class WantedEntryView : MonoBehaviour
     [SerializeField]
     private TMP_Text m_conditionText;
 
-    // 금액 서식은 프로젝트 공용이고 행마다 같은 문구다 — SerializeField로 두면 행 프리팹이
-    // 늘 때마다 같은 키를 다시 배선해야 하고 하나만 빠지면 그 행만 옛 표기로 남는다. (#497)
-    // 언어 변경 갱신은 WantedListView가 로케일 변경에 걸고 통째로 다시 그리는 것으로 처리한다.
     private const string k_commonTable = "CommonTable";
     private const string k_moneyKey = "Common.Unit.Money";
     private const string k_hqTable = "HqTable";
@@ -63,7 +55,6 @@ public class WantedEntryView : MonoBehaviour
         if (m_bountyText != null)
             m_bountyText.text = LocalizedStrings.Get(k_commonTable, k_moneyKey, entry.Bounty);
 
-        // 행방불명이면 조건 자리를 대신 쓴다 (#913) — 잡을 수 없게 된 대상에 '생포 필수'는 의미가 없다
         if (m_conditionText != null)
             m_conditionText.text = entry.Missing
                 ? LocalizedStrings.Get(k_hqTable, k_missingKey)

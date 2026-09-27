@@ -6,23 +6,19 @@ using UnityEngine.Localization;
 using UnityEngine.Localization.Settings;
 
 /// <summary>
-/// 본부 모니터의 수배 리스트 표시 — WantedListManager의 동기화 리스트를 구독해 항목이 추가/제거될 때마다 행을 다시 그림.
-/// MinimapViewer·CCTV와 함께 본부(HQ) 장소의 모니터 화면 컴포넌트다.
-///
-/// <b>한 페이지씩만 그린다</b> (#917) — 수배 정원은 씬 값이라 언제든 늘어나므로, 시민 명부
-/// (<see cref="CitizenDirectoryView"/>)와 같은 페이지 방식으로 판 크기에 안 매이게 한다.
-/// 넘김은 <see cref="WantedListPageButton"/>과 자동 순환 둘 다 받는다.
+/// 본부 모니터의 수배 리스트 — WantedListManager 리스트를 구독해 한 페이지씩 행을 그린다.
+/// 페이지 넘김은 버튼과 자동 순환 둘 다 지원한다.
 /// </summary>
 public class WantedListView : MonoBehaviour
 {
     private WantedListManager Manager => App.Game.WantedList;
 
     [Header("UI 참조")]
-    [SerializeField] private RectTransform m_entryContainer; // 행 부모 (GridLayoutGroup)
-    [SerializeField] private WantedEntryView m_entryPrefab;  // 행 프리팹
+    [SerializeField] private RectTransform m_entryContainer;
+    [SerializeField] private WantedEntryView m_entryPrefab;
 
     [Header("페이지")]
-    [SerializeField] private TMP_Text m_pageLabel; // "1 / 2" (선택)
+    [SerializeField] private TMP_Text m_pageLabel;
 
     [Tooltip("한 페이지에 그릴 수배 수 — 컨테이너 GridLayoutGroup이 판에 담는 칸 수와 맞출 것")]
     [Min(1)]
@@ -38,10 +34,9 @@ public class WantedListView : MonoBehaviour
     private readonly List<WantedEntryView> m_rows = new List<WantedEntryView>();
     private int m_page;
 
-    /// <summary>페이지가 둘 이상인가 — 버튼의 윤곽선 판정용. (#917)</summary>
     public bool HasMultiplePages => m_pageCount > 1;
 
-    /// <summary>페이지를 넘긴다 — 표시 전용이라 로컬이다. (#917)</summary>
+    /// <summary>페이지를 넘긴다 — 표시 전용이라 로컬이다.</summary>
     public void ChangePage(int delta)
     {
         m_page += delta;
@@ -49,7 +44,6 @@ public class WantedListView : MonoBehaviour
         Rebuild();
     }
 
-    // 아무도 안 눌러도 뒷장이 보이게 (#917)
     private void Update()
     {
         if (m_pageCount <= 1)
@@ -64,14 +58,10 @@ public class WantedListView : MonoBehaviour
         Rebuild();
     }
 
-    // 몽타주 문장을 조립할 옵션 정의 — 항목에는 인덱스만 실려 오므로 표시하는 쪽이 자기 언어로 만든다 (#497).
-    // 배정기가 들고 있는 것을 그대로 쓴다 — 행 프리팹에 같은 에셋을 또 배선하면 두 곳이 어긋날 수 있다.
     private AppearanceDatabase Database => App.Game.Appearance != null ? App.Game.Appearance.Database : null;
 
     private void OnEnable()
     {
-        // 행의 몽타주·현상금 표기가 테이블에서 오므로 언어가 바뀌면 다시 그린다 — 값은 그대로여도 표기가 바뀐다.
-        // 행마다 StringChanged를 걸지 않고 로케일 변경 한 곳에 걸어 통째로 다시 채운다 (ShopStand와 같은 방식). (#497)
         LocalizationSettings.SelectedLocaleChanged += HandleLocaleChanged;
 
         if (Manager == null)
@@ -80,13 +70,9 @@ public class WantedListView : MonoBehaviour
             return;
         }
 
-        // 이후 추가/제거는 OnListChanged로 갱신
         Manager.Wanted.OnListChanged += HandleListChanged;
-        // 접속 직후 초기 동기화 시점 — NetworkList는 late-join 클라에 초기 내용을 OnListChanged로 안 알리므로
-        // 여기서 현재 상태를 처음 한 번 그린다 (뒤늦게 접속한 클라 빈 화면 방지)
         Manager.OnListReady += Rebuild;
 
-        // 매니저가 이미 스폰돼 있으면(뷰가 늦게 켜져 OnListReady를 놓친 경우) 즉시 그린다
         if (Manager.IsSpawned)
             Rebuild();
     }
@@ -99,7 +85,6 @@ public class WantedListView : MonoBehaviour
             Manager.OnListReady -= Rebuild;
         }
 
-        // 종료 중에는 설정 에셋을 되살리지 않는다 — HasSettings로 먼저 확인한다 (ShopStand 관례)
         if (LocalizationSettings.HasSettings)
             LocalizationSettings.SelectedLocaleChanged -= HandleLocaleChanged;
     }
@@ -110,7 +95,6 @@ public class WantedListView : MonoBehaviour
             Rebuild();
     }
 
-    // 항목 추가/제거 시 전체를 다시 그린다.
     private void HandleListChanged(NetworkListEvent<WantedEntry> _) => Rebuild();
 
     private void Rebuild()
@@ -131,7 +115,6 @@ public class WantedListView : MonoBehaviour
         int start = m_page * perPage;
         int visible = Mathf.Clamp(wanted.Count - start, 0, perPage);
 
-        // 행 수를 이번 페이지 항목 수에 맞춘다 (부족하면 생성, 남으면 제거) — 매번 전부 파괴/생성하지 않고 재사용
         while (m_rows.Count < visible)
             m_rows.Add(Instantiate(m_entryPrefab, m_entryContainer));
 
@@ -150,7 +133,6 @@ public class WantedListView : MonoBehaviour
         for (int i = 0; i < visible; i++)
             m_rows[i].Bind(wanted[start + i], database);
 
-        // 한 페이지면 숫자를 보일 이유가 없다
         if (m_pageLabel != null)
         {
             m_pageLabel.gameObject.SetActive(pageCount > 1);

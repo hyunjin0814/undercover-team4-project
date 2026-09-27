@@ -18,7 +18,6 @@ public class CCTVKeypadConfirmButton : MonoBehaviour, IInteractable
         m_switcher.RequestConfirmEntryRpc();
     }
 
-    // 입력이 없으면 확인할 것이 없다 — 그때는 윤곽선도 뜨지 않는다
     public bool CanInteract(GameObject interactor) =>
         m_switcher != null
         && m_switcher.IsSpawned

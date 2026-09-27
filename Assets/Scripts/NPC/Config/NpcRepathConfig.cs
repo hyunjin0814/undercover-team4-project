@@ -1,13 +1,8 @@
 using UnityEngine;
 
 /// <summary>
-/// NavMesh 경로 재탐색·주변 훑기 주기 튜닝 값. (#573 — 상태 클래스에 흩어져 있던 k_repathInterval 통합)
-///
-/// 재탐색 주기만 <b>거리 티어</b>를 탄다 — 가장 가까운 플레이어에게서 멀수록 성기게 돈다. 아무도 보고 있지
-/// 않은 NPC의 경로를 촘촘히 다시 재는 것은 낭비고, NPC 수에 그대로 비례해 프레임을 먹는다.
-///
-/// 훑기·막힘 판정은 <b>티어를 타지 않는다</b>. 도주 이탈 판정처럼 <b>거리로 갈리는 게임플레이 판정</b>이
-/// 같은 게이트 뒤에 있어서다 — 주기를 늘리면 최적화가 아니라 판정이 느려지는 것이 된다 (#573 주의).
+/// NavMesh 경로 재탐색·주변 훑기 주기 튜닝 SO.
+/// 재탐색 주기만 가장 가까운 플레이어와의 거리 티어에 따라 달라진다.
 /// </summary>
 [CreateAssetMenu(fileName = "NpcRepathConfig", menuName = "Undercover/NPC/Repath Config")]
 public class NpcRepathConfig : ScriptableObject

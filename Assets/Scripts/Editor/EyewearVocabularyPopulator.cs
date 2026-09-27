@@ -6,15 +6,8 @@ using UnityEngine.Localization;
 using UnityEngine.Localization.Tables;
 
 /// <summary>
-/// 안경 어휘 배선 (#619) — 메뉴: Tools/안경 어휘 배선
-///
-/// 안경 축을 아래 표대로 통째로 다시 쓴다. <see cref="HairVocabularyPopulator"/>와 같은 이유로 코드에 표를 둔다.
-///
-/// 값 묶음은 비교 시트를 16px로 재서 정했다 — 기존 값들끼리 26~60칸 떨어져 있고, 후보는 가장 가까운 값과의
-/// 거리로 붙였다(3~28칸). 눈으로 본 것과 결론이 갈린 곳이 있는데(<c>PS_Glasses_02</c>는 32px에서 검은
-/// 선글라스처럼 보이지만 16px에서는 바이저와 8칸 차이) <b>묶는 기준은 몽타주 해상도</b>라 측정을 따랐다.
-///
-/// 배선 후에는 <c>Tools/몽타주 레이어 굽기</c>로 레이어를 다시 구워야 새 값의 그림이 생긴다.
+/// 안경 외형 축을 코드에 정의한 표대로 다시 쓴다. 메뉴: Tools/안경 어휘 배선.
+/// 배선 후 몽타주 레이어를 다시 구워야 한다.
 /// </summary>
 public static class EyewearVocabularyPopulator
 {
@@ -24,7 +17,6 @@ public static class EyewearVocabularyPopulator
 
     private const string k_table = "NpcTable";
 
-    /// <summary>값 하나 — 이름 키(+없으면 새로 팔 번역), 틴트 색, 그 값이 쓰는 메시들(0번이 몽타주 대표).</summary>
     private readonly struct Value
     {
         public readonly string Key;
@@ -45,12 +37,6 @@ public static class EyewearVocabularyPopulator
         }
     }
 
-    // 순서가 곧 인덱스다. 기존 네 키를 버리지 않고 자리만 옮겼다 — [2]는 메시를 그대로 두고 이름을
-    // 바이저→안경으로, [3]은 고글→바이저로 고쳤다(눈 전체를 덮는 판이라 그게 맞다). '고글' 키는
-    // 진짜 고글 메시가 들어온 [5]로 갔다. AppearanceModelCatalog에서 [3]을 쓰던 모델은 확인이 필요하다.
-    //
-    // 한 값에 묶은 메시는 같은 색으로 틴트한다 — 색이 그림에 들어가는 축이라(실루엣 축이 아니다)
-    // 색을 통일해야 그림이 어느 메시든 맞다.
     private static readonly Value[] s_values =
     {
         new Value("Npc.Appearance.None", "없음", "None", Color.white, false),
@@ -104,7 +90,7 @@ public static class EyewearVocabularyPopulator
             "Npc.Appearance.Eyewear.Eyepatch",
             "안대",
             "Eyepatch",
-            Color.white, // 메시 자체가 검은 가죽이라 틴트하지 않는다
+            Color.white,
             false,
             k_apocalypse + "Press_Male_Eyepatch_01"
         ),

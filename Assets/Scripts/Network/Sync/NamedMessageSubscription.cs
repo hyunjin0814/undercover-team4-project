@@ -1,9 +1,7 @@
 using Unity.Netcode;
 
 /// <summary>
-/// 네임드 메시지 수신 등록·해제 — 세 컴포넌트가 같은 모양으로 복사해 쓰던 것을 모았다.
-/// <see cref="CustomMessagingManager"/>는 NGO가 시작된 뒤에만 존재하므로 <c>OnClientStarted</c>를
-/// 걸어 두고 그때 등록한다. 이미 세션이 떠 있으면 <see cref="Attach"/>가 그 자리에서 등록한다.
+/// NGO 네임드 메시지 수신 등록·해제 헬퍼 — 클라이언트 시작 시점에 맞춰 등록한다.
 /// </summary>
 public sealed class NamedMessageSubscription
 {

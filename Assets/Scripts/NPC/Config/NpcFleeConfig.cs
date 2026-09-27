@@ -1,8 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// 도주(Run) 상태 튜닝 값. (#76, #259 — NpcController에서 분리)
-/// SpeedMultiplier는 저항(Resist)이, StepDistance는 추격(Chase)이 공유해 읽는다.
+/// 도주(Run) 상태 튜닝 SO. 저항·추격도 일부 값을 공유한다.
 /// </summary>
 [CreateAssetMenu(fileName = "NpcFleeConfig", menuName = "Undercover/NPC/Flee Config")]
 public class NpcFleeConfig : ScriptableObject

@@ -8,15 +8,8 @@ using UnityEngine.Localization.Tables;
 using UnityEngine.SceneManagement;
 
 /// <summary>
-/// 열린 맵 씬의 CCTV를 본부 콘솔에 배선한다 — 채널 배열과 설치 위치 문구를 한 번에 채운다.
-///
-/// 카메라가 늘어날 때마다 배열을 손으로 채우고 로케일 키를 하나씩 고르는 일을 없애려고 둔다.
-/// 채널 번호는 <b>Hierarchy 순서</b>다 — 배치한 사람이 정한 순서를 툴이 바꾸지 않는다.
-/// 번호를 바꾸려면 Hierarchy에서 카메라를 끌어 옮기고 다시 실행하면 된다.
-///
-/// 문구는 규약 키다 — <c>Cam_Market_Inside</c> → <c>World.Cctv.MarketInside</c>
-/// (접두 <c>Cam_</c>를 떼고 <c>_</c>를 지운다). 테이블에 없는 키는 비워 두고 경고만 남긴다.
-/// 라벨이 비면 모니터가 "CH 12"로 폴백하므로 배선 자체는 성립한다.
+/// 열린 맵 씬의 CCTV 카메라를 본부 콘솔 채널 배열과 위치 문구 키에 자동 배선한다.
+/// 채널 번호는 Hierarchy 순서이며, 키는 Cam_ 접두어를 뗀 이름으로 만든다.
 /// </summary>
 public static class CctvConsoleWiring
 {
@@ -84,8 +77,6 @@ public static class CctvConsoleWiring
         Debug.Log(report.ToString(), switcher);
     }
 
-    // Hierarchy에 보이는 순서 그대로 모은다 — 배치한 사람이 정한 순서가 채널 번호다.
-    // FindObjectsByType은 순서를 보장하지 않으므로 직접 훑는다.
     private static List<CCTVNode> CollectInHierarchyOrder(Scene scene)
     {
         var found = new List<CCTVNode>();
@@ -104,7 +95,6 @@ public static class CctvConsoleWiring
             Collect(node.GetChild(i), into);
     }
 
-    // Cam_Market_Inside -> World.Cctv.MarketInside
     private static string KeyFor(string objectName)
     {
         string body = objectName.StartsWith(k_namePrefix)

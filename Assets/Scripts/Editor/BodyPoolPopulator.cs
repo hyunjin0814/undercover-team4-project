@@ -3,27 +3,19 @@ using UnityEditor;
 using UnityEngine;
 
 /// <summary>
-/// 바디 풀 배선 (#619, docs §13-17) — 메뉴: Tools/바디 풀 배선
-///
-/// Apocalypse·PoliceStation 팩 바디를 <c>NPC_Citizen_Generic</c>의 Model 아래에 Generic 스켈레톤으로
-/// 다시 바인딩해 붙인다. 옷은 몽타주 축이 아니라 화면 다양성만 오른다.
-///
-/// 팩 프리팹 하나에 그 팩 바디 전체가 한 스켈레톤 아래 들어 있어(우리 프리팹과 같은 꼴) 팩마다
-/// 아무 프리팹 하나를 기증자로 열면 된다. 그래서 표에 적는 것은 <b>넣을 것이 아니라 뺄 것</b>이다.
-/// 다시 돌려도 안전하다 — <c>SM_Gen_</c>이 아닌 바디를 걷어내고 새로 붙인다.
+/// Apocalypse·PoliceStation 팩 바디를 NPC_Citizen_Generic 아래 Generic 스켈레톤으로 다시 바인딩해 붙인다.
+/// 메뉴: Tools/바디 풀 배선. 다시 돌려도 안전하다.
 /// </summary>
 public static class BodyPoolPopulator
 {
     private const string k_targetPrefab = "Assets/Prefabs/NPC/NPC_Citizen_Generic.prefab";
 
-    // 원래 바디의 접두사 — 이게 아니면 이 툴이 붙인 것으로 보고 걷어낸다
     private const string k_genericPrefix = "SM_Gen_";
 
     private readonly struct Pack
     {
         public readonly string DonorPrefab;
 
-        /// <summary>붙인 바디 이름의 접두사 — 두 팩에 같은 이름(SM_Chr_Criminal_Male_01)이 있어 갈라 둔다.</summary>
         public readonly string Rename;
 
         public readonly string[] Excluded;
@@ -41,7 +33,6 @@ public static class BodyPoolPopulator
         new Pack(
             "Assets/Imported/Synty/PolygonApocalypse/Prefabs/Characters/SM_Chr_Biker_Male_01.prefab",
             "SM_Apo_",
-            // 좀비는 비인간이라 뺀다 — 도시 시민으로 섞이면 톤이 깨진다
             "SM_Chr_Zombie_Male_01",
             "SM_Chr_Zombie_Male_02",
             "SM_Chr_Zombie_Female_01",
@@ -50,8 +41,6 @@ public static class BodyPoolPopulator
         new Pack(
             "Assets/Imported/Synty/PolygonPoliceStation/Prefabs/Characters/SM_Chr_Officer_Male_01.prefab",
             "SM_Pol_"
-            // 옷에 POLICE 글자가 있는 바디를 여기 적어 뺀다 — 글자는 아틀라스에 구워져 있어
-            // 코드로는 못 갈라내니 붙인 뒤 눈으로 보고 채운다
         ),
     };
 
@@ -166,18 +155,14 @@ public static class BodyPoolPopulator
                 mapped[i] = ResolveBone(sourceBones[i], bones, name, missing);
             body.bones = mapped;
 
-            go.SetActive(false); // 하나를 켜는 것은 NpcAppearance.ApplyModel이 한다
+            go.SetActive(false);
             added++;
             log.Append("\n  ").Append(name);
         }
         return added;
     }
 
-    /// <summary>
-    /// 팩 본에 대응하는 Generic 본. 이름이 같으면 그대로고, 없으면 좌우를 계층으로 판정한다 —
-    /// Apocalypse 손가락만 이름에 좌우가 없어(<c>Finger_01</c>/<c>Finger_01 1</c>) 조상
-    /// <c>Hand_L</c>/<c>Hand_R</c>에서 접미사를 가져온다.
-    /// </summary>
+    /// <summary>팩 본에 대응하는 Generic 본을 찾는다. 이름에 좌우가 없으면 조상 Hand_L/R로 판정한다.</summary>
     private static Transform ResolveBone(
         Transform sourceBone,
         Dictionary<string, Transform> bones,

@@ -4,7 +4,9 @@ using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
 using UnityEngine;
 
-// 빌드에 커밋 sha를 굽는다 (#622, 진단 전용 — 참가 차단에는 안 쓴다).
+/// <summary>
+/// 빌드 시 현재 커밋 sha를 Resources에 구워 넣고, 빌드 후 지운다(진단 전용).
+/// </summary>
 public class BuildStampBaker : IPreprocessBuildWithReport, IPostprocessBuildWithReport
 {
     private const string k_resourcesDir = "Assets/Scripts/Network/Config/Resources";
@@ -30,7 +32,6 @@ public class BuildStampBaker : IPreprocessBuildWithReport, IPostprocessBuildWith
         }
     }
 
-    // 항상 지운다 — 에디터가 이 빌드의 낡은 값이 아니라 살아있는 git을 보게 해야 한다.
     public void OnPostprocessBuild(BuildReport report)
     {
         try

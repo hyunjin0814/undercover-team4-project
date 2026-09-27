@@ -2,8 +2,7 @@ using UnityEngine;
 using UnityEngine.Localization;
 
 /// <summary>
-/// CCTV 콘솔 키패드의 숫자 버튼 — 누르는 만큼 번호가 쌓이고 확인 버튼이 그 채널을 띄운다. (#362 연장)
-/// 채널마다 버튼을 두지 않는다: 카메라가 수십 개로 늘어도 키패드는 11개로 고정이다.
+/// CCTV 콘솔 키패드의 숫자 버튼 — 누른 숫자를 채널 번호 입력에 쌓는다.
 /// </summary>
 public class CCTVKeypadButton : MonoBehaviour, IInteractable
 {
@@ -24,7 +23,6 @@ public class CCTVKeypadButton : MonoBehaviour, IInteractable
         m_switcher.RequestAppendDigitRpc(m_digit);
     }
 
-    // RequestAppendDigitRpc의 서버 가드와 같은 기준
     public bool CanInteract(GameObject interactor) =>
         m_switcher != null
         && m_switcher.IsSpawned

@@ -2,8 +2,7 @@ using System;
 using UnityEngine;
 
 /// <summary>
-/// 슬롯별 치장 아이템 목록 (#818) — <b>배열 인덱스가 곧 네트워크로 오가는 값</b>이다.
-/// 인덱스 0은 "안 씀"이라 0번 항목은 프리팹을 비워 둔다. 수치·목록을 코드에 박지 않는다 (GDD 10-4).
+/// 슬롯별 치장 아이템 목록 SO — 배열 인덱스가 네트워크로 오가는 값이며, 0번은 "안 씀"이다.
 /// </summary>
 [CreateAssetMenu(fileName = "AccessoryCatalog", menuName = "Undercover/Player/Accessory Catalog")]
 public class AccessoryCatalog : ScriptableObject
@@ -54,11 +53,7 @@ public class AccessoryCatalog : ScriptableObject
         return item == null ? null : item.Icon;
     }
 
-    /// <summary>
-    /// 처음부터 쓸 수 있는 항목인가 (#818 D). <b>보유함에 담지 않고 카탈로그가 정한다</b> —
-    /// 담아 두면 기본 지급 세트를 고칠 때 이미 만든 계정에는 반영되지 않는다.
-    /// "안 씀"(0)은 늘 쓸 수 있다.
-    /// </summary>
+    /// <summary>처음부터 쓸 수 있는 기본 지급 항목인지 판정한다. "안 씀"(0)은 항상 참이다.</summary>
     public bool IsDefaultOwned(EAccessorySlot slot, int index)
     {
         if (index <= 0)
@@ -68,18 +63,11 @@ public class AccessoryCatalog : ScriptableObject
         return item != null && item.DefaultOwned;
     }
 
-    /// <summary>
-    /// 이 조합에서 <b>가려지는</b> 슬롯 (#818) — 전면 헬멧을 쓰면 머리카락이, 마스크를 쓰면 수염이
-    /// 덮인다. 가린다고 선택을 지우지는 않는다: 벗으면 골라 둔 것이 그대로 다시 나온다.
-    ///
-    /// 아이템이 <b>자기 슬롯을 가리는 것은 무시한다</b> — 그러면 자기 자신이 안 붙는다.
-    /// </summary>
+    /// <summary>이 조합에서 다른 액세서리에 가려지는 슬롯을 돌려준다.</summary>
     public EAccessorySlotMask HiddenSlots(AccessorySet set)
     {
         EAccessorySlotMask hidden = EAccessorySlotMask.None;
 
-        // enum 선언 순서가 곧 우선순위다 — <b>이미 가려진 아이템은 남을 가리지 못한다</b>.
-        // 서로 가리게 적어 두면(헬멧이 머리카락을, 그 머리카락이 헬멧을) 둘 다 사라지기 때문이다.
         foreach (EAccessorySlot slot in Enum.GetValues(typeof(EAccessorySlot)))
         {
             if (IsHidden(hidden, slot))
@@ -101,7 +89,6 @@ public class AccessoryCatalog : ScriptableObject
 
     public static EAccessorySlotMask MaskOf(EAccessorySlot slot) => (EAccessorySlotMask)(1 << (int)slot);
 
-    // 0번("안 씀")과 범위 밖은 항목이 없는 것으로 본다 — 부르는 쪽이 null 하나만 보면 된다
     private Item ItemAt(EAccessorySlot slot, int index)
     {
         if (index <= 0)

@@ -1,12 +1,9 @@
-// Assets/Scripts/UI/Panels/CrosshairSettingsPanel.cs
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// 크로스헤어 커스터마이징 창 (#945) — 설정 창 Look 탭 버튼으로 연다. 모양 4종 토글, 색 드롭다운,
-/// 크기·굵기 슬라이더를 <see cref="CosmeticLoadout"/>에 즉시 쓰고(설정 창의 "즉시 적용" 관례,
-/// docs/design/settings-ui.md), 같은 값으로 미리보기(<see cref="CrosshairPreviewView"/>)를 다시 그린다.
+/// 크로스헤어 커스터마이징 창 — 모양·색·크기·굵기를 즉시 저장하고 미리보기를 다시 그린다.
 /// </summary>
 public class CrosshairSettingsPanel : PanelBase
 {
@@ -63,7 +60,6 @@ public class CrosshairSettingsPanel : PanelBase
         SyncFromSettings();
     }
 
-    // 설정 창 관례(SettingsPanel.SyncFromSettings)와 같다 — WithoutNotify로 넣어야 되먹임이 안 생긴다.
     private void SyncFromSettings()
     {
         CrosshairSettings settings = CosmeticLoadout.GetCrosshairSettings();
@@ -87,8 +83,6 @@ public class CrosshairSettingsPanel : PanelBase
     private void HandleSizeChanged(float value) => ApplyChange(s => s.Size = value);
     private void HandleThicknessChanged(float value) => ApplyChange(s => s.Thickness = value);
 
-    // 현재 값을 복사해 한 필드만 바꾸고 그대로 저장한다 — CosmeticLoadout 쪽 값 자체를 직접
-    // 변형하지 않는 이유는 참조 공유로 인한 사고를 막기 위해서다(§2 GetCrosshairSettings 주석 참고).
     private void ApplyChange(System.Action<CrosshairSettings> mutate)
     {
         CrosshairSettings settings = CosmeticLoadout.GetCrosshairSettings();

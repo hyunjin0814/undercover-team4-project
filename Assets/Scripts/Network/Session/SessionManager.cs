@@ -5,39 +5,35 @@ using Unity.Netcode;
 using Unity.Services.Multiplayer;
 using UnityEngine;
 
+/// <summary>
+/// UGS 멀티플레이 세션 생성·참가·이탈과 연결 끊김 감지를 담당하는 상주 매니저.
+/// 세션 프로퍼티로 게임 버전을 비교하고, 연결 승인 게이트를 소유한다.
+/// </summary>
 [DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
 public class SessionManager : CommonManagerBase
 {
-    // 게임 버전을 담는 세션 프로퍼티 키 (#586). 값은 NetworkProtocol.VersionString.
     private const string k_versionProperty = "ver";
 
-    // 호스트 커밋 sha (#622). 진단 전용 — 이 값으로 참가를 막지 않는다.
     private const string k_shaProperty = "sha";
 
     [SerializeField]
     private int m_maxPlayer = 6;
 
     [SerializeField]
-    private AuthBootstrap m_auth; // 인스펙터로 연결
+    private AuthBootstrap m_auth;
     public AuthBootstrap Auth => m_auth;
 
     private ISession m_session;
     public ISession CurrentSession => m_session;
 
-    // 연결 승인 콜백의 단일 소유자 (#628 B층) — 씬과 무관하게 항상 걸려야 해 상주 매니저가 든다.
     private readonly ConnectionApprovalGate m_approvalGate = new();
     public ConnectionApprovalGate Approval => m_approvalGate;
 
-    public event Action<string> OnSessionJoined; // 인자: session.Id
+    public event Action<string> OnSessionJoined;
     public event Action OnSessionLeft;
-    public event Action<EConnectionLostReason> OnConnectionLost; // 비자발 끊김 — 인자: 사유 (#764)
-    private bool m_isLeaving; // 자발적 LeaveAsync 진행 중 표시
+    public event Action<EConnectionLostReason> OnConnectionLost;
+    private bool m_isLeaving;
 
-    /// <summary>
-    /// 버전 불일치로 물러난 사유 — 참가 화면이 띄울 때까지 매니저가 들고 있는다 (#586).
-    /// 참가가 끝난 시점엔 호스트 씬 동기화가 이미 클라를 로비로 끌고 간 뒤일 수 있어,
-    /// 예외를 받을 SessionPanel이 씬과 함께 사라져 있다. 그래서 사유를 씬 밖에 둔다.
-    /// </summary>
     public SessionVersionMismatchException PendingVersionMismatch { get; private set; }
 
     /// <summary>안내를 띄우면서 비운다 — 다음에 타이틀에 올 때 지난 실패가 다시 뜨지 않게.</summary>
@@ -51,7 +47,7 @@ public class SessionManager : CommonManagerBase
     private void OnEnable()
     {
         if (m_auth != null)
-            m_auth.CanSignOut = () => m_session == null && !m_isBusy; // 세션에 접속 중이 아니면 로그아웃 가능
+            m_auth.CanSignOut = () => m_session == null && !m_isBusy;
     }
 
     private void OnDisable()
@@ -71,18 +67,17 @@ public class SessionManager : CommonManagerBase
         await m_auth.InitializeAndSignInAsync();
     }
 
-    /// <summary>인스펙터의 최대 인원(m_maxPlayer)으로 세션을 생성한다 — 세션 관문 UI(#247)용.</summary>
+    /// <summary>인스펙터의 최대 인원(m_maxPlayer)으로 세션을 생성한다 — 세션 관문 UI용.</summary>
     public UniTask<string> CreateSessionAsync() => CreateSessionAsync(m_maxPlayer);
 
     public async UniTask<string> CreateSessionAsync(int maxPlayer)
     {
         await EnsureSignedInAsync();
-        PrepareApprovalGate(NetworkManager.Singleton); // StartHost 전에 버전 페이로드·게이트를 건다 (#628)
+        PrepareApprovalGate(NetworkManager.Singleton);
         var options = new SessionOptions
         {
             MaxPlayers = maxPlayer,
             Type = "Session",
-            // Public이어야 참가자가 Properties로 읽을 수 있다 (#586)
             SessionProperties = new Dictionary<string, SessionProperty>
             {
                 [k_versionProperty] = new SessionProperty(
@@ -110,7 +105,6 @@ public class SessionManager : CommonManagerBase
         NetworkManager nm = NetworkManager.Singleton;
         PrepareApprovalGate(nm);
 
-        // B층 거부 사유 캡처 — DisconnectReason은 Shutdown에서 안 비워져 스테일 값이 남을 수 있다 (#628)
         string rejectReason = null;
         void CaptureReason(ulong _) => rejectReason = nm?.DisconnectReason;
         if (nm != null)
@@ -136,8 +130,6 @@ public class SessionManager : CommonManagerBase
                 nm.OnClientDisconnectCallback -= CaptureReason;
         }
 
-        // 버전 검사는 AdoptSession보다 먼저 — 채택하면 OnSessionJoined가 발화해 Vivox가 음성 채널까지
-        // 붙는다. 여기까지 await 없이 이어지므로 참가와 검사 사이에 NGO가 한 프레임도 돌지 않는다. (#586)
         string sessionVersion = ReadVersion(session);
         if (sessionVersion != NetworkProtocol.VersionString)
         {
@@ -148,7 +140,7 @@ public class SessionManager : CommonManagerBase
                 NetworkProtocol.VersionString,
                 sessionVersion
             );
-            PendingVersionMismatch = mismatch; // 씬이 갈려도 사유가 남게 — 먼저 넣고 물러난다
+            PendingVersionMismatch = mismatch;
             Abandon(session);
             throw mismatch;
         }
@@ -156,7 +148,6 @@ public class SessionManager : CommonManagerBase
         AdoptSession(session);
         Debug.Log($"[SessionManager] 세션 참가 완료 / Id: {session.Id}, Code: {session.Code}");
 
-        // 진단 전용 (#622) — sha가 달라도 물러나지 않는다. 차단 기준은 위의 버전 검사뿐이다.
         string sessionSha = ReadSha(session);
         if (sessionSha != BuildStamp.Sha)
         {
@@ -210,30 +201,17 @@ public class SessionManager : CommonManagerBase
         return BuildStamp.k_unknownSha;
     }
 
-    /// <summary>
-    /// 버전이 다른 세션에서 즉시 물러난다 (#586). NGO를 먼저 끊는 이유는 나가기(HTTP 왕복)를
-    /// 기다리는 사이 호스트의 씬 동기화가 도착해 인게임 씬 로드가 시작되기 때문이다 — 그러면
-    /// 실패 문구를 띄울 SessionPanel이 이미 파괴된 뒤다.
-    /// </summary>
+    /// <summary>버전이 다른 세션에서 NGO를 먼저 끊고 즉시 물러난다.</summary>
     private static void Abandon(ISession session)
     {
         if (NetworkManager.Singleton != null)
             NetworkManager.Singleton.Shutdown();
 
-        // 나가기를 기다리지 않는다 — 방금 NGO를 끊었으므로 SDK가 종료 완료를 기다리다 돌아오지 않을
-        // 수 있고, 그러면 불일치 예외가 UI까지 못 올라가 화면이 "참가 중…"에 멈춘다.
-        // 사용자에게 이유를 보여 주는 일이 세션 정리를 기다릴 이유는 없다.
         LeaveQuietlyAsync(session).Forget();
         ReturnToTitleAsync().Forget();
     }
 
-    /// <summary>
-    /// 불일치로 물러난 뒤 타이틀 복귀 (#586). 참가 await이 풀린 시점엔 이미 씬 동기화로 로비에
-    /// 끌려간 뒤일 수 있는데, 방금 NGO를 끊었으므로 아무도 되돌려 주지 않는다 — 드롭 복귀
-    /// (ConnectionLostReturner)는 AdoptSession 전이라 걸리지 않는다.
-    /// NGO가 다 내려간 뒤에 로드해야 한다: 아직 IsListening이면 App.LoadScene이 씬 동기화 분기를
-    /// 타고, 클라는 로드 권한이 없어 고착된다 (#326).
-    /// </summary>
+    /// <summary>버전 불일치로 물러난 뒤 NGO가 내려가면 타이틀로 복귀한다.</summary>
     private static async UniTaskVoid ReturnToTitleAsync()
     {
         await SessionFlow.WaitForNetworkShutdownAsync();
@@ -364,14 +342,9 @@ public class SessionManager : CommonManagerBase
 
         OnConnectionLost?.Invoke(reason);
 
-        // 비자발 드롭은 SDK에 Deleted/RemovedFromSession 이벤트를 안 주므로, MultiplayerService
-        // 레지스트리에 세션이 남아 다음 생성이 "already registered"로 실패한다. SDK LeaveAsync를 걸어
-        // SDK 자체 핸들러가 레지스트리에서 세션을 빼게 한다(호스트=DeleteAsync). (#287)
         TeardownLostSessionAsync(lost).Forget();
     }
 
-    // 끊긴 세션을 SDK 레지스트리에서 내린다. 죽은 relay와 무관하게 Lobby 백엔드(HTTP)로 정리되며,
-    // 이미 삭제된 세션이면 SDK 내부에서 즉시 반환한다(안전한 no-op). 실패해도 게임 흐름은 막지 않는다.
     private static async UniTaskVoid TeardownLostSessionAsync(ISession lost)
     {
         try
@@ -401,7 +374,7 @@ public class SessionManager : CommonManagerBase
 
     protected override void OnDestroy()
     {
-        base.OnDestroy(); // App 등록 해제
+        base.OnDestroy();
 
         if (m_session != null)
         {
@@ -467,8 +440,6 @@ public class SessionManager : CommonManagerBase
 
         GUI.enabled = true;
     }
-
-    // 게임 종료 버튼은 Title 메인 메뉴(TitleUIManager)로 이관됨 — 여기 OnGUI는 순수 세션 디버그 조작만 남긴다. (#224)
 
     private void DrawInSessionUI()
     {
@@ -552,11 +523,7 @@ public class SessionManager : CommonManagerBase
         }
     }
 
-    /// <summary>
-    /// 끊긴 플레이어를 UGS 세션 명부에서 내린다 — 호스트 전용. (#920)
-    /// 강제 종료한 클라는 자기 쪽에서 LeaveAsync를 부르지 못한 채 죽으므로, 호스트가 대신 내려주지
-    /// 않으면 백엔드에 멤버로 남아 같은 코드로 다시 들어오지 못한다(정원도 한 칸 계속 먹는다).
-    /// </summary>
+    /// <summary>끊긴 플레이어를 UGS 세션 명부에서 제거한다. 호스트 전용.</summary>
     public async UniTask RemovePlayerAsync(string playerId)
     {
         if (m_session == null || string.IsNullOrEmpty(playerId))
@@ -569,7 +536,6 @@ public class SessionManager : CommonManagerBase
         }
         catch (Exception ex)
         {
-            // 자발적으로 나간 사람은 이미 빠진 뒤라 여기로 온다 — 정상 경로라 경고로 올리지 않는다.
             Debug.Log($"[SessionManager] 세션 플레이어 제거 안 함(이미 없거나 실패): {ex.Message}");
         }
     }
@@ -581,7 +547,7 @@ public class SessionManager : CommonManagerBase
             return;
         try
         {
-            IHostSession host = m_session.AsHost(); // 호스트(세션 생성자)만 유효
+            IHostSession host = m_session.AsHost();
             if (host.IsLocked == locked)
                 return;
             host.IsLocked = locked;

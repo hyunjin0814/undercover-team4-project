@@ -2,9 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// 로비에서 자기 로봇 색을 고르는 창 (#432) — 감정표현 휠 구성과 같은 자리·같은 방식이다.
-/// 칸을 그리는 일은 부위마다 <see cref="PlayerColorPickerView"/>가 맡고, 창은 열고 닫기와
-/// 미리보기만 맡는다.
+/// 로비·상점에서 자기 로봇 색과 치장을 고르는 커스터마이징 창 — 열고 닫기와 미리보기를 맡는다.
 /// </summary>
 public class PlayerColorPanel : PanelBase
 {
@@ -38,21 +36,18 @@ public class PlayerColorPanel : PanelBase
     public override void ClosePanel()
     {
         if (!IsOpened)
-            return; // 중복 호출로 CursorLock 참조 수가 어긋나지 않게
+            return;
 
         base.ClosePanel();
         SetBlocked(false);
     }
 
-    // 창이 열린 채 사라지면(씬 전환) 커서 해제 요청을 되돌릴 주체가 없어진다 — LootPanel과 같은 사정
     private void OnDisable()
     {
         HandleDisabled();
         SetBlocked(false);
     }
 
-    // 커서를 푼다 — 로비는 원래 풀려 있지만 상점 락커(#818)로 열 때는 잠긴 상태에서 들어온다.
-    // 래치 덕에 몇 번 불려도 Push/Pop은 1:1로 유지된다.
     protected override PlayerInputHandler BlockTarget => FindLocalInput();
 
     private static PlayerInputHandler FindLocalInput()
@@ -78,10 +73,8 @@ public class PlayerColorPanel : PanelBase
 
     private void HandleColorChanged(EBodyPart _) => RefreshPreview();
 
-    // 치장도 같은 자리에서 되그린다 — 무대가 전신 미리보기에만 태운다 (#818)
     private void HandleAccessoryChanged(EAccessorySlot _) => RefreshPreview();
 
-    // 그림은 무대가 그린다 — 창은 어느 것을 볼지만 정한다
     private void RefreshPreview()
     {
         if (m_preview == null || m_portraitStage == null)

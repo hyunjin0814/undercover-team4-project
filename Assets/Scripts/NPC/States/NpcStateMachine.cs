@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
 
+/// <summary>
+/// NPC 상태 머신 — 상태를 등록하고 전이하며, 전이 전후 이벤트를 발행한다.
+/// </summary>
 public class NpcStateMachine
 {
     private readonly Dictionary<NpcState, NpcStateBase> m_states =
@@ -9,20 +12,8 @@ public class NpcStateMachine
 
     public NpcState CurrentState { get; private set; }
 
-    // 상태 전이 훅 — 이후 애니메이션·Netcode 동기화(NetworkVariable)를 여기에 연결한다
     public event Action<NpcState> OnStateChanged;
 
-    /// <summary>
-    /// 전이 훅 — <b>새 상태의 <c>Enter()</c> 직전</b>에 발행한다 (<see cref="OnStateChanged"/>보다 먼저).
-    ///
-    /// <b>왜 따로 필요한가.</b> <c>Enter()</c>에서 이미 <c>SetDestination</c>을 부르는 상태가 있다
-    /// (<see cref="NpcWalkState"/>). 그래서 "그 경로 계산에 영향을 주는" 설정 — 통행 마스크가
-    /// 대표적이다 — 을 <see cref="OnStateChanged"/>에 붙이면 <b>첫 목적지만 옛 값으로</b> 잡히고
-    /// 두 번째부터 맞는, 재현이 들쭉날쭉한 버그가 된다. 그런 설정은 여기서 건다.
-    ///
-    /// 표현 계층(애니메이션·동기화)은 여전히 <see cref="OnStateChanged"/>를 쓴다 — 이쪽은 상태가
-    /// 아직 <c>Enter()</c>를 돌지 않은 시점이라 상태 클래스가 잡은 값을 읽을 수 없다.
-    /// </summary>
     public event Action<NpcState> OnBeforeEnter;
 
     public void AddState(NpcState state, NpcStateBase stateInstance)
@@ -35,15 +26,6 @@ public class NpcStateMachine
         if (m_currentState != null && CurrentState == state)
             return;
 
-        // 사망은 빠져나가지 않는다 — <b>규약이 아니라 구조로 막는다</b> (#571).
-        //
-        // 코어 Update의 사망 게이트로는 부족하다: 그건 FSM 자신의 전이만 멈추는데, 밖에서 직접
-        // 거는 경로가 여럿이다(오검거·납치 매니저의 NpcDutyAgent, 신병 석방 등). 그중 하나라도
-        // 시체를 배회·추격으로 되돌리면 에이전트가 꺼진 채 상태만 살아나 그 자리에 굳는다.
-        //
-        // 조용히 무시하지 않고 알리는 이유: 여기 걸렸다는 것은 그 시스템이 사망 통보
-        // (<see cref="NpcDeath.OnDied"/>)를 구독하지 않아 죽은 대상을 아직 붙들고 있다는 뜻이고,
-        // 그건 이 한 줄이 막아 준 증상보다 위에 있는 원인이다.
         if (CurrentState == NpcState.Dead)
         {
             UnityEngine.Debug.LogError(
@@ -56,7 +38,7 @@ public class NpcStateMachine
         m_currentState?.Exit();
         CurrentState = state;
         m_currentState = m_states[state];
-        OnBeforeEnter?.Invoke(state); // Enter()가 거는 경로 계산에 반영되어야 한다 — 순서가 계약이다
+        OnBeforeEnter?.Invoke(state);
         m_currentState.Enter();
         OnStateChanged?.Invoke(state);
     }

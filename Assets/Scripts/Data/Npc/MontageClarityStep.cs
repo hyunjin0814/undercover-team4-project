@@ -1,7 +1,9 @@
 using System;
 using UnityEngine;
 
-/// <summary>몽타주 화질 한 단계 (#724) — 표시 픽셀 크기 + 대비 저하.</summary>
+/// <summary>
+/// 몽타주 화질 한 단계 — 표시 픽셀 크기 + 대비 저하.
+/// </summary>
 [Serializable]
 public struct MontageClarityStep
 {

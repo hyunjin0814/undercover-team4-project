@@ -2,12 +2,8 @@ using UnityEngine;
 using Random = UnityEngine.Random;
 
 /// <summary>
-/// 세력 소탕 — 유치장에 갇힌 범인의 세력이 복수대 N명을 보내 현장을 덮친다. (GDD 6-4, #721)
-/// 조직원 전원이 <b>같은 플레이어 한 명</b>을 물어 표적이 혼자 버티지 못하게 하는 것이 협동 강제의 실체다.
-///
-/// 상태를 새로 만들지 않는다 — 동네 깡패(<see cref="StreetThugEvent"/>)가 검증한
-/// <see cref="NpcResistState"/>를 그대로 쓰고, 인원(<see cref="SpawnCount"/>)·포기하지 않음
-/// (<see cref="NpcReaction.IsRelentless"/>)·고정 외형 셋만 다르다. 규칙과 근거는 GDD 6-4.
+/// 세력 소탕 돌발 이벤트 — 수감된 범인의 세력이 복수대를 보내 한 플레이어를 집중 공격한다(GDD 6-4).
+/// NpcResistState를 그대로 쓰며 인원·포기하지 않음·고정 외형만 다르다.
 /// </summary>
 public class FactionRevengeEvent : SpawnedNpcEventBase
 {
@@ -30,13 +26,10 @@ public class FactionRevengeEvent : SpawnedNpcEventBase
     [Tooltip("복수대 전원이 쓸 모델 이름 — AppearanceModelCatalog의 ModelName과 대조한다. 비우면 프리팹 기본(무작위 바디)")]
     [SerializeField] private string m_modelName = "Character_Muscle_Male_01";
 
-    // 라운드당 1회 게이트 — 매니저에는 횟수 제한 개념이 없어 이벤트가 스스로 판정한다
     private int m_lastTriggeredRound = k_neverTriggered;
 
-    // 발동 <b>근거</b> 세력 — 로그용이다. 조직원 프로필에는 실리지 않는다 (GDD 6-4)
     private OfficialRecords.Faction m_faction;
 
-    // 개발자 단축키가 게이트를 건너뛴 발동인가 — ServerBegin에서 한 번 쓰고 버린다 (#775)
     private bool m_forced;
 
     public override string NoticeKey => "Hud.Event.Notice.FactionRevenge";
@@ -48,7 +41,6 @@ public class FactionRevengeEvent : SpawnedNpcEventBase
             ? m_memberTable.GetMemberCount(CurrentRound, m_fallbackMemberCount)
             : m_fallbackMemberCount;
 
-    // 상주 진행도가 없는 구성(오프라인 단독 Play)은 1라운드로 친다 — SuddenEventManager와 같은 규약
     private static int CurrentRound
     {
         get
@@ -64,15 +56,13 @@ public class FactionRevengeEvent : SpawnedNpcEventBase
         if (round < m_minRound || round == m_lastTriggeredRound)
             return false;
 
-        // 복수할 세력이 있는지만 본다 — 어느 세력인지는 ServerBegin에서 고른다(술어가 상태를 남기지 않게)
         if (!TryPickJailedFaction(out _))
             return false;
 
-        return base.CanTrigger(); // 표적이 될 현장 플레이어
+        return base.CanTrigger();
     }
 
-    /// <summary>강제 발동 준비 — 라운드 하한·라운드당 1회·수감자 조건을 건너뛴다.
-    /// 표적만은 그대로 요구한다 — 때릴 상대가 없으면 이벤트가 성립하지 않는다. (#775)</summary>
+    /// <summary>강제 발동 시 라운드·횟수·수감자 조건을 건너뛴다(표적은 필요).</summary>
     public override bool ServerPrepareForceTrigger()
     {
         if (!base.CanTrigger())
@@ -88,7 +78,6 @@ public class FactionRevengeEvent : SpawnedNpcEventBase
 
     public override void ServerBegin()
     {
-        // 세력은 여기서 고른다 — 강제 발동이면 세력 있는 수감자가 없을 수 있어 임의 세력으로 떨어진다
         if (!TryPickJailedFaction(out m_faction))
             m_faction = PickAnyFaction();
 
@@ -97,10 +86,9 @@ public class FactionRevengeEvent : SpawnedNpcEventBase
         if (!IsActive)
         {
             m_forced = false;
-            return; // 스폰 불발 — 게이트를 소모하지 않는다
+            return;
         }
 
-        // 강제 발동은 게이트를 남기지 않는다 — 인원 스케일을 보려면 한 라운드에 여러 번 띄워야 한다
         if (!m_forced)
             m_lastTriggeredRound = CurrentRound;
         m_forced = false;
@@ -108,9 +96,7 @@ public class FactionRevengeEvent : SpawnedNpcEventBase
         Debug.Log($"[세력 소탕] 복수대가 현장으로 몰려온다 ({CurrentRound}라운드) — 발동 근거: 유치장의 {m_faction} 수감자");
     }
 
-    /// <summary>라운드 종료 정리 — 스폰물과 함께 라운드당 1회 게이트도 푼다. 매니저가 InProgress를
-    /// 벗어날 때만 부르므로(날씨 교체 경로는 IRoundWeather만 탄다) 라운드 경계와 일치한다.
-    /// 세션을 새로 시작해 라운드가 1로 되돌아와도 지난 게이트가 첫 라운드를 막지 않는다.</summary>
+    /// <summary>라운드 종료 시 스폰물을 정리하고 라운드당 1회 게이트를 푼다.</summary>
     public override void ServerReset()
     {
         base.ServerReset();
@@ -137,12 +123,9 @@ public class FactionRevengeEvent : SpawnedNpcEventBase
 
     protected override void ApplyBehavior(NpcController npc)
     {
-        // 전원에게 같은 표적을 넘긴다. 표적이 다운되면 저항 상태의 기존 규칙대로 각자 근처 플레이어로 넘어간다.
         npc.Reaction.StartResist(m_threat, relentless: true);
     }
 
-    // 세력이 있는 수감자 중 하나를 뽑아 그 세력을 돌려준다 — 없으면 false.
-    // 후보를 모으지 않고 지나가며 뽑는다(reservoir) — 수감자가 몇이든 할당이 없다.
     private static bool TryPickJailedFaction(out OfficialRecords.Faction faction)
     {
         faction = OfficialRecords.Faction.None;
@@ -172,7 +155,6 @@ public class FactionRevengeEvent : SpawnedNpcEventBase
         return candidates > 0;
     }
 
-    // 강제 발동 전용 — 세력 있는 수감자가 없을 때 쓸 임의 세력. 전부 None이면 None.
     private static OfficialRecords.Faction PickAnyFaction()
     {
         var all = (OfficialRecords.Faction[])System.Enum.GetValues(typeof(OfficialRecords.Faction));
@@ -192,7 +174,6 @@ public class FactionRevengeEvent : SpawnedNpcEventBase
         return picked;
     }
 
-    // 정확히 일치를 먼저 보고, 없으면 접미사로 찾는다("Muscle_Male_01" → "Character_Muscle_Male_01"). 없으면 -1.
     private static int IndexOfModel(NpcCatalogAppearance appearance, string modelName)
     {
         AppearanceModelCatalog catalog = appearance != null ? appearance.Catalog : null;
@@ -218,7 +199,6 @@ public class FactionRevengeEvent : SpawnedNpcEventBase
                 suffixMatch = i;
         }
 
-        // 접미사가 여럿 걸리면 어느 것을 골랐는지 알린다 — 조용히 엉뚱한 모델을 입지 않게
         if (suffixCount > 1)
             Debug.LogWarning($"FactionRevengeEvent: '{modelName}'이 접미사로 {suffixCount}개 모델에 걸려 "
                 + $"'{catalog.GetModelName(suffixMatch)}'을 골랐다 — 전체 이름으로 적을 것");

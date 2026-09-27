@@ -1,7 +1,9 @@
 using UnityEngine;
 using UnityEngine.Localization;
 
-/// <summary>CCTV 적외선(야시경) 토글 버튼 — 전원/채널 버튼과 같은 방식. (#677)</summary>
+/// <summary>
+/// CCTV 적외선(야시경) 토글 버튼 — 전원/채널 버튼과 같은 방식.
+/// </summary>
 public class CCTVInfraredButton : MonoBehaviour, IInteractable
 {
     [SerializeField]
@@ -16,7 +18,6 @@ public class CCTVInfraredButton : MonoBehaviour, IInteractable
         m_switcher.RequestToggleInfraredRpc();
     }
 
-    // RequestToggleInfraredRpc의 서버 가드와 같은 기준
     public bool CanInteract(GameObject interactor) =>
         m_switcher != null
         && m_switcher.IsSpawned

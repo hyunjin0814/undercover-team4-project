@@ -3,8 +3,7 @@ using UnityEngine.Localization;
 using UnityEngine.Localization.Settings;
 
 /// <summary>
-/// PlayerPrefs에 저장된 언어를 시작 시 복원하는 셀렉터.
-/// 언어 변경 시 Save()를 호출해줘야 한다.
+/// PlayerPrefs에 저장된 언어를 시작 시 복원하는 로케일 셀렉터. 언어 변경 시 Save를 호출해야 한다.
 /// </summary>
 [System.Serializable]
 public class PlayerPrefLocaleSelector : IStartupLocaleSelector
@@ -16,7 +15,7 @@ public class PlayerPrefLocaleSelector : IStartupLocaleSelector
         string code = PlayerPrefs.GetString(k_prefKey, string.Empty);
         if (string.IsNullOrEmpty(code))
         {
-            return null; // 저장값 없으면 다음 셀렉터로 넘어감
+            return null;
         }
 
         return availableLocales.GetLocale(code);

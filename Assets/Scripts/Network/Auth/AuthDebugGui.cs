@@ -4,10 +4,7 @@ using Unity.Services.Core;
 using UnityEngine;
 
 /// <summary>
-/// AuthBootstrap 수동 조작용 OnGUI 디버그 패널 — 테스트 씬에만 붙인다. 정식 UI는 AuthGatePanel (#247 · #585).
-/// 컴포넌트의 존재 자체가 표시 스위치다(예전 m_showDebugGui 체크박스를 대신한다).
-/// AuthBootstrap에서 분리한 이유: 진행 중 래치·상태 문자열·입력칸은 이 패널에서만 쓰이는 값인데
-/// 매니저에 남으면 프로덕션 경로와 섞인다.
+/// AuthBootstrap 수동 조작용 OnGUI 디버그 패널 — 테스트 씬에만 붙인다.
 /// </summary>
 public class AuthDebugGui : MonoBehaviour
 {
@@ -54,7 +51,6 @@ public class AuthDebugGui : MonoBehaviour
         GUILayout.Label($"연결됨(세션/NGO): {auth.IsNetworkConnected}");
         GUILayout.Space(8);
 
-        // 세션 참가 중이면 위에서 이미 return했으므로 여기서는 전환 중 여부만 본다
         bool canSignOut = !m_isBusy && (auth.CanSignOut == null || auth.CanSignOut());
 
         GUI.enabled = !m_isBusy;
@@ -92,7 +88,6 @@ public class AuthDebugGui : MonoBehaviour
 
         try
         {
-            // 인스펙터에 설정된 프로필로 — Start의 자동 로그인과 같은 경로를 탄다
             await auth.InitializeAndSignInAsync(auth.Profile);
             m_status = $"로그인 성공 - PlayerId: {auth.PlayerId}";
         }

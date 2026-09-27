@@ -2,12 +2,8 @@ using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// 납치 결말의 맨홀 — 뚜껑을 여닫는다. (#775)
-///
-/// 서버가 여닫고 전 피어가 같은 값을 보고 그린다 (#56). 뚜껑 참조는 <b>선택</b>이다 —
-/// 비워 두면 연출만 빠지고 결말은 그대로 난다(<see cref="AbductionEvent"/>의 대기는 계속 돈다).
-///
-/// 맨홀 지점(<c>AbductionEvent.m_outskirtPoints</c>)이나 그 자식에 붙인다.
+/// 납치 결말용 맨홀 뚜껑을 서버가 여닫고 전 피어에 동기화한다.
+/// 맨홀 지점이나 그 자식에 붙이며, 뚜껑 참조는 선택이다.
 /// </summary>
 [RequireComponent(typeof(NetworkObject))]
 public class AbductionManhole : NetworkBehaviour
@@ -28,11 +24,10 @@ public class AbductionManhole : NetworkBehaviour
 
     private readonly NetworkVariable<bool> m_open = new NetworkVariable<bool>();
 
-    // 오프라인(네트워크 미사용) Play용 사본 — NetworkVariable이 돌지 않는다 (NpcDutyAgent와 같은 관례)
     private bool m_openLocal;
 
-    private Vector3 m_closedPosition; // 뚜껑의 닫힌 로컬 좌표 — 여는 이동의 기준
-    private float m_progress;         // 0=닫힘, 1=열림
+    private Vector3 m_closedPosition;
+    private float m_progress;
     private bool m_wasOpen;
 
     private bool IsOpen => IsSpawned ? m_open.Value : m_openLocal;
@@ -47,7 +42,6 @@ public class AbductionManhole : NetworkBehaviour
     {
         bool open = IsOpen;
 
-        // 여는 순간에만 소리를 낸다 — 닫을 때는 무음(구조 성공은 조용히 되돌린다)
         if (open != m_wasOpen)
         {
             m_wasOpen = open;

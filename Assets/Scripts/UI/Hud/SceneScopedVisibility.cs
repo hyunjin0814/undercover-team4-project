@@ -1,12 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// 정해 둔 씬에서만 딸린 것을 켠다 (#850) — 씬마다 HUD를 따로 만들지 않기 위한 스위치다.
-/// 가릴 일이 없는 자리(커스터마이징 창)에서는 <b>이 컴포넌트를 꺼 두면</b> 만들어 둔 대로 남는다.
-///
-/// 자기 GameObject가 아니라 <see cref="m_content"/>를 껐다 켜는 이유는, 자기를 끄면 다시 켤 사람이
-/// 없어서다. 구독을 <c>Start</c>에서 붙이는 것도 매니저 등록이 끝난 뒤라야 하기 때문이다(R6) —
-/// 붙기 전에 이미 들어와 있는 씬이 있으므로 현재 씬을 한 번 반영하고 시작한다(<c>BgmPlayer</c>와 같은 자리).
+/// 지정한 씬에서만 m_content를 켜는 스위치. 씬 전환을 구독해 갱신한다.
 /// </summary>
 public class SceneScopedVisibility : MonoBehaviour
 {

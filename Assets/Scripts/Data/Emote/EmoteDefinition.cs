@@ -2,15 +2,8 @@ using UnityEngine;
 using UnityEngine.Localization;
 
 /// <summary>
-/// 감정표현 1종의 정의 — 무엇이 재생되고 무엇이 머리 위에 뜨는가. (#219)
-///
-/// <b>종류 enum을 두지 않았다.</b> "댄스" / "이모지만" / "춤추면서 이모지" 세 경우가
-/// <see cref="Clip"/>·<see cref="BubbleSprite"/>의 <b>있음/없음 조합</b>으로 자연히 나오므로
-/// 분기 코드가 생기지 않는다. enum을 두면 조합마다 값이 필요하고, 새 조합이 생길 때마다
-/// 소비자 쪽 switch를 전부 찾아 고쳐야 한다.
-///
-/// 길이 필드를 따로 두지 않는 것도 같은 이유다 — 클립이 이미 길이를 알고 있는데 값을 복사해
-/// 두면 클립을 갈아끼웠을 때 한쪽만 남아 조용히 어긋난다.
+/// 감정표현 1종의 정의 — 재생할 클립과 머리 위에 띄울 말풍선 스프라이트.
+/// 둘의 유무 조합으로 댄스/이모지/둘 다를 표현한다.
 /// </summary>
 [CreateAssetMenu(fileName = "Emote", menuName = "Scriptable Objects/Emote Definition")]
 public class EmoteDefinition : ScriptableObject
@@ -39,7 +32,6 @@ public class EmoteDefinition : ScriptableObject
     [SerializeField]
     private Sprite m_bubbleSprite;
 
-    /// <summary>안정적 키 — 로비 구성 저장용. 네트워크에는 카탈로그 인덱스가 실린다.</summary>
     public string Id => m_id;
 
     public LocalizedString DisplayName => m_displayName;
@@ -49,8 +41,5 @@ public class EmoteDefinition : ScriptableObject
     public bool Loop => m_loop;
     public Sprite BubbleSprite => m_bubbleSprite;
 
-    /// <summary>
-    /// 자동 종료까지의 길이(초). 루프이거나 클립이 없으면 0 — 서버가 시간으로 끊지 않는다는 뜻이다.
-    /// </summary>
     public float DurationSeconds => m_loop || m_clip == null ? 0f : m_clip.length;
 }

@@ -1,5 +1,8 @@
 using UnityEngine;
 
+/// <summary>
+/// 대기(Idle) 상태 — 정해진 시간 동안 멈춰 있다가 배회(Walk)로 전환한다.
+/// </summary>
 public class NpcIdleState : NpcStateBase
 {
     private float m_waitTimer;
@@ -13,11 +16,9 @@ public class NpcIdleState : NpcStateBase
 
     public override void Enter()
     {
-        // 넉백 비행 등으로 에이전트가 꺼진 채 Idle로 강제 전이될 수 있다 — 다른 State와 같은 가드.
         if (m_owner.Agent.isOnNavMesh)
             m_owner.SetAgentStopped(true);
 
-        // 가끔은 구경하듯 오래 멈춰 서 있는다 — 걷다 서다 리듬이 단조로워지는 것을 방지
         bool isLongIdle = Random.value < m_config.LongIdleChance;
         m_waitTimer = isLongIdle
             ? Random.Range(m_config.LongIdleTimeMin, m_config.LongIdleTimeMax)
