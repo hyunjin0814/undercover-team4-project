@@ -15,13 +15,18 @@ using UnityEngine;
 /// 커스터디 이탈·거리 끊김 감지다. 목줄 여부(<see cref="IsLeashedTo"/>)와 끊김 거리는
 /// 끊김 판정과 이동 제한이 같은 기준을 봐야 해서 이 컴포넌트가 단일 진실로 갖는다.
 ///
-/// ⚠ 채널링을 하지 않는데도 <see cref="ChanneledInteractionBehaviour"/>를 상속하는 이유는 오너
-/// 판정 피드백(<c>NotifyOwner</c>, #91)이 거기 있기 때문이다 — 줄 끊김·놓기를 오너 화면에 알려야 한다.
-/// 그 기반이 지금 "채널링 게이지 + 오너 피드백" 두 가지를 함께 들고 있어서 생긴 어긋남이고,
-/// 피드백만 별도 기반으로 가르는 것은 <c>ItemBase</c> 계층까지 건드리므로 후속 과제로 둔다.
+/// 오너 판정 피드백(<see cref="OwnerFeedback"/>, #91)만 쓴다 — 줄 끊김·놓기를 오너 화면에 알려야 한다.
+/// 채널링은 하지 않으므로 <see cref="ChannelGauge"/>는 붙이지 않는다.
 /// </summary>
-public class PlayerEscorter : ChanneledInteractionBehaviour
+[RequireComponent(typeof(OwnerFeedback))]
+public class PlayerEscorter : NetworkBehaviour
 {
+    private OwnerFeedback m_feedback;
+
+    // internal인 이유 — 같은 클래스의 다른 인스턴스(holder)에게 알리는 자리가 있다(ServerHandleJailExit).
+    // 상속 시절에는 protected 접근으로 됐던 것이 합성 후에는 이 접근자를 거친다.
+    internal OwnerFeedback Feedback => this.ResolveCapability(ref m_feedback);
+
     [Header("밧줄 끌기")]
     // 장력 튜닝 값(길이·스무딩·흔들림·간격)은 NpcRopeDragConfig에 있다 — 장력 계산과 같은 자리.
     [Tooltip("이 거리(m)를 넘게 멀어지면 밧줄이 끊겨 NPC가 풀려난다 — 벽에 막혀 못 따라오거나 놓아둔 채 걸어가면 발생. 밧줄 길이보다 넉넉해야 한다")]
@@ -237,7 +242,7 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
 
             // 남긴 사람이 있다는 것은 이 줄이 남의 사정으로 끊겼다는 뜻이다 — 왜 사라졌는지 알려야 한다.
             if (keeper != null)
-                holder.NotifyOwner($"밧줄 끊김 — 다른 참가자가 감옥 밖으로 데리고 나갔다: {npc.name}");
+                holder.Feedback?.NotifyOwner($"밧줄 끊김 — 다른 참가자가 감옥 밖으로 데리고 나갔다: {npc.name}");
         }
     }
 
@@ -480,7 +485,7 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
                 if (npc.Death.IsDead)
                 {
                     ReleaseDrag(npc);
-                    NotifyOwner($"밧줄 끊김 — 시체를 놓쳤다: {npc.name}");
+                    Feedback?.NotifyOwner($"밧줄 끊김 — 시체를 놓쳤다: {npc.name}");
                     RemoveTetherAt(i);
                     continue;
                 }
@@ -496,7 +501,7 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
                 if (othersHold)
                 {
                     RemoveTetherAt(i);
-                    NotifyOwner($"밧줄 끊김 — 내 줄만 끊겼다 (다른 참가자가 계속 확보 중): {npc.name}");
+                    Feedback?.NotifyOwner($"밧줄 끊김 — 내 줄만 끊겼다 (다른 참가자가 계속 확보 중): {npc.name}");
                     continue;
                 }
 
@@ -509,7 +514,7 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
                 // 도주로 전환돼 창살을 통과해 나간다(창살 콜라이더는 플레이어만 막는다).
                 if (NpcStateRules.StaysPutWhenFreed(npc))
                 {
-                    NotifyOwner($"밧줄 끊김 — 달아나지 않고 그 자리에 남는다: {npc.name}");
+                    Feedback?.NotifyOwner($"밧줄 끊김 — 달아나지 않고 그 자리에 남는다: {npc.name}");
                     npc.StandUp.ServerStandUpThen(null);
                 }
                 else
@@ -518,7 +523,7 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
                     // 컴포넌트가 이미 사라져 있을 수 있어 transform을 지역 변수로 잡아 둔다 —
                     // 그새 파괴됐어도 NpcFleeState가 위협 없는 도주로 받아 준다(ThreatTarget null 검사).
                     Transform threat = transform;
-                    NotifyOwner($"밧줄 끊김 — 너무 멀어져 도주: {npc.name}");
+                    Feedback?.NotifyOwner($"밧줄 끊김 — 너무 멀어져 도주: {npc.name}");
                     // 질주하던 개체(공연음란범)는 도주가 아니라 질주로 돌아간다 (#106)
                     npc.StandUp.ServerStandUpThen(() => npc.Reaction.ResumeReaction(threat));
                 }
@@ -599,7 +604,7 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
         Transform successor = stillDragged ? npc.Rope.AnyDragger : null;
         bool handedOver = npc.Custody.HandOverEscortTarget(transform, successor);
 
-        NotifyOwner(
+        Feedback?.NotifyOwner(
             stillDragged
                 ? $"밧줄 끌기 놓기: {npc.name} — 다른 참가자가 계속 끌고 있다 (줄은 그대로)"
                     + (handedOver ? $" · 커스터디를 {successor.name}에게 넘겼다" : "")
@@ -626,5 +631,5 @@ public class PlayerEscorter : ChanneledInteractionBehaviour
         ReleaseAllDrags();
     }
 
-    // 채널링 게이지와 오너 피드백(NotifyOwner)은 기반 ChanneledInteractionBehaviour가 제공한다. (#184/#91)
+    // 오너 피드백은 같은 오브젝트의 OwnerFeedback 컴포넌트가 제공한다. (#91)
 }

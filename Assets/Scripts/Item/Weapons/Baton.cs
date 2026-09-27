@@ -31,8 +31,13 @@ using UnityEngine;
 /// 홀드 채널링은 아니다 — 좌클릭을 떼도 이미 시작된 스윙은 그대로 들어간다(CancelUse 기본 구현 유지).
 /// 취소되는 경우는 스윙 도중 아이템이 손을 떠났을 때뿐이다.
 /// </summary>
+[RequireComponent(typeof(OwnerFeedback))]
 public class Baton : ItemBase, IAimedWeapon
 {
+    private OwnerFeedback m_feedback;
+
+    private OwnerFeedback Feedback => this.ResolveCapability(ref m_feedback);
+
     [Header("진압봉 설정")]
     [Tooltip(
         "타격이 닿는 최대 사거리(m). 상호작용 레이(PlayerInteractor.Range)와 무관하게 이 값이 기준이다"
@@ -336,11 +341,11 @@ public class Baton : ItemBase, IAimedWeapon
         {
             case SwingResult.NoHit:
                 // 허공은 연출이 없다 — 이미 나간 스윙음이 '휘두르긴 했다'를 말해 주고 있다.
-                NotifyOwner($"{WeaponLogName} 빗나감 — 허공");
+                Feedback?.NotifyOwner($"{WeaponLogName} 빗나감 — 허공");
                 return;
             case SwingResult.HitNonTarget:
                 App.Game.Fx?.PlayEverywhere(EFx.BatonHitWorld, hit.point, hit.normal);
-                NotifyOwner($"{WeaponLogName} 빗나감 — {hit.collider.name}에 맞음");
+                Feedback?.NotifyOwner($"{WeaponLogName} 빗나감 — {hit.collider.name}에 맞음");
                 return;
             case SwingResult.TargetInvalidState:
                 // 아무 연출도 내지 않는다 — 때릴 수 없는 대상이므로 허공(NoHit)과 같은 취급이다.
@@ -348,7 +353,7 @@ public class Baton : ItemBase, IAimedWeapon
                 // 휘두른 것 자체는 이미 나간 스윙 모션·스윙음이 말해 준다.
                 // NPC 쪽 사유는 이제 <b>상태 하나</b>다 — "이미 쓰러진" 갈래는 그 게이트를 걷으면서
                 // 함께 사라졌다(#571, EvaluateSwing 주석). 쓰러진 대상은 이제 유효타다.
-                NotifyOwner(
+                Feedback?.NotifyOwner(
                     playerTarget != null
                         ? $"{WeaponLogName} 무효 — 이미 무력화된 동료 ({playerTarget.name})"
                         : $"{WeaponLogName} 무효 — {(target.CurrentState == NpcState.Dead ? "이미 죽은" : "이미 제압됐거나 페널티 진행 중인")} 대상 ({target.CurrentState})"
@@ -365,7 +370,7 @@ public class Baton : ItemBase, IAimedWeapon
             App.Game.Fx?.PlayEverywhere(EFx.BatonHitMetal, hit.point, hit.normal);
             NotifyHit(false);
             bombTarget.ServerDetonate();
-            NotifyOwner($"{WeaponLogName} 명중 — 폭탄이 그 자리에서 터졌다");
+            Feedback?.NotifyOwner($"{WeaponLogName} 명중 — 폭탄이 그 자리에서 터졌다");
             return;
         }
 
@@ -393,7 +398,7 @@ public class Baton : ItemBase, IAimedWeapon
         if (playerTarget != null)
         {
             playerTarget.TakeDamage(power.Damage, holder.gameObject);
-            NotifyOwner(
+            Feedback?.NotifyOwner(
                 $"{WeaponLogName} 명중 — 동료 오사! {playerTarget.name} "
                     + $"(-{power.Damage} → {playerTarget.CurrentHp}/{playerTarget.MaxHp})"
             );
@@ -405,7 +410,7 @@ public class Baton : ItemBase, IAimedWeapon
         // 이 타격으로 기절하면 깨어난 뒤에도 이 사람에게서 도망친다 (#269).
         target.Health.TakeDamage(power.Damage, holder.gameObject);
         target.Reaction.ServerReactTo(ReactionTrigger.Damage, holderTransform); // 맞은 즉시 반응 (#400)
-        NotifyOwner(
+        Feedback?.NotifyOwner(
             $"{WeaponLogName} 명중: {target.name} (-{power.Damage} → {target.Health.CurrentHp}/{target.Health.MaxHp})"
         );
         ServerOnHitLanded(target, null, direction, holderTransform);

@@ -23,7 +23,7 @@ public class HealPack : ItemBase
             return;
         }
 
-        if (HasServerAuthority)
+        if (this.HasServerAuthority())
         {
             ServerTryHeal();
             return;
@@ -45,7 +45,7 @@ public class HealPack : ItemBase
 
     private void ServerTryHeal()
     {
-        if (!HasServerAuthority) return;
+        if (!this.HasServerAuthority()) return;
 
         // HolderHealth는 접근할 때마다 다시 찾는 프로퍼티라 한 번만 읽어 쓴다.
         PlayerHealth health = HolderHealth;

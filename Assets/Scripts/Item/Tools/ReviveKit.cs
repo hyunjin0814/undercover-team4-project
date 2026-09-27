@@ -13,9 +13,21 @@ using UnityEngine.Localization;
 /// 플레이어 오브젝트에 붙은 컴포넌트의 SendTo.Owner(게이지·NotifyOwner)는 쓰러진 본인에게 닿지
 /// 않는다. 반면 소지품(이 아이템)의 소유권은 사망 중에도 그대로 남는다(사망 경로에 ChangeOwnership이
 /// 없다) — 그래서 채널링·게이지·피드백을 플레이어가 아니라 이 아이템에 둔다.
+/// (합성 전환 후에도 같다: <see cref="ChannelGauge"/>가 이 아이템 프리팹에 붙으므로 오너 라우팅이
+/// 아이템의 소유권을 따른다.)
 /// </summary>
+[RequireComponent(typeof(ChannelGauge))]
+[RequireComponent(typeof(OwnerFeedback))]
 public class ReviveKit : ItemBase
 {
+    private OwnerFeedback m_feedback;
+
+    private OwnerFeedback Feedback => this.ResolveCapability(ref m_feedback);
+
+    private ChannelGauge m_gauge;
+
+    private ChannelGauge Gauge => this.ResolveCapability(ref m_gauge);
+
     // 사거리는 조준·윤곽선과 같은 기준 — PlayerInteractor.Range를 재사용 (#147 패턴, #184).
     private const float k_fallbackRange = 3f; // 테스트 구성 등 PlayerInteractor가 없을 때
 
@@ -26,9 +38,6 @@ public class ReviveKit : ItemBase
 
     // 자가 부활 채널링 생명주기(CTS 소유·재진입 가드)는 ServerChannel에 위임 (#109, Scanner 관례)
     private readonly ServerChannel m_selfChannel = new();
-
-    // 자가 부활 채널링 중 루프음 — 동료 구조(PlayerReviver)와 같은 소리로 통일한다.
-    protected override EAudioClip ChannelLoopSound => EAudioClip.ReviveLoop;
 
     /// <summary>
     /// 이 키트로 일으킬 수 있는 대상을 조준 중인지 — 윤곽선·크로스헤어 게이트. (#184)
@@ -53,7 +62,7 @@ public class ReviveKit : ItemBase
         }
 
         // 서버(호스트 포함)·오프라인은 로컬 참조로 바로 실행 (PlayerReviver.RequestBeginRevive 관례)
-        if (HasServerAuthority)
+        if (this.HasServerAuthority())
         {
             ServerTryRevive(revivable);
             return;
@@ -117,7 +126,7 @@ public class ReviveKit : ItemBase
     /// </summary>
     private void ServerTryRevive(PlayerHealth target)
     {
-        if (!HasServerAuthority || target == null)
+        if (!this.HasServerAuthority() || target == null)
             return;
 
         PlayerInteractor holder = Holder;
@@ -138,7 +147,7 @@ public class ReviveKit : ItemBase
         PlayerIncapacitation userIncapacitation = holder.GetComponent<PlayerIncapacitation>();
         if (userIncapacitation != null && userIncapacitation.IsIncapacitated)
         {
-            NotifyOwner("부활 실패 — 무력화 상태에서는 키트를 쓸 수 없다");
+            Feedback?.NotifyOwner("부활 실패 — 무력화 상태에서는 키트를 쓸 수 없다");
             return;
         }
 
@@ -147,7 +156,7 @@ public class ReviveKit : ItemBase
         {
             // 살아 있는 동료, 이미 일어난 대상, 또는 몸이 회수 불가능한 곳으로 사라진 대상(#775) —
             // 어느 경우든 키트는 소모하지 않는다
-            NotifyOwner($"부활 실패 — {target.name}은 부활 대상이 아니다");
+            Feedback?.NotifyOwner($"부활 실패 — {target.name}은 부활 대상이 아니다");
             return;
         }
 
@@ -158,14 +167,14 @@ public class ReviveKit : ItemBase
                 PlayerInteractor.RangeOf(holder, k_fallbackRange),
                 transform.position))
         {
-            NotifyOwner($"부활 실패 — {target.name}이 사거리를 벗어났다");
+            Feedback?.NotifyOwner($"부활 실패 — {target.name}이 사거리를 벗어났다");
             return;
         }
 
         // 부활은 본부 장치와 같은 경로 — HP 부분 회복 + 무력화 해제 (#365와 동일)
         target.ServerRevive();
         holder.GetComponent<PlayerAssistCredit>()?.ServerCreditRescue(); // 정산 "최다 팀원 구조" 집계 (#739)
-        NotifyOwner($"부활 완료: {target.name} (부활 키트 소모)");
+        Feedback?.NotifyOwner($"부활 완료: {target.name} (부활 키트 소모)");
 
         // 성공했을 때만 소모한다 — 거부된 사용으로 키트가 사라지면 산 값을 그냥 잃는다
         ServerConsume();
@@ -179,7 +188,7 @@ public class ReviveKit : ItemBase
     /// </summary>
     public void RequestSelfRevive()
     {
-        if (HasServerAuthority)
+        if (this.HasServerAuthority())
         {
             ServerBeginSelfRevive();
             return;
@@ -213,7 +222,7 @@ public class ReviveKit : ItemBase
 
     private void ServerBeginSelfRevive()
     {
-        if (!HasServerAuthority || m_selfChannel.IsActive)
+        if (!this.HasServerAuthority() || m_selfChannel.IsActive)
             return;
 
         PlayerInteractor holder = Holder;
@@ -241,8 +250,9 @@ public class ReviveKit : ItemBase
 
     private async UniTaskVoid ServerSelfChannelAsync(PlayerInteractor holder, PlayerIncapacitation incap)
     {
-        NotifyOwner($"자가 부활 채널링 시작 ({m_selfReviveSeconds}초)");
-        NotifyChannelGaugeStart(m_selfReviveSeconds);
+        Feedback?.NotifyOwner($"자가 부활 채널링 시작 ({m_selfReviveSeconds}초)");
+        // 루프음은 동료 구조(PlayerReviver)와 같은 소리로 통일한다
+        Gauge?.Begin(m_selfReviveSeconds, EAudioClip.ReviveLoop);
 
         // Down 유예 시계를 얼린다 — Die 중이면 IsDowned가 아니라 무동작으로 넘어간다 (#725)
         incap.ServerSetBeingRevived(true, m_selfReviveSeconds);
@@ -260,18 +270,18 @@ public class ReviveKit : ItemBase
         finally
         {
             // 완료·취소·예외 어떤 경로로 끝나도 게이지 숨김과 유예 시계 해동을 보장한다 (#184, #725)
-            NotifyChannelGaugeEnd();
+            Gauge?.End();
             incap.ServerSetBeingRevived(false);
         }
 
         switch (result)
         {
             case ServerChannel.Result.Canceled:
-                NotifyOwner("자가 부활 취소됨");
+                Feedback?.NotifyOwner("자가 부활 취소됨");
                 return;
 
             case ServerChannel.Result.OutOfRange:
-                NotifyOwner("자가 부활 중단 — 대상이 부활 대상이 아니게 됨");
+                Feedback?.NotifyOwner("자가 부활 중단 — 대상이 부활 대상이 아니게 됨");
                 return;
 
             case ServerChannel.Result.Completed:
@@ -282,21 +292,21 @@ public class ReviveKit : ItemBase
         // 경합을 한 번 더 막는다
         if (Holder != holder)
         {
-            NotifyOwner("자가 부활 실패 — 키트를 손에서 놓쳤다");
+            Feedback?.NotifyOwner("자가 부활 실패 — 키트를 손에서 놓쳤다");
             return;
         }
 
         PlayerHealth health = holder.GetComponent<PlayerHealth>();
         if (health == null || !(incap.IsDowned || incap.IsRevivable))
         {
-            NotifyOwner("자가 부활 실패 — 이미 복구됐거나 부활 대상이 아니다");
+            Feedback?.NotifyOwner("자가 부활 실패 — 이미 복구됐거나 부활 대상이 아니다");
             return;
         }
 
         // 부활이 먼저다 — ServerRevive()의 Recover()가 소유권을 본인에게 되돌려야, 뒤따르는
         // ServerConsume() 안의 SyncHeldItemsRpc(SendTo.Owner)가 서버가 아니라 본인에게 간다 (#763, #820)
         health.ServerRevive();
-        NotifyOwner("자가 부활 완료 (부활 키트 소모)");
+        Feedback?.NotifyOwner("자가 부활 완료 (부활 키트 소모)");
         ServerConsume();
     }
 

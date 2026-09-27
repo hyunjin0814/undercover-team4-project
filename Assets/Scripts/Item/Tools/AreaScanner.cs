@@ -23,8 +23,13 @@ using UnityEngine;
 /// 기본값(false/null)을 그대로 쓴다. Taser와 같은 이유다: 상호작용 레이(3m)와 실제 반경(20m)이
 /// 어긋난 표시가 되기 때문이다.
 /// </summary>
+[RequireComponent(typeof(OwnerFeedback))]
 public class AreaScanner : ItemBase
 {
+    private OwnerFeedback m_feedback;
+
+    private OwnerFeedback Feedback => this.ResolveCapability(ref m_feedback);
+
     private const double k_noCooldown = -1d;
 
     [Header("구역 스캔 설정")]
@@ -138,7 +143,7 @@ public class AreaScanner : ItemBase
 
         Vector3 origin = holder.transform.position;
 
-        if (HasServerAuthority)
+        if (this.HasServerAuthority())
         {
             ServerScan(origin);
             return;
@@ -173,7 +178,7 @@ public class AreaScanner : ItemBase
         if (IsBlackout)
         {
             // 정상 흐름은 클라 CanUse()가 이미 막는다 — 여기 닿는다면 위조 RPC다 (Scanner.ServerBeginScan 관례)
-            NotifyOwner("구역 스캔 실패 — 전자기기 먹통");
+            Feedback?.NotifyOwner("구역 스캔 실패 — 전자기기 먹통");
             return;
         }
 

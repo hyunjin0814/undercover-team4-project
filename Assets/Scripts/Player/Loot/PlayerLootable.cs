@@ -17,12 +17,11 @@ using UnityEngine;
 /// 끌려가는" 조합을 막아야 해서 한 몸이어야 하지만, 약탈은 서버에 세션을 두지 않고 요청마다
 /// 처음부터 검증한다(<see cref="PlayerLooter"/>) — 공유할 상태가 아예 없다.
 ///
-/// 알림이 <b>당한 본인에게</b> 가야 해서 NetworkBehaviour다. 다만 기반 클래스의
-/// <see cref="NotifyOwner"/>(<c>SendTo.Owner</c>)는 <b>쓸 수 없다</b> — 쓰러진 몸은 오너가
-/// 서버로 옮겨져 있다(#763/#865). 대상을 직접 지정하는 이유가 그것이다(아래 주석).
-/// (채널링은 쓰지 않고 오너 피드백 관례만 빌린다 — <see cref="ItemBattery"/>와 같은 결)
+/// 알림이 <b>당한 본인에게</b> 가야 해서 NetworkBehaviour다. 다만 <see cref="OwnerFeedback"/>의
+/// <c>SendTo.Owner</c>는 <b>쓸 수 없다</b> — 쓰러진 몸은 오너가 서버로 옮겨져 있다(#763/#865).
+/// 대상을 직접 지정하는 이유가 그것이다(아래 주석).
 /// </summary>
-public class PlayerLootable : ChanneledInteractionBehaviour
+public class PlayerLootable : NetworkBehaviour
 {
     private PlayerIncapacitation m_incapacitation;
     private PlayerLoadout m_loadout;
@@ -52,12 +51,12 @@ public class PlayerLootable : ChanneledInteractionBehaviour
 
     // ---- 피해 알림 (서버가 약탈자 경로에서 호출 → <b>몸의 진짜 주인</b>에게만 간다) ----
     //
-    // ⚠ <b>NotifyOwner(SendTo.Owner)를 쓰지 않는다.</b> 쓰러져 있는 동안 이 오브젝트의 오너는
+    // ⚠ <b>OwnerFeedback(SendTo.Owner)을 쓰지 않는다.</b> 쓰러져 있는 동안 이 오브젝트의 오너는
     // 서버다(PlayerIncapacitation.ApplyDeathOwnership — #763은 Die, #865는 Down까지). 그러면
     // 서버가 스스로에게 보내는 것으로 끝나 털린 본인은 아무것도 못 받는다(#820 함정 1).
     // <b>유예 60초가 주된 약탈 창</b>이므로 여기서는 BodyOwnerClientId를 직접 지정한다.
     //
-    // 기반 클래스의 NotifyOwner는 <b>고치지 말 것</b> — 아이템에 붙은 컴포넌트에서는 사망 중에도
+    // OwnerFeedback.NotifyOwner는 <b>고치지 말 것</b> — 아이템에 붙은 컴포넌트에서는 사망 중에도
     // 소유권이 그대로라 SendTo.Owner가 정확하다(#820이 자가 부활 채널링을 아이템에 둔 근거).
 
     /// <summary>소지품을 뺏겼다 — 본인에게만 알린다. 서버 전용.</summary>
@@ -75,7 +74,7 @@ public class PlayerLootable : ChanneledInteractionBehaviour
     // 토스트는 소매치기와 같은 채널을 쓴다 (#303) — 자금은 표시가 없어 로그만 간다.
     private void ServerNotifyVictim(string message, bool stolenToast)
     {
-        Debug.Log(message); // 서버(호스트)·오프라인 콘솔 — NotifyOwner와 같은 관례
+        Debug.Log(message); // 서버(호스트)·오프라인 콘솔 — OwnerFeedback과 같은 관례
 
         ulong victim =
             m_incapacitation != null ? m_incapacitation.BodyOwnerClientId : OwnerClientId;

@@ -9,10 +9,19 @@ using UnityEngine;
 ///
 /// 언제 충전을 막을지는 본체가 <see cref="CanCharge"/>로 꽂아 주므로, 이 컴포넌트는 자기가 어떤
 /// 아이템에 붙었는지 알 필요가 없다 — 참조는 본체 → 배터리 한 방향뿐이다.
-/// 오너 피드백(NotifyOwner)을 쓰려고 ChanneledInteractionBehaviour를 상속한다.
 /// </summary>
-public class ItemBattery : ChanneledInteractionBehaviour, IChargeable
+[RequireComponent(typeof(ToastFeedback))]
+[RequireComponent(typeof(OwnerFeedback))]
+public class ItemBattery : NetworkBehaviour, IChargeable
 {
+    private OwnerFeedback m_feedback;
+
+    private OwnerFeedback Feedback => this.ResolveCapability(ref m_feedback);
+
+    private ToastFeedback m_toast;
+
+    private ToastFeedback Toast => this.ResolveCapability(ref m_toast);
+
     [Tooltip("배터리 최대치 — 아이템 사용 1회당 1 소모한다 (GDD 5-2)")]
     [SerializeField] private int m_maxBattery = 5;
 
@@ -38,12 +47,6 @@ public class ItemBattery : ChanneledInteractionBehaviour, IChargeable
     /// <summary>완충 상태에서 충전을 시도했을 때 띄울 오너 토스트 (#309). 본체가 자기 값으로 덮어쓴다.</summary>
     public EItemFeedback FullyChargedFeedback { get; set; } = EItemFeedback.BatteryFull;
 
-    /// <summary>오너 화면 토스트로 띄울 사유 — 본체가 자기 토스트 채널로 중계한다 (#309).</summary>
-    public event Action<EItemFeedback> OnChargeToast;
-
-    /// <summary>기반 ToastOwner의 발행 지점 — 본체로 올려보낸다.</summary>
-    protected override void RaiseOwnerToast(EItemFeedback feedback) => OnChargeToast?.Invoke(feedback);
-
     /// <summary>
     /// 배터리를 amount만큼 충전한다. 오너·비오너(본부 충전기 #60) 모두 호출 가능.
     /// 실제 충전은 서버에서 처리되며, 결과는 NetworkVariable로 전 클라에 동기화된다 (#55).
@@ -53,7 +56,7 @@ public class ItemBattery : ChanneledInteractionBehaviour, IChargeable
         if (amount <= 0)
             return;
 
-        if (HasServerAuthority)
+        if (this.HasServerAuthority())
         {
             ServerCharge(amount);
             return;
@@ -68,20 +71,20 @@ public class ItemBattery : ChanneledInteractionBehaviour, IChargeable
 
     private void ServerCharge(int amount)
     {
-        if (!HasServerAuthority)
+        if (!this.HasServerAuthority())
             return;
 
         // 본체가 막는 동안엔 거부 — "충전은 본부에서만·왕복 필요" 리듬 설계를 우회하는 걸 막는다 (#60 리뷰, #109).
         if (CanCharge != null && !CanCharge())
         {
-            NotifyOwner(ChargeBlockedReason);
+            Feedback?.NotifyOwner(ChargeBlockedReason);
             return;
         }
 
         // 이미 완충이면 값 변화가 없어 OnCharged가 안 울리므로, 여기서 직접 오너 토스트를 띄운다 (#309).
         if (IsFullyCharged)
         {
-            ToastOwner(FullyChargedFeedback);
+            Toast?.ToastOwner(FullyChargedFeedback);
             return;
         }
 
@@ -91,7 +94,7 @@ public class ItemBattery : ChanneledInteractionBehaviour, IChargeable
     /// <summary>아이템 사용이 성공한 지점에서 본체가 호출 — 서버가 잔량을 깎는다. (#55)</summary>
     public void ServerConsume(int amount = 1)
     {
-        if (!HasServerAuthority)
+        if (!this.HasServerAuthority())
             return;
 
         m_current.Value = Mathf.Max(m_current.Value - amount, 0);
