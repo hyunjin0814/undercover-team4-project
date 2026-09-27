@@ -4,25 +4,14 @@ using UnityEditor;
 using UnityEngine;
 
 /// <summary>
-/// 몽타주 레이어 굽기 (#607) — 메뉴: Tools/몽타주 레이어 굽기
-///
-/// 포트레이트는 축 값마다 그림 한 장을 베이스 위에 얹어 만든다. 그 그림들을 손으로 그리는 대신
-/// AppearanceDatabase에 이미 배선된 프롭을 마네킹 머리에 하나씩 붙여 정면에서 렌더해 뽑는다 —
-/// 화면의 NPC와 같은 프롭을 쓰므로 몽타주가 실물과 어긋날 수 없다 (appearance-montage.md §1).
-///
-/// 프롭 레이어는 평면 실루엣으로 굽고 색은 런타임에 입힌다(옵션 색 / 머리색). 프롭 원본 아틀라스가
-/// 어두워 그대로 구우면 곱셈 틴트가 탁해지는 문제(NpcAppearance의 중립 베이스와 같은 이유)를 피한다.
-///
-/// 렌더 자체는 <see cref="MontageBakeRig"/>가 맡는다. 여기 남은 것은 어느 값을 굽고 어디에 꽂느냐다.
-///
-/// SciFi 전용 값(가림·후드·풀헬멧·특수 안경)은 프롭이 없어 자동으로 나오지 않는다 — 손으로 채워야 하고,
-/// 채우기 전까지는 AppearanceDatabase.CanDepict가 그 축을 공개 후보에서 빼 준다.
+/// AppearanceDatabase의 프롭을 마네킹 머리에 붙여 정면 렌더로 몽타주 레이어를 굽는다.
+/// 메뉴: Tools/몽타주 레이어 굽기. 렌더 자체는 MontageBakeRig가 맡는다.
 /// </summary>
 public class MontageLayerBaker : EditorWindow
 {
-    private const float k_unknownHairCapRatio = 0.3f; // 형태 미상 머리가 정수리에서 덮는 깊이 (두상 높이 대비)
+    private const float k_unknownHairCapRatio = 0.3f;
 
-    private const int k_closePairsPerAxis = 8; // 구분 문턱에 걸린 쌍을 축마다 이만큼만 로그에 적는다
+    private const int k_closePairsPerAxis = 8;
 
     [SerializeField] private AppearanceDatabase m_database;
 
@@ -34,25 +23,16 @@ public class MontageLayerBaker : EditorWindow
 
     [SerializeField] private float m_orthoSize = 0.16f;
 
-    // Synty 휴머노이드의 Head 본은 두개골 밑동에 있다 — 머리 중심은 거기서 9cm쯤 위다.
-    // 낮게 잡으면 정수리가 잘리고 대신 목·어깨가 프레임에 들어와 실루엣이 커진다.
     [SerializeField] private float m_headOffset = 0.09f;
 
     [SerializeField] private float m_cameraDistance = 1.5f;
 
-    // 정면에서 거의 안 보이는 프롭(뒤로 넘긴 묶음머리·번)을 알리는 선이다. 자를지 말지의 기준은 아니다 —
-    // 희미해도 구분은 글이 하므로 그대로 꽂는 쪽으로 정했다 (#619, docs §13-7). 여기 걸리면 사람이 보고 판단한다.
     [SerializeField] private float m_minLayerCoverage = 0.06f;
 
-    // 구운 레이어끼리 얼마나 갈리는지의 선 — 같은 축의 두 값이 이보다 덜 다르면 알린다.
-    // 비교 시트를 대신하는 자리다: 시트는 배선 '전' 후보를 보는 그림인데, 어휘를 그냥 다 넣기로 한 축(색으로
-    // 굽는 축)에서는 배선 '후' 실제 레이어로 재는 것이 정확하다. 걸린 쌍은 ExcludeFromMontage 후보다.
     [SerializeField] private float m_minPairDistance = 0.12f;
 
-    // 비우면 화질 단계별 갈래 수를 재지 않는다 — 원본 해상도에서의 갈래 수만 보던 지금과 같다 (#724)
     [SerializeField] private MontageClarityTable m_clarityTable;
 
-    // 이미지는 전부 Imported 공유 저장소에 둔다 (2026-08-12 에셋 폴더 정리)
     [SerializeField] private string m_outputFolder = "Assets/Imported/Art/Montage/Layers";
 
     [SerializeField] private GameObject m_sciFiPrefab;
@@ -66,12 +46,10 @@ public class MontageLayerBaker : EditorWindow
 
     [SerializeField] private int[] m_compareResolutions = { 16 };
 
-    // 프레임을 위로 올려 정수리 위를 담고 목을 버리는 실험용 — 묶은 머리·번이 프레임 위로 잘려 나간다 (#619)
     [SerializeField] private float[] m_compareOffsets = { 0.09f };
 
     [SerializeField] private GameObject[] m_compareProps;
 
-    // 대상 주위를 도는 각도들 — 0이 정면. 묶은 머리처럼 뒤로 넘어간 것은 정면에 안 나온다 (#619)
     [SerializeField] private float[] m_compareAngles = { 0f };
 
     [SerializeField] private bool m_compareLit;
@@ -150,11 +128,7 @@ public class MontageLayerBaker : EditorWindow
         EditorGUILayout.EndScrollView();
     }
 
-    /// <summary>
-    /// 해상도 비교 시트 (#619) — 어휘를 몇 개까지 늘릴 수 있는지는 <b>해상도가 정한다</b>.
-    /// 16px에서 머리는 10픽셀 남짓이라 단발과 스포츠머리가 같은 덩어리가 되고, 해상도를 올리면
-    /// 값은 늘릴 수 있지만 뭉갬을 난이도 레버로 쓰던 것과 맞바꾼다. 그 맞바꿈을 눈으로 보고 정하는 자리다.
-    /// </summary>
+    /// <summary>해상도 비교 시트 섹션을 그린다.</summary>
     private void DrawCompareSection()
     {
         EditorGUILayout.Space();
@@ -256,11 +230,7 @@ public class MontageLayerBaker : EditorWindow
         }
     }
 
-    /// <summary>
-    /// SciFi 모델(또는 아틀라스 변형)을 한 장에 나열한다 (#619).
-    /// 통짜 메시라 축을 떼어낼 수 없으니 카탈로그가 손으로 적은 값이 정본인데, 그 값이 실물과 맞는지
-    /// 확인할 길이 지금 없다 — 모델을 한 줄로 세워 눈으로 대조하는 것이 그 길이다.
-    /// </summary>
+    /// <summary>SciFi 모델(또는 아틀라스 변형)을 한 장에 나열해 굽는다.</summary>
     private void BakeSciFiSheet()
     {
         using var rig = new MontageBakeRig(m_sciFiPrefab, m_flatMaterial, m_resolution, m_orthoSize, m_headOffset, m_cameraDistance);
@@ -318,11 +288,7 @@ public class MontageLayerBaker : EditorWindow
         Debug.Log($"[몽타주] SciFi 시트 → {m_compareFolder}/{fileName}.png\n  가로(왼→오른): {string.Join(", ", labels)}");
     }
 
-    /// <summary>
-    /// SciFi 모델 하나를 프롭 레이어와 같은 프레임으로 렌더해 PNG로 뽑는다 (#607).
-    /// 통짜 메시라 부위를 코드로 떼어낼 수 없어 <b>사람이 지워서</b> 레이어를 만든다 —
-    /// 그래도 화면의 그 모델을 그대로 찍은 그림이라 몽타주가 실물과 어긋나지 않는다.
-    /// </summary>
+    /// <summary>SciFi 모델 하나를 프롭 레이어와 같은 프레임으로 렌더해 PNG로 저장한다.</summary>
     private void RenderSciFiModel()
     {
         using var rig = new MontageBakeRig(m_sciFiPrefab, m_flatMaterial, m_resolution, m_orthoSize, m_headOffset, m_cameraDistance);
@@ -351,7 +317,7 @@ public class MontageLayerBaker : EditorWindow
         }
 
         Directory.CreateDirectory(m_outputFolder);
-        AssetDatabase.Refresh(); // 새로 만든 폴더를 인식시켜야 아래 ImportAsset이 먹는다
+        AssetDatabase.Refresh();
 
         using var rig = new MontageBakeRig(m_mannequinPrefab, m_flatMaterial, m_resolution, m_orthoSize, m_headOffset, m_cameraDistance);
         if (!rig.IsValid)
@@ -366,7 +332,6 @@ public class MontageLayerBaker : EditorWindow
         var close = new List<string>();
         var groups = new List<string>();
 
-        // ① 살
         Color[] basePixels = rig.RenderBase();
         Sprite baseSprite = SaveLayer(basePixels, "Montage_Base");
         if (baseSprite != null)
@@ -375,7 +340,6 @@ public class MontageLayerBaker : EditorWindow
             baked.Add("살");
         }
 
-        // ② 형태 미상 머리 — 머리 프롭을 쓰지 않고 두상에서 뽑는다 (BuildUnknownHair 참고)
         Sprite unknownHair = SaveLayer(BuildUnknownHair(basePixels), "Montage_HairUnknown");
         if (unknownHair != null)
         {
@@ -383,7 +347,6 @@ public class MontageLayerBaker : EditorWindow
             baked.Add("형태 미상 머리");
         }
 
-        // ③ 프롭 레이어
         foreach (AppearanceAxis axis in PropAxes())
         {
             var layers = new List<(int Index, Color[] Pixels)>();
@@ -394,18 +357,15 @@ public class MontageLayerBaker : EditorWindow
                 if (option?.MontageProp == null)
                     continue;
 
-                // 몽타주에서 뺀 값은 그림을 꽂지 않는다 — 꽂으면 CanDepict가 공개 축 후보로 되살린다
                 if (option.ExcludeFromMontage)
                 {
-                    option.MontageLayer = null; // 예전에 꽂아 둔 그림이 있으면 걷어낸다
+                    option.MontageLayer = null;
                     excluded.Add($"{axis}[{i}] {option.MontageProp.name}");
                     continue;
                 }
 
                 Color[] pixels = rig.RenderProp(option.MontageProp, option.Color, IsSilhouetteAxis(axis));
 
-                // 노출이 적은 프롭은 꽂되 알린다 — 자를지 말지는 사람이 굽은 그림을 보고 정할 몫이다.
-                // 면적이 곧 구분 가능성은 아니라서다: 콧수염은 5%대여도 '없음'과 확실히 구분된다.
                 float coverage = Coverage(pixels);
                 if (coverage < m_minLayerCoverage)
                     faint.Add($"{axis}[{i}] {option.MontageProp.name} ({coverage:P1})");
@@ -444,10 +404,7 @@ public class MontageLayerBaker : EditorWindow
         );
     }
 
-    /// <summary>
-    /// 해상도별로 리그를 세워 같은 프롭을 굽고 한 장에 붙인다 (#619). DB에는 아무것도 꽂지 않는다 —
-    /// 어휘 예산을 정하려고 보는 그림이라, 보는 동안 지금 어휘가 깨지면 안 된다.
-    /// </summary>
+    /// <summary>해상도별 리그로 같은 프롭을 구워 비교 시트 한 장으로 합친다(DB는 건드리지 않는다).</summary>
     private void BakeCompareSheet()
     {
         if (m_flatMaterial == null)
@@ -464,7 +421,6 @@ public class MontageLayerBaker : EditorWindow
         var props = new List<GameObject>();
         var colors = new List<Color>();
 
-        // 지금 어휘가 이 해상도에서 서로 구분되는지가 기준선이다 — DB 값을 먼저 깐다
         int optionCount = m_database != null ? m_database.GetOptionCount(m_compareAxis) : 0;
         for (int i = 0; i < optionCount; i++)
         {
@@ -484,7 +440,7 @@ public class MontageLayerBaker : EditorWindow
                     continue;
 
                 props.Add(prefab);
-                colors.Add(Color.white); // 아직 어휘에 없어 옵션 색이 없다
+                colors.Add(Color.white);
             }
         }
 
@@ -494,12 +450,10 @@ public class MontageLayerBaker : EditorWindow
             return;
         }
 
-        // 실물 색으로 켜면 실루엣을 안 쓴다 — 몽타주용 그림이 아니라 사람이 메시를 보려는 시트다
         bool silhouette = IsSilhouetteAxis(m_compareAxis) && !m_compareLit;
         Color skinColor = FirstOptionColor(AppearanceAxis.SkinColor, new Color(0.85f, 0.68f, 0.55f));
         Color hairColor = FirstOptionColor(AppearanceAxis.HairColor, new Color(0.06f, 0.06f, 0.06f));
 
-        // 줄은 해상도 × 머리 오프셋 조합이다 — 둘 다 "무엇이 프레임에 담기나"를 정하는 노브라 같이 봐야 한다
         var rowSetups = new List<(int Resolution, float Offset, float Angle)>();
         foreach (int resolution in m_compareResolutions)
         {
@@ -510,11 +464,9 @@ public class MontageLayerBaker : EditorWindow
             }
         }
 
-        int columns = props.Count + 1; // 맨 두상 한 칸
+        int columns = props.Count + 1;
         int rows = rowSetups.Count;
 
-        // 칸이 원본보다 작으면 축소해야 하는데, 축소는 곧 이 시트가 판단하려는 뭉갬을 한 번 더 먹이는 것이다.
-        // 그래서 칸은 가장 큰 해상도보다 작아지지 않는다.
         int cellSize = Mathf.Max(1, m_compareCell);
         foreach (var setup in rowSetups)
             cellSize = Mathf.Max(cellSize, setup.Resolution);
@@ -536,10 +488,8 @@ public class MontageLayerBaker : EditorWindow
                 return;
             }
 
-            // 굽기와 같은 순서로 찍는다 (살 → 프롭) — 시트가 실물과 다르면 보고 정할 이유가 없다
             Color[] basePixels = rig.RenderBase();
 
-            // 같이 붙일 프롭은 자기 색으로 한 번 그려 두고, 후보 프롭을 찍을 땐 검정 가림막으로 쓴다
             Color[] pairedLayer = m_comparePairedProp != null
                 ? rig.RenderProp(m_comparePairedProp, Color.white, false)
                 : null;
@@ -639,7 +589,6 @@ public class MontageLayerBaker : EditorWindow
         int scale = Mathf.Max(1, cellSize / size);
         int drawn = size * scale;
         int offsetX = column * cellSize + (cellSize - drawn) / 2;
-        // 픽셀 배열은 아래가 0행이라, 위에서 아래로 해상도가 커지게 하려면 뒤집어 넣는다
         int offsetY = sheetHeight - (row + 1) * cellSize + (cellSize - drawn) / 2;
 
         for (int y = 0; y < drawn; y++)
@@ -651,18 +600,7 @@ public class MontageLayerBaker : EditorWindow
         }
     }
 
-    /// <summary>
-    /// 형태 미상 머리 — 머리 스타일이 미공개일 때 까는 레이어. 머리색을 얹을 자리를 만들되 어느 스타일도
-    /// 지목하지 않아야 한다. 살 실루엣에서 정수리 쪽 일부를 떼어 캡으로 쓴다.
-    ///
-    /// 머리 프롭을 전부 겹친 합집합으로 굽던 것을 바꾼 것이다 — 합집합은 정의상 가장 바깥 포락선이라
-    /// 긴머리 외곽선을 그대로 물려받고, 미상이 장발이라는 말한 적 없는 정보를 사칭했다. 정수리 캡은
-    /// 어느 스타일에나 공통이라 길이를 주장하지 않는다.
-    ///
-    /// 캡은 채우지 않고 <b>윤곽만</b> 남긴다 — 통짜로 칠하면 이번엔 짧은머리 하나로 읽힌다. 바깥 한 겹은
-    /// 체크무늬로 솎아 윤곽까지 흐린다(미공개 색을 반투명으로 두는 것과 같은 취지 — 농도로 말한다).
-    /// 윤곽의 아랫변은 뺀다: 이마를 가로지르는 띠는 모자·이마밴드로 읽혀 Headwear 축과 섞인다.
-    /// </summary>
+    /// <summary>머리 스타일 미공개용 '형태 미상 머리' 레이어를 만든다(정수리 캡 윤곽).</summary>
     private Color[] BuildUnknownHair(Color[] basePixels)
     {
         int size = m_resolution;
@@ -690,7 +628,6 @@ public class MontageLayerBaker : EditorWindow
             return new Color[basePixels.Length];
         }
 
-        // 깊이는 두상 높이의 비율로 잡는다 — 해상도를 바꿔도 캡이 이마 아래로 내려오지 않는다
         int depth = Mathf.Max(2, Mathf.RoundToInt((top - bottom + 1) * k_unknownHairCapRatio));
 
         int capBottom = Mathf.Max(0, top - depth + 1);
@@ -701,7 +638,6 @@ public class MontageLayerBaker : EditorWindow
                 cap[y * size + x] = head[y * size + x];
         }
 
-        // 굽는 크기에 비례해 부풀려야 해상도를 올려도 윤곽 두께가 같아 보인다
         bool[] grown = (bool[])cap.Clone();
         int thickness = Mathf.Max(1, Mathf.RoundToInt(size / 16f));
         for (int step = 0; step < thickness; step++)
@@ -735,10 +671,8 @@ public class MontageLayerBaker : EditorWindow
             {
                 int i = y * size + x;
                 bool outline = capEdge[i] && y > capBottom;
-                // 디더 칸도 thickness와 같은 비율로 키운다 — 1px 칸은 16px일 때만 보이고, 128px에서는
-                // 화면 표시 배율이 낮아져 안 보이는 채 회색으로 뭉개진다 (#724, 해상도를 올리며 발견).
                 bool fuzz = grownEdge[i] && (((x / thickness) + (y / thickness)) & 1) == 0;
-                result[i] = outline || fuzz ? Color.white : Color.clear; // 머리색으로 칠할 것이므로 흰색이다
+                result[i] = outline || fuzz ? Color.white : Color.clear;
             }
         }
         return result;
@@ -768,10 +702,7 @@ public class MontageLayerBaker : EditorWindow
         return edge;
     }
 
-    /// <summary>
-    /// 같은 축의 값끼리 재서 구분 문턱에 걸린 쌍만 가까운 순으로 모은다 (#619).
-    /// '없음'은 레이어가 없어(안 그리는 것이 곧 그 값이다) 여기 안 들어온다 — 그쪽은 노출 문턱이 본다.
-    /// </summary>
+    /// <summary>같은 축 값끼리 비교해 구분 문턱에 걸린 쌍을 가까운 순으로 모은다.</summary>
     private void CollectClosePairs(AppearanceAxis axis, List<(int Index, Color[] Pixels)> layers, List<string> close)
     {
         int cells = m_resolution * m_resolution;
@@ -789,8 +720,6 @@ public class MontageLayerBaker : EditorWindow
 
         found.Sort((left, right) => left.Cells.CompareTo(right.Cells));
 
-        // 축마다 가까운 쪽 몇 쌍만 찍는다 — 값이 늘면 쌍은 제곱으로 늘어 로그가 통째로 잘린다.
-        // 잘라낸 수는 함께 적는다: 안 적으면 "이게 전부"로 읽힌다.
         int shown = Mathf.Min(k_closePairsPerAxis, found.Count);
         for (int i = 0; i < shown; i++)
         {
@@ -801,11 +730,7 @@ public class MontageLayerBaker : EditorWindow
             close.Add($"{axis} — 그 밖 {found.Count - shown}쌍 더 (가까운 순으로 {shown}쌍만 적었다)");
     }
 
-    /// <summary>
-    /// 값들이 실제로 몇 갈래로 갈리는지 센다 (#619) — 어휘 예산을 정하는 숫자다.
-    /// <b>완전연결</b>이다: 한 갈래 안의 모든 쌍이 구분 문턱 미만이어야 합친다. 가까운 쌍 하나만 보고
-    /// 사슬로 이으면 서로 멀리 떨어진 값까지 한 갈래로 빨려 들어가 실태가 과장된다.
-    /// </summary>
+    /// <summary>값들이 구분 문턱 기준으로 몇 갈래로 갈리는지 완전연결 방식으로 센다.</summary>
     private void CollectGroups(AppearanceAxis axis, List<(int Index, Color[] Pixels)> layers, List<string> groups)
     {
         if (layers.Count < 2)
@@ -825,7 +750,7 @@ public class MontageLayerBaker : EditorWindow
         }
     }
 
-    /// <summary>화질 표 단계마다 뭉갠 픽셀로 갈래 수를 다시 잰다 — 최저 화질에서 1갈래로 붕괴하면 표에서 뺄 후보다 (#724)</summary>
+    /// <summary>화질 표 단계마다 뭉갠 픽셀로 갈래 수를 다시 잰다 — 최저 화질에서 1갈래로 붕괴하면 표에서 뺄 후보다</summary>
     private void CollectClarityGroups(AppearanceAxis axis, List<(int Index, Color[] Pixels)> layers, List<string> groups)
     {
         if (m_clarityTable == null || layers.Count < 2)
@@ -838,8 +763,6 @@ public class MontageLayerBaker : EditorWindow
         }
     }
 
-    // 완전연결 군집화 — 한 갈래 안 모든 쌍이 구분 문턱 미만이어야 합친다. 가까운 쌍 하나로 사슬처럼 이으면
-    // 서로 먼 값까지 한 갈래로 빨려 들어가 실태가 과장된다 (#619)
     private List<List<int>> Bucketize(List<(int Index, Color[] Pixels)> layers)
     {
         int cells = m_resolution * m_resolution;
@@ -885,8 +808,8 @@ public class MontageLayerBaker : EditorWindow
     /// <summary>두 레이어가 몇 칸에서 다르게 보이는가 — 있고 없음이 갈리거나, 둘 다 보이는데 색이 갈리는 칸.</summary>
     private static int DifferentCells(Color[] left, Color[] right)
     {
-        const float k_visible = 0.5f; // 이 알파부터 그림으로 보인다
-        const float k_colorStep = 0.1f; // 채널 하나라도 이만큼 다르면 다른 칸으로 센다
+        const float k_visible = 0.5f;
+        const float k_colorStep = 0.1f;
 
         int different = 0;
         int cells = Mathf.Min(left.Length, right.Length);
@@ -961,7 +884,6 @@ public class MontageLayerBaker : EditorWindow
         return AssetDatabase.LoadAssetAtPath<Sprite>(path);
     }
 
-    // 픽셀 몽타주라 확대해도 뭉개지지 않게 Point 필터·무압축으로 둔다
     private static void ApplyImportSettings(string path)
     {
         var importer = (TextureImporter)AssetImporter.GetAtPath(path);
@@ -974,11 +896,10 @@ public class MontageLayerBaker : EditorWindow
         importer.mipmapEnabled = false;
         importer.alphaIsTransparency = true;
         importer.textureCompression = TextureImporterCompression.Uncompressed;
-        importer.isReadable = true; // 화질 저하(MontageDegrader)가 런타임에 픽셀을 읽어야 한다 (#724)
+        importer.isReadable = true;
         importer.SaveAndReimport();
     }
 
-    // 베이스·미상 머리는 옵션이 아니라 DB의 private 필드라 SerializedObject로 넣는다
     private void SetPrivateSprite(string fieldName, Sprite sprite)
     {
         var serialized = new SerializedObject(m_database);

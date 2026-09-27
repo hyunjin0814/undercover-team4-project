@@ -1,14 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// 바퀴 회전 연출 — 폭탄이 실제로 움직인 거리만큼 바퀴를 굴린다. (#399 표현 계층)
-///
-/// <b>순수 로컬 표현이고 동기화가 없다.</b> 이동은 서버가 만들고 원격에는 NetworkTransform이 결과만
-/// 실어다 주는데, 이 컴포넌트는 <b>지난 프레임 대비 얼마나 움직였나</b>만 보므로 두 경우 모두 같은
-/// 그림이 나온다 — 속도 값을 따로 전파할 필요가 없다.
-/// 굴리는 양은 이동 거리에서 나온다(<see cref="m_wheelRadius"/> 기준 원둘레). 속도를 곱해 대충 돌리면
-/// 밀려날 때·멈출 때 바퀴만 헛도는데, 거리 기준이면 그 어긋남이 원천적으로 없다.
-/// 진압봉에 밀려 뒤로 갈 때는 전진 성분이 음수가 되어 저절로 거꾸로 돈다.
+/// 폭탄이 실제로 움직인 거리만큼 바퀴를 굴리는 로컬 연출.
 /// </summary>
 public class BombWheelSpin : MonoBehaviour
 {
@@ -35,7 +28,6 @@ public class BombWheelSpin : MonoBehaviour
         Vector3 delta = transform.position - m_lastPosition;
         m_lastPosition = transform.position;
 
-        // 전진 성분만 본다 — 제자리 회전으로는 바퀴가 돌지 않는다(실제로 굴러간 거리가 아니다)
         float travelled = Vector3.Dot(delta, transform.forward);
         if (Mathf.Abs(travelled) < 0.0001f)
             return;

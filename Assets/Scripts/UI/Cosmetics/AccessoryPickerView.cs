@@ -2,11 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// 한 슬롯의 치장을 고르는 칸들 (#818) — <see cref="PlayerColorPickerView"/>와 같은 구조다.
-/// 고르면 <see cref="GameSettings"/>에 쓰고, 남에게 나르는 일은 명부와 <c>PlayerAccessories</c>가 맡는다.
-///
-/// <b>안 가진 항목은 잠긴 칸으로 남긴다</b> (#818 D) — 숨기지 않는 것은 무엇이 더 있는지 보여야
-/// 자판기를 돌릴 이유가 생기기 때문이다. 보유 판단은 <see cref="CosmeticInventory"/>가 한다.
+/// 한 슬롯의 치장 선택 칸들을 만들고, 고르면 착용 정보에 저장한다. 미보유 항목은 잠긴 칸으로 남긴다.
 /// </summary>
 public class AccessoryPickerView : MonoBehaviour
 {
@@ -41,7 +37,6 @@ public class AccessoryPickerView : MonoBehaviour
         CosmeticNames.OnLanguageChanged += RefreshLabels;
         CosmeticInventory.OnOwnedChanged += RefreshLocks;
 
-        // 창을 열 때 한 번 걸러 낸다 — 해금이 생기기 전에 고른 값이 남아 있을 수 있다 (#818 D)
         CosmeticInventory.SanitizeEquipped(m_catalog);
 
         RefreshLocks();
@@ -61,7 +56,7 @@ public class AccessoryPickerView : MonoBehaviour
         int count = m_catalog.CountOf(m_slot);
         for (int i = 0; i < count; i++)
         {
-            int index = i; // 클로저가 루프 변수를 잡지 않게 사본을 넘긴다
+            int index = i;
             AccessoryCellView cell = Instantiate(m_cellPrefab, m_container);
             cell.name = $"Accessory {index}";
             cell.Bind(
@@ -77,8 +72,6 @@ public class AccessoryPickerView : MonoBehaviour
         RefreshHidden();
     }
 
-    // 다른 슬롯이 바뀌어도 다시 그린다 — 헬멧을 쓰면 머리카락 줄이 가려지기 때문이다 (#932).
-    // 자기 슬롯일 때만 선택 표시를 갱신하는 것은 종전과 같다.
     private void HandleAccessoryChanged(EAccessorySlot slot)
     {
         if (slot == m_slot)
@@ -93,7 +86,6 @@ public class AccessoryPickerView : MonoBehaviour
             m_cells[i].SetLabel(CosmeticNames.Of(m_catalog.Get(m_slot, i)));
     }
 
-    // 자판기로 뽑으면 잠금이 풀린다 — 칸을 다시 만들지 않고 표시만 갈아 준다
     private void RefreshLocks()
     {
         for (int i = 0; i < m_cells.Count; i++)
@@ -108,8 +100,6 @@ public class AccessoryPickerView : MonoBehaviour
             m_cells[i].SetSelected(i == selected);
     }
 
-    // 이 슬롯이 다른 치장에 가려지면 줄 전체를 흐린다 (#932) — 고른 것이 화면에 안 나오는데
-    // 칸은 멀쩡해 보여서 "안 눌렸나" 하고 계속 누르게 되던 자리다. 고르는 것 자체는 막지 않는다.
     private void RefreshHidden()
     {
         bool hidden = AccessoryCatalog.IsHidden(

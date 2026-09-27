@@ -1,20 +1,12 @@
 using UnityEngine;
 
 /// <summary>
-/// 화면 강수 표현 (#782) — 시점 카메라 앞에 쿼드 하나를 붙이고 애디티브 셰이더로 눈·비를 얹는다.
-/// 어디에 뿌릴지는 <see cref="PrecipitationMask"/>가 구운 마스크가 픽셀마다 가린다.
-/// 설계 근거: <c>docs/superpowers/specs/2026-08-21-precipitation-shader-design.md</c>
-///
-/// <b>URP Renderer Feature를 쓰지 않는다.</b> URP 17.3은 전체화면 패스가 RenderGraph 전용이라
-/// 파이프라인 에셋 배선과 API가 버전에 묶인다. 카메라 자식 쿼드는 그 의존이 없고, 나중에 Renderer
-/// Feature로 옮기더라도 셰이더와 마스크는 그대로 쓴다 — 옮길 것은 "무엇으로 그리는가" 한 겹뿐이다.
-///
-/// <b>눈과 비는 같은 셰이더다</b> — 갈리는 것은 값뿐이라(줄기 길이·속도·흔들림) 프리셋 둘을 여기 둔다.
+/// 시점 카메라 앞 쿼드에 애디티브 셰이더로 눈·비를 그리는 화면 강수 표현.
+/// PrecipitationMask가 픽셀별로 가리며, 눈·비 프리셋을 함께 둔다.
 /// </summary>
 [RequireComponent(typeof(PrecipitationMask))]
 public class PrecipitationScreen : MonoBehaviour
 {
-    /// <summary>강수 종류 — 값 프리셋을 고르는 열쇠다.</summary>
     public enum EKind
     {
         None,
@@ -90,7 +82,7 @@ public class PrecipitationScreen : MonoBehaviour
     {
         Tint = new Color(0.85f, 0.90f, 1f),
         Cells = 26f,
-        Fall = 2f, // m/s
+        Fall = 2f,
         Streak = 1.4f,
         Thickness = 16f,
         Occupancy = 0.30f,
@@ -110,12 +102,12 @@ public class PrecipitationScreen : MonoBehaviour
     [SerializeField] private Preset m_rain = new Preset
     {
         Tint = new Color(0.72f, 0.80f, 0.95f),
-        Cells = 20f, // 칸이 커야 줄기가 길게 뻗는다 — 줄기는 한 칸을 넘지 못한다 (#981)
-        Fall = 8f, // m/s
+        Cells = 20f,
+        Fall = 8f,
         Streak = 13f,
-        Thickness = 28f, // 크면 얇다. 빗줄기는 눈보다 가늘다
+        Thickness = 28f,
         Occupancy = 0.50f,
-        Tilt = 0f, // 비는 곧게 떨어뜨린다 (#981)
+        Tilt = 0f,
         Drift = 0f,
         Layers = 3f,
         Opacity = 0.55f,
@@ -124,7 +116,7 @@ public class PrecipitationScreen : MonoBehaviour
         MaskSoft = 0.10f,
         NearDistance = 2f,
         FarDistance = 20f,
-        LandFade = 1f, // 비는 칼같이 끊겨야 바닥에 꽂히는 것으로 읽힌다
+        LandFade = 1f,
     };
 
     [Header("페이드")]
@@ -162,11 +154,9 @@ public class PrecipitationScreen : MonoBehaviour
     private Camera m_attachedTo;
 
     private EKind m_kind;
-    private float m_target; // 목표 세기 — Show/Hide가 정한다
+    private float m_target;
     private float m_current;
 
-
-    /// <summary>지금 그리는 강수 종류. 없으면 <see cref="EKind.None"/>.</summary>
     public EKind Kind => m_kind;
 
     private void Awake() => m_mask = GetComponent<PrecipitationMask>();
@@ -185,10 +175,7 @@ public class PrecipitationScreen : MonoBehaviour
         ApplyPreset();
     }
 
-    /// <summary>
-    /// 자기가 켠 강수를 끈다 — 페이드가 끝나면 쿼드까지 감춘다. <b>지금 그리는 것이 남의 것이면 무동작</b> (#891).
-    /// 뷰 둘이 이 컴포넌트 하나를 공유하므로, 검사 없이 끄면 눈 뷰가 방금 켜진 비를 지운다.
-    /// </summary>
+    /// <summary>자기가 켠 강수를 페이드로 끈다. 다른 종류가 그리는 중이면 무동작.</summary>
     public void Hide(EKind kind)
     {
         if (m_kind != kind)
@@ -197,12 +184,10 @@ public class PrecipitationScreen : MonoBehaviour
         m_target = 0f;
     }
 
-    // 종류를 가리지 않고 끈다 — 컴포넌트 자신이 정리할 때만 쓴다.
     private void ForceHide() => m_target = 0f;
 
     private void OnDisable()
     {
-        // 씬이 내려가거나 컴포넌트가 꺼질 때 셰이더 전역이 남지 않게 — 마스크가 세기를 쥔다
         m_current = 0f;
         m_target = 0f;
         m_kind = EKind.None;
@@ -214,8 +199,6 @@ public class PrecipitationScreen : MonoBehaviour
 
     private void OnDestroy()
     {
-        // 런타임에 만든 것은 스스로 정리한다. 쿼드는 카메라의 자식이라 보통 카메라와 함께 죽지만,
-        // 이 컴포넌트가 먼저 사라지는 순서(씬 언로드)에서는 남는다.
         if (m_quad != null)
             Destroy(m_quad.gameObject);
         if (m_material != null)
@@ -232,7 +215,6 @@ public class PrecipitationScreen : MonoBehaviour
             ? m_target
             : Mathf.MoveTowards(m_current, m_target, Time.deltaTime / m_fadeSeconds);
 
-        // 세기는 마스크가 전역으로 올린다 — 전역을 두 곳에서 쓰면 서로 덮는다
         m_mask.Amount = m_current;
 
         if (m_current <= 0.001f)
@@ -254,7 +236,6 @@ public class PrecipitationScreen : MonoBehaviour
         ApplyViewUniforms();
     }
 
-    // 셰이더가 칸 밀도를 각도로 환산할 때 쓴다 — 시야각이 바뀌어도 밀도가 유지된다
     private void ApplyViewUniforms()
     {
         if (m_material != null)
@@ -267,7 +248,6 @@ public class PrecipitationScreen : MonoBehaviour
         return 2f * Mathf.Atan(Mathf.Tan(halfV) * m_attachedTo.aspect);
     }
 
-    // 쿼드를 시점 카메라 자식으로 만든다. 카메라가 갈아 끼워지면(관전·CCTV) 다시 붙인다.
     private void EnsureQuad()
     {
         Camera camera = m_mask.Camera;
@@ -286,7 +266,7 @@ public class PrecipitationScreen : MonoBehaviour
 
             GameObject quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
             quad.name = "PrecipitationQuad";
-            Destroy(quad.GetComponent<Collider>()); // 화면 장식이 물리에 잡히면 안 된다
+            Destroy(quad.GetComponent<Collider>());
 
             m_renderer = quad.GetComponent<MeshRenderer>();
             m_renderer.sharedMaterial = m_material;
@@ -305,7 +285,6 @@ public class PrecipitationScreen : MonoBehaviour
         }
     }
 
-    // 근평면 살짝 앞에서 화면을 꽉 채우게 크기를 맞춘다 — 시야각·화면비가 바뀌어도 따라간다.
     private void FitToCamera()
     {
         Camera camera = m_attachedTo;

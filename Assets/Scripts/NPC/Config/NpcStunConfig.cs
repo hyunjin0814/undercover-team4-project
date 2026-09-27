@@ -1,8 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// 기절(Stunned) 상태 튜닝 값. (#259 — NpcController에서 분리)
-/// 테이저 등으로 무력화된 지속 시간과, 그 끝에 일어나는 모션 구간(#269)을 정한다.
+/// 기절(Stunned) 상태 튜닝 SO — 무력화 지속 시간과 기상 모션 구간.
 /// </summary>
 [CreateAssetMenu(fileName = "NpcStunConfig", menuName = "Undercover/NPC/Stun Config")]
 public class NpcStunConfig : ScriptableObject
@@ -20,7 +19,6 @@ public class NpcStunConfig : ScriptableObject
 
     public float StunSeconds => m_stunSeconds;
 
-    /// <summary>체력 0으로 쓰러진 기절의 지속 시간 — 타격 경로 전용. 이 창 안에 한 대 더 치면 죽는다. (#400/#916)</summary>
     public float KnockdownStunSeconds => m_knockdownStunSeconds;
     public float StandUpSeconds => m_standUpSeconds;
 }

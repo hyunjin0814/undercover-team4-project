@@ -5,8 +5,7 @@ using UnityEngine.Localization;
 using UnityEngine.Localization.Settings;
 
 /// <summary>
-/// 세력 문양 대조자료 (#222) — 이번 세션의 세력별 '진짜' 문양을 나열한다.
-/// 세션 중 값이 바뀌지 않지만(세션 1회 roll), 늦게 접속한 클라는 스폰 후 동기화되므로 이벤트도 구독한다.
+/// 이번 세션의 세력별 진짜 문양을 나열해 표시한다.
 /// </summary>
 public class FactionSymbolBoardView : HqPanelView
 {
@@ -31,8 +30,6 @@ public class FactionSymbolBoardView : HqPanelView
         if (m_manager != null)
             m_manager.OnRealIndicesChanged += Rebuild;
 
-        // 세력 표기가 테이블에서 오므로 언어가 바뀌면 다시 그린다 — 행마다 구독하는 대신
-        // 로케일 변경 한 곳에 걸고 통째로 다시 채운다 (ShopStand와 같은 방식). (#497)
         LocalizationSettings.SelectedLocaleChanged += HandleLocaleChanged;
 
         Rebuild();
@@ -44,7 +41,6 @@ public class FactionSymbolBoardView : HqPanelView
             m_manager.OnRealIndicesChanged -= Rebuild;
         m_manager = null;
 
-        // 종료 중에는 설정 에셋을 되살리지 않는다 — HasSettings로 먼저 확인한다 (ShopStand 관례)
         if (LocalizationSettings.HasSettings)
             LocalizationSettings.SelectedLocaleChanged -= HandleLocaleChanged;
     }
@@ -56,7 +52,6 @@ public class FactionSymbolBoardView : HqPanelView
         if (m_officialRecords == null || m_rowPrefab == null || m_rowContainer == null)
             return;
 
-        // 문양을 가진 세력만 — None(무소속)은 variants가 없어 여기서 자동으로 빠진다.
         m_shown.Clear();
         foreach (OfficialRecords.Faction faction in Enum.GetValues(typeof(OfficialRecords.Faction)))
         {

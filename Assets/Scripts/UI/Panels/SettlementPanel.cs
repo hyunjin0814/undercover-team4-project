@@ -9,18 +9,8 @@ using UnityEngine.Localization;
 using UnityEngine.UI;
 
 /// <summary>
-/// 라운드 정산 패널 (#107, GDD 3-2, #693, #739) — 라운드 결과·팀 자금 증감·개인 칭호 로스터(코믹 스탯)를 보여준다.
-/// 표시는 각 클라 로컬. 데이터는 SettlementController가 서버 권위 값으로 채워 <see cref="Show"/>로 넘긴다.
-///
-/// 연출: 패널(창·배경)은 즉시 뜨고, 결과/자금/칭호 3줄은 <see cref="m_textRevealDelay"/>초 뒤에 등장한다.
-/// 텍스트가 뜨는 순간부터 <see cref="m_countdownSeconds"/>초 상점 복귀 카운트다운을 화면 중앙 상단에 보여준다.
-/// (실제 복귀는 RoundEndResetter가 서버 주도로 처리 — 그 딜레이 = 텍스트 지연 + 카운트다운으로 맞춰 둔다)
-///
-/// 열려 있는 동안 로컬 플레이어 입력을 정지(PlayerInputHandler.SetSuspended)해 정산 화면 뒤 월드로
-/// 이동·시점 입력이 새지 않게 하고, 버튼을 누를 수 있게 커서를 띄운다. 확인 버튼·ESC로 닫으면 되돌린다.
-///
-/// 닫는 것은 곧 "다 읽었다"는 확인이다 (#509) — 확인 버튼이든 ESC든 SettlementConfirmGate에 보고하고,
-/// 전원이 보고하면 카운트다운이 끝나기 전이라도 서버가 복귀를 앞당긴다. 카운트다운 문구에 그 인원을 함께 보여준다.
+/// 라운드 정산 패널 — 결과·팀 자금 증감·개인 칭호를 보여 주고 복귀 카운트다운을 표시한다(GDD 3-2).
+/// 닫으면 SettlementConfirmGate에 확인을 보고한다. 열려 있는 동안 입력을 정지한다.
 /// </summary>
 public class SettlementPanel : PanelBase
 {
@@ -38,7 +28,6 @@ public class SettlementPanel : PanelBase
     [SerializeField]
     private SettlementTitleRowView m_titleRowPrefab;
 
-    // 행은 재사용한다 — TeamStatusPanel과 같은 관례.
     private readonly List<SettlementTitleRowView> m_titleRows = new List<SettlementTitleRowView>();
 
     [Header("상점 복귀 카운트다운 (화면 중앙 상단)")]
@@ -58,8 +47,6 @@ public class SettlementPanel : PanelBase
     [SerializeField]
     private Button m_confirmButton;
 
-    // 문구는 채우는 순간 한 번 읽고 끝낸다 — HUD와 달리 StringChanged를 구독하지 않는다.
-    // 정산 화면은 10초짜리 결과 요약이고 그 사이 설정 창으로 언어를 바꿀 경로가 없어서다. (#497)
     [Header("문구")]
     [Tooltip("팀 자금 증감 요약 — Settlement.Fund.Summary ({0}=팀 몫 증감, {1}=팀 자금, {2}=할당량)")]
     [SerializeField]
@@ -73,8 +60,6 @@ public class SettlementPanel : PanelBase
     [SerializeField]
     private LocalizedString m_countdownFormat;
 
-    // 결과·종료 사유·복귀 도착지는 규약 기반 키(접두 + enum 이름)라 인스펙터에서 고를 것이 없다.
-    // 규약은 RoundResult·RoundEndReason 선언부의 [LocalizedEnum]에 적혀 있다. (문서 §2 결정 (h))
     private const string k_table = "SettlementTable";
     private const string k_resultPrefix = "Settlement.Result.";
     private const string k_returnPrefix = "Settlement.Return.";
@@ -84,19 +69,14 @@ public class SettlementPanel : PanelBase
     public override bool CanCloseWithESC => true;
     public override bool IsStackable => true;
 
-    // 로컬 플레이어 입력을 정지 중인지 — 자동복귀(OnDestroy) 시 대칭 복구 + 커서 Push/Pop 1:1 판단용.
     private bool m_playerBlocked;
 
-    // 텍스트 지연 등장 + 카운트다운 시퀀스 취소용 — 닫히거나 파괴되면 중단한다.
     private CancellationTokenSource m_revealCts;
 
-    // 확인 인원이 바뀌어도 문구를 다시 그려야 해서 남은 초를 들고 있는다 (초 갱신과 인원 갱신이 따로 온다).
     private int m_secondsLeft;
 
-    // 결과 3줄이 뜬 뒤부터 확인을 받는다 — 버튼과 ESC가 같은 구간을 쓴다.
     private bool m_confirmEnabled;
 
-    // 확인 보고는 이번 정산에 한 번만 — 닫기 경로가 둘(확인 버튼·ESC)이라 래치를 둔다.
     private bool m_confirmReported;
 
     private SettlementConfirmGate Gate => App.Game.SettlementGate;
@@ -104,10 +84,9 @@ public class SettlementPanel : PanelBase
     protected override void Awake()
     {
         base.Awake();
-        // 연출 대상들도 패널과 같은 시작 상태(닫힘)로 맞춘다 (딤 배경은 PanelBase가 맞춘다).
         SetResultTextsVisible(false);
         SetCountdownVisible(false);
-        SetConfirmEnabled(false); // 결과가 뜨기 전에는 못 누른다 (#509)
+        SetConfirmEnabled(false);
         if (m_confirmButton != null)
             m_confirmButton.onClick.AddListener(ClosePanel);
     }
@@ -124,13 +103,11 @@ public class SettlementPanel : PanelBase
         base.OnDestroy();
     }
 
-    // 이번 정산의 도착지 — 성공은 상점, 실패는 로비(새 판). RoundEndResetter의 분기와 맞춘다 (#395).
     private string m_returnLabel = string.Empty;
 
     /// <summary>정산 데이터를 채우고 패널을 연다. 결과 텍스트는 지연 후 등장한다.</summary>
     public void Show(SettlementData data)
     {
-        // None(종료 전)으로 열릴 일은 없지만, 들어와도 키가 없는 조회로 새지 않게 실패로 접는다.
         RoundResult result = data.Result == RoundResult.Success ? RoundResult.Success : RoundResult.Failure;
 
         m_returnLabel = LocalizedStrings.Get(k_table, k_returnPrefix + result);
@@ -138,8 +115,6 @@ public class SettlementPanel : PanelBase
         if (m_resultText != null)
         {
             string resultBase = LocalizedStrings.Get(k_table, k_resultPrefix + result);
-            // 실패 원인은 별도 줄 대신 결과 줄에 흡수한다 — "종료 사유" 줄을 없애며 유일한 정보처였던
-            // 실패 원인이 사라지지 않게 하기 위함 (#693 검토포인트 2).
             m_resultText.text =
                 result == RoundResult.Failure && data.Reason != RoundEndReason.None
                     ? m_resultWithReasonFormat.GetLocalizedString(resultBase, ReasonToText(data.Reason))
@@ -147,8 +122,6 @@ public class SettlementPanel : PanelBase
         }
 
         if (m_fundText != null)
-            // 할당량은 경찰서 납부분이라 총 수익에서 떼고 남은 초과분만 팀 몫이 된다 (#395).
-            // 압축 표기(팀 몫 증감 → 팀 자금, 할당량 납부분 괄호)로도 그 근거가 보이게 한다 (#693 검토포인트 1).
             m_fundText.text = m_fundSummary.GetLocalizedString(
                 data.FundDelta,
                 data.FundBalance,
@@ -162,9 +135,9 @@ public class SettlementPanel : PanelBase
         m_confirmReported = false;
         m_secondsLeft = Mathf.CeilToInt(m_countdownSeconds);
 
-        SetResultTextsVisible(false); // 창은 바로 뜨되 텍스트·카운트다운은 지연 등장
+        SetResultTextsVisible(false);
         SetCountdownVisible(false);
-        SetConfirmEnabled(false); // 확인은 결과가 뜬 뒤부터 — 못 읽고 넘기는 것을 막는다 (#509)
+        SetConfirmEnabled(false);
         OpenPanel();
 
         CancelReveal();
@@ -172,7 +145,6 @@ public class SettlementPanel : PanelBase
         RevealAndCountdownAsync(m_revealCts.Token).Forget();
     }
 
-    // 텍스트 지연 등장 → 등장 순간부터 카운트다운. 실시간 기준(freeze로 timeScale이 건드려져도 흐르게).
     private async UniTaskVoid RevealAndCountdownAsync(CancellationToken ct)
     {
         try
@@ -196,7 +168,6 @@ public class SettlementPanel : PanelBase
         }
         catch (OperationCanceledException)
         {
-            // 패널이 닫히거나 파괴됨 — 연출 중단(가시성 정리는 ClosePanel/Awake가 담당)
         }
     }
 
@@ -206,7 +177,6 @@ public class SettlementPanel : PanelBase
         RefreshCountdownText();
     }
 
-    // 남은 초 + 확인 인원(n/총원)을 한 문구로 그린다 (#509). 게이트가 없는 씬(테스트)은 혼자 있는 것으로 센다.
     private void RefreshCountdownText()
     {
         if (m_countdownText == null)
@@ -224,8 +194,6 @@ public class SettlementPanel : PanelBase
         );
     }
 
-    // 실패 결과 줄에 흡수할 사유 문구 — 규약 키 Settlement.Reason.<RoundEndReason>. (다운·기능 정지(Die) 혼재는 #364)
-    // None은 라운드 종료 전이라 표시할 사유가 없다 — 키도 두지 않는다.
     private static string ReasonToText(RoundEndReason reason)
     {
         return reason == RoundEndReason.None
@@ -233,8 +201,6 @@ public class SettlementPanel : PanelBase
             : LocalizedStrings.Get(k_table, k_reasonPrefix + reason);
     }
 
-    // 확인 인원은 서버가 세어 복제한다 — 바뀔 때마다 카운트다운 문구를 다시 그린다. (#509)
-    // 창을 닫아도 카운트다운은 남으므로 구독은 파괴될 때까지 유지한다.
     private void BindGate()
     {
         UnbindGate();
@@ -249,7 +215,6 @@ public class SettlementPanel : PanelBase
             Gate.OnCountsChanged -= RefreshCountdownText;
     }
 
-    // 결과 텍스트의 표시를 한꺼번에 켜고 끈다. (카운트다운은 별도 — 닫아도 남긴다)
     private void SetResultTextsVisible(bool visible)
     {
         if (m_resultText != null)
@@ -260,7 +225,6 @@ public class SettlementPanel : PanelBase
             m_titleRowContainer.gameObject.SetActive(visible);
     }
 
-    // 개인 칭호 로스터를 그린다 — 칭호가 없는 사람도 이름은 뜨고 배지만 빈다(리썰 컴퍼니 스타일, #739).
     private void BuildTitleRows(List<SettlementPlayerTitle> titles)
     {
         if (m_titleRowContainer == null || m_titleRowPrefab == null)
@@ -292,7 +256,6 @@ public class SettlementPanel : PanelBase
             m_countdownText.gameObject.SetActive(visible);
     }
 
-    // 결과가 뜨기 전에는 확인을 받지 않는다 (#509) — 버튼을 잠그고, 같은 구간의 ESC도 확인으로 세지 않는다.
     private void SetConfirmEnabled(bool enabled)
     {
         m_confirmEnabled = enabled;
@@ -300,8 +263,6 @@ public class SettlementPanel : PanelBase
             m_confirmButton.interactable = enabled;
     }
 
-    // 창을 닫는 것 = "다 읽었다" (#509). 확인 버튼이든 ESC든 같은 신호로 서버에 보고한다.
-    // 열려 있고 확인 가능한 구간일 때만 — 씬 정리로 다시 불려도 새지 않게.
     private void ReportConfirmed()
     {
         if (m_confirmReported || !m_confirmEnabled || !IsOpened)
@@ -331,24 +292,17 @@ public class SettlementPanel : PanelBase
     {
         ReportConfirmed();
 
-        // 카운트다운은 일부러 남긴다 — 창·배경을 닫아도 상점 복귀까지 남은 시간을 계속 보여준다.
-        // (시퀀스를 취소하지 않으므로 카운트다운은 계속 돌고, 결과 텍스트는 창이 꺼지며 함께 숨는다)
         SetLocalPlayerBlocked(false);
         base.ClosePanel();
     }
 
-    // 로컬 플레이어(오너)의 입력 정지 + 커서 해제를 함께 처리한다.
-    // 정산 화면 뒤 월드로 이동·시점이 새지 않게 입력을 멈추고(SetSuspended), 버튼을 누를 수 있게
-    // 커서를 푼다(CursorLock.PushUnlock — 닫을 때 Pop).
     private void SetLocalPlayerBlocked(bool blocked)
     {
-        // 같은 값으로 두 번 불려도(PanelBase.OpenPanel엔 재진입 가드가 없다) 커서 Push/Pop이 어긋나지 않게 한다 (#352)
         if (m_playerBlocked == blocked)
             return;
 
         m_playerBlocked = blocked;
 
-        // 플레이어 조회보다 먼저 — 라운드 종료 디스폰으로 플레이어가 사라져도 Push/Pop 짝은 유지돼야 한다 (#352)
         if (blocked)
             CursorLock.PushUnlock();
         else
@@ -368,7 +322,6 @@ public class SettlementPanel : PanelBase
         if (movement == null)
             return;
 
-        // 정산을 닫으면 라운드 종료 freeze를 무시하고 움직일 수 있게 한다 (호스트도 — 다운 상태면 여전히 잠김) (#107)
         movement.SetIgnoreRoundEndFreeze(!blocked);
     }
 }

@@ -1,9 +1,8 @@
 using UnityEngine;
 
 /// <summary>
-/// 라운드 날씨 확률 표 (#700) — 라운드가 오를수록 맑음이 줄어드는 난이도 레버이자 맵별 날씨 성향.
-/// 조회 규약은 <see cref="RoundQuotaTable"/>(#377)과 같다 — 첫 항목이 1라운드, 표 끝을 넘으면 마지막 행 유지.
-/// 맵별 분리는 각 맵 씬의 매니저에 그 맵의 표를 꽂아서 한다 — 맵을 늘려도 코드는 그대로다.
+/// 라운드별 날씨 확률 표 SO — 맑음 확률과 날씨별 가중치를 담는다.
+/// 표 끝을 넘으면 마지막 행을 유지하며, 맵마다 다른 표를 꽂을 수 있다.
 /// </summary>
 [CreateAssetMenu(
     fileName = "RoundWeatherTable",
@@ -36,13 +35,9 @@ public class RoundWeatherTable : ScriptableObject
     [SerializeField]
     private WeatherWeight[] m_weights = new WeatherWeight[0];
 
-    /// <summary>표에 굴릴 행이 있는가 — 비어 있으면 호출부는 자기 인스펙터 폴백을 쓴다.</summary>
     public bool HasRows => m_clearPercents != null && m_clearPercents.Length > 0;
 
-    /// <summary>
-    /// N라운드의 맑음 확률(%). 표가 비었으면 <paramref name="fallback"/>.
-    /// 표 끝을 넘는 라운드는 마지막 행으로 clamp — 라운드가 이어져도 확률이 폭주하지 않는다.
-    /// </summary>
+    /// <summary>N라운드의 맑음 확률(%)을 돌려준다. 표가 비었으면 fallback.</summary>
     public int GetClearPercent(int round, int fallback)
     {
         if (!HasRows)
@@ -56,10 +51,7 @@ public class RoundWeatherTable : ScriptableObject
         return m_clearPercents[index];
     }
 
-    /// <summary>
-    /// 이 날씨의 상대 가중치 — 목록에 없으면 <b>1(균등)</b>이다.
-    /// 전부 적지 않아도 되게 한 것이고, 막고 싶은 날씨만 0으로 적으면 된다.
-    /// </summary>
+    /// <summary>날씨의 상대 가중치를 돌려준다. 목록에 없으면 1.</summary>
     public float WeightOf(WeatherKind kind)
     {
         if (m_weights == null)

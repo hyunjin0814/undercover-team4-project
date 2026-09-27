@@ -1,19 +1,8 @@
 using UnityEngine;
 
 /// <summary>
-/// 화면 강수 마스크 (#782) — <b>"이 픽셀이 보는 지점이 하늘에 열려 있는가"</b>를 저해상 텍스처로 굽는다.
-///
-/// 강수 표현이 파티클 리그에서 화면 셰이더로 옮겨 오면서, 예전에 배치로 풀던 세 예외
-/// (실외 배치 / 기둥·처마 회피 #647 / 창 너머 재배치 #733)가 전부 이 마스크 하나로 대체된다 —
-/// 물어야 하는 것이 "내가 실외인가"가 아니라 "이 방향이 열려 있는가"이기 때문이다.
-/// 설계 근거: <c>docs/superpowers/specs/2026-08-21-precipitation-shader-design.md</c>
-///
-/// <b>베이크하지 않는다.</b> 진짜 카메라에서 쏜 진짜 레이라 층이 있는 구조(다리 아래·2층 실내)가
-/// 자연히 맞고, 맵마다 표시해 둘 것이 없다(<see cref="WeatherShelter"/> 철학).
-///
-/// <b>판정은 빌려 쓴다.</b> 하늘이 막혔는지는 <see cref="WeatherShelter.IsSheltered"/> 하나가 답한다 —
-/// 낙뢰 대상(<c>LightningEvent</c>)·빙판 누적(<c>SnowEvent</c>)이 쓰는 그 함수다. 규칙을 복제하면
-/// "눈은 그쳤는데 벼락은 떨어진다"가 다시 난다.
+/// 화면 강수 마스크 — 각 픽셀이 보는 지점이 하늘에 열려 있는지를 레이로 판정해 저해상 텍스처로 굽는다.
+/// 판정은 WeatherShelter.IsSheltered를 그대로 쓴다.
 /// </summary>
 public class PrecipitationMask : MonoBehaviour
 {
@@ -57,51 +46,40 @@ public class PrecipitationMask : MonoBehaviour
     [Min(0.1f)]
     [SerializeField] private float m_logInterval = 1f;
 
-    // 셰이더가 읽는 전역 — 강수 셰이더 하나뿐이라 머티리얼마다 물리지 않는다
     private static readonly int s_maskId = Shader.PropertyToID("_PrecipMask");
     private static readonly int s_amountId = Shader.PropertyToID("_PrecipAmount");
 
-    private Camera m_camera; // 시점 카메라 — 꺼지면 다시 찾는다 (ResolveCamera)
-    private bool m_idle;    // 강수가 없어 쉬는 중인가 — 세기를 매 프레임 다시 쓰지 않게
+    private Camera m_camera;
+    private bool m_idle;
 
     private float m_nextLogAt;
     private System.Text.StringBuilder m_logBuffer;
 
     private Texture2D m_mask;
-    private Color[] m_pixels; // Texture2D.SetPixels용 버퍼 — 매 프레임 새로 만들지 않는다
-    private int m_built; // 지금 버퍼가 만들어진 격자 크기 (인스펙터에서 바뀌면 다시 만든다)
+    private Color[] m_pixels;
+    private int m_built;
 
-    /// <summary>강수 세기(0~1) — 뷰(<c>SnowView</c>·<c>LightningView</c>)가 on/off·페이드로 쓴다.</summary>
     public float Amount { get; set; }
 
-    /// <summary>마지막으로 구운 칸 중 하늘이 열린 비율 — 진단·테스트용. 격자가 없으면 0.</summary>
     public float OpenRatio { get; private set; }
 
-    /// <summary>마스크를 구운 시점 카메라 — 화면 쿼드(<see cref="PrecipitationScreen"/>)가 같은 것에 붙는다.
-    /// 마스크와 쿼드가 다른 카메라를 보면 가림이 화면과 어긋난다.</summary>
     public Camera Camera => ResolveCamera();
 
     private void OnDisable()
     {
-        // 강수가 끝나면 셰이더가 남은 마스크로 계속 그리지 않게 세기를 0으로 눌러 둔다
         Shader.SetGlobalFloat(s_amountId, 0f);
-        m_idle = false; // 다음에 켜질 때 다시 눌러 주도록
+        m_idle = false;
     }
 
     private void OnDestroy()
     {
-        // 런타임에 만든 텍스처는 스스로 정리한다 — 맵을 오갈 때마다 SuddenEvents가 새로 생긴다
         if (m_mask != null)
             Destroy(m_mask);
         m_mask = null;
     }
 
-    // 카메라가 움직인 뒤에 굽는다 — 시점 제어(PlayerLook)가 Update 구간에서 카메라를 옮기므로,
-    // Update에서 구우면 마스크가 한 프레임 뒤처져 빠르게 돌 때 경계가 밀린다 — 폐기된 파티클 리그도 같은 이유로 LateUpdate였다.
     private void LateUpdate()
     {
-        // <b>강수가 없으면 굽지 않는다.</b> 맑은 라운드(GDD 6-7의 4택 중 하나)에는 마스크를 쓰는 곳이
-        // 없는데도 레이 225발과 텍스처 업로드를 매 프레임 냈다. 세기는 한 번만 눌러 두고 쉰다.
         if (Amount <= 0f)
         {
             if (!m_idle)
@@ -131,8 +109,6 @@ public class PrecipitationMask : MonoBehaviour
             TickLog(camera);
     }
 
-    // 격자를 그대로 그린다 — 숫자 하나로는 "창가에서 그 방향만 열렸다"가 안 보인다.
-    // # = 열림, . = 막힘, 중간값은 + (시간 보간 중). 화면 위쪽이 첫 줄이다.
     private void TickLog(Camera camera)
     {
         if (Time.time < m_nextLogAt)
@@ -169,15 +145,7 @@ public class PrecipitationMask : MonoBehaviour
         Debug.Log(m_logBuffer.ToString(), this);
     }
 
-    /// <summary>
-    /// 마스크를 구울 카메라 — <b>로컬 플레이어의 시점 카메라가 1순위, `Camera.main`은 폴백이다.</b>
-    ///
-    /// ⚠ <c>Camera.main</c>만 믿으면 안 된다: <c>Player.prefab</c>의 시점 카메라는 <b>Untagged</b>라
-    /// Camera.main으로 잡히지 않는다. 그러면 씬에 놓인 고정 카메라가 잡혀 마스크가 <b>맵의 한 지점
-    /// 기준으로 굳는다</b>. 폐기된 파티클 리그가 같은 함정을 주석으로 남겨 뒀던 자리다.
-    ///
-    /// 꺼진 카메라는 다시 찾는다 — 관전 전환·CCTV로 갈아 끼워지기 때문이다.
-    /// </summary>
+    /// <summary>마스크를 구울 카메라를 찾는다 — 로컬 플레이어 시점 카메라 우선, Camera.main은 폴백.</summary>
     private Camera ResolveCamera()
     {
         if (m_camera != null && m_camera.isActiveAndEnabled)
@@ -210,11 +178,9 @@ public class PrecipitationMask : MonoBehaviour
         m_built = m_grid;
         m_pixels = new Color[m_grid * m_grid];
 
-        // 격자를 바꾸면 옛 텍스처를 버린다 — 안 버리면 인스펙터를 만질 때마다 쌓인다
         if (m_mask != null)
             Destroy(m_mask);
 
-        // R8 하나면 충분하다 — 값이 "열렸나" 하나뿐이다. 바이리니어로 늘려 읽고 경계는 물리지 않는다.
         m_mask = new Texture2D(m_grid, m_grid, TextureFormat.R8, mipChain: false, linear: true)
         {
             filterMode = FilterMode.Bilinear,
@@ -222,13 +188,10 @@ public class PrecipitationMask : MonoBehaviour
             name = "PrecipMask",
         };
 
-        // 처음 한 번은 전부 열린 것으로 둔다 — 실외에서 시작하는 것이 흔하고, 닫히는 쪽으로
-        // 수렴하는 것이 반대(실외인데 한 박자 안 내림)보다 눈에 덜 걸린다.
         for (int i = 0; i < m_pixels.Length; i++)
             m_pixels[i] = Color.white;
     }
 
-    // 격자 한 칸 = 화면 한 점. 그 점이 보는 지점을 찾고, 그 지점에서 하늘이 열렸는지 묻는다.
     private void Bake(Camera camera)
     {
         float step = 1f / (m_grid - 1);
@@ -253,11 +216,6 @@ public class PrecipitationMask : MonoBehaviour
         OpenRatio = (float)openCount / (m_grid * m_grid);
     }
 
-    // 이 시선이 닿는 지점 위가 열려 있는가.
-    //
-    // 2단이다. ① 시선이 닿는 끝 지점을 잡고 ② 그 지점에서 위로 쏴 하늘을 묻는다. ②가 핵심이다 —
-    // 없으면 천장 있는 큰 실내 홀도 하늘로 읽힌다(레이가 끝까지 날아가도 아무것도 안 맞으므로).
-    // 폐기된 파티클 리그가 창 하나를 찾던 2단 판정(#733)을 화면 전체로 넓힌 것이다.
     private bool IsSkyOpenAlong(Ray ray)
     {
         Vector3 probe = Physics.Raycast(

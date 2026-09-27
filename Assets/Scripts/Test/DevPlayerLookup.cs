@@ -3,8 +3,7 @@ using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// 개발자 단축키가 쓰는 플레이어 조회 — 폭탄·차량 단축키가 같은 것을 복사해 쓰던 것을 모았다.
-/// <b>에디터 전용</b>이라 빌드에는 들어가지 않는다.
+/// 개발자 단축키용 플레이어 조회 헬퍼(에디터 전용).
 /// </summary>
 public static class DevPlayerLookup
 {
@@ -15,7 +14,6 @@ public static class DevPlayerLookup
         if (manager != null && manager.IsListening && manager.LocalClient?.PlayerObject != null)
             return manager.LocalClient.PlayerObject.transform;
 
-        // 매니저가 아니라 스폰물이라 R1(FindFirstObjectByType 금지)의 대상이 아니다
         PlayerMovement player = Object.FindFirstObjectByType<PlayerMovement>();
         return player != null ? player.transform : null;
     }

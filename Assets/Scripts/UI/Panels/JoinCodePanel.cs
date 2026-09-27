@@ -2,7 +2,9 @@ using System;
 using TMPro;
 using UnityEngine;
 
-// 코드 입력 모달 — SessionPanel의 [코드 입력으로 참가] 버튼이 연다. 실제 참가 처리는 SessionPanel이 맡는다.
+/// <summary>
+/// 세션 코드 입력 모달 — 입력한 코드를 콜백으로 넘기며, 실제 참가는 SessionPanel이 한다.
+/// </summary>
 public class JoinCodePanel : ConfirmPanelBase
 {
     [Header("입력")]

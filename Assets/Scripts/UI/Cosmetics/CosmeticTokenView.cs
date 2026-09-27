@@ -3,12 +3,7 @@ using UnityEngine;
 using UnityEngine.Localization;
 
 /// <summary>
-/// 남은 치장 뽑기 토큰 표시 (#818 D · #850) — 자판기 3D 라벨, 상점 HUD, 커스터마이징 창이 같이 쓴다.
-/// 문구는 인스펙터에서 받으므로 놓이는 자리마다 다른 키를 물릴 수 있다.
-///
-/// 조준 안내(<see cref="InteractPrompts.Gacha"/>)에 숫자를 끼우지 않는 이유는 그 문구가 20종을
-/// 한 벌만 캐시해 두고 참조 비교로 재구독을 판정하는 자리라서다 — 인자만 갈면 화면이 갱신되지 않는다.
-/// 그래서 표시를 따로 둔다. 계정 값이라 조준하지 않아도 보이는 것이 낫기도 하다.
+/// 남은 치장 뽑기 토큰 수를 표시한다(자판기 라벨·상점 HUD·커스터마이징 창 공용).
 /// </summary>
 public class CosmeticTokenView : MonoBehaviour
 {
@@ -22,15 +17,12 @@ public class CosmeticTokenView : MonoBehaviour
 
     private void OnEnable()
     {
-        // 키가 안 붙었으면 구독하지 않는다 — 빈 LocalizedString을 구독하면 조회할 때마다
-        // 에러가 쌓인다 (EmoteWheelSlotView가 같은 이유로 IsEmpty를 본다)
         if (m_format.IsEmpty)
         {
             Debug.LogWarning($"[{nameof(CosmeticTokenView)}] 표시 문구 키가 연결되지 않았습니다 (#818 D)", this);
             return;
         }
 
-        // 인자를 먼저 넣고 구독한다 — 순서를 어기면 첫 발화가 인자 없는 문장으로 나간다
         m_format.Arguments = new object[] { CosmeticInventory.Tokens };
         m_format.StringChanged += SetText;
         CosmeticInventory.OnTokensChanged += Refresh;
@@ -45,7 +37,6 @@ public class CosmeticTokenView : MonoBehaviour
         CosmeticInventory.OnTokensChanged -= Refresh;
     }
 
-    // 토큰이 오가면 인자를 갈고 다시 읽는다 — RefreshString이 구독자에게 새 문장을 보낸다
     private void Refresh()
     {
         m_format.Arguments = new object[] { CosmeticInventory.Tokens };

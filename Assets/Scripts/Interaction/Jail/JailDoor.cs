@@ -3,42 +3,8 @@ using UnityEngine;
 using UnityEngine.Localization;
 
 /// <summary>
-/// 철창문 (#415/#537/#722) — 본부 본관과 유치장 별동을 잇는 <b>순간이동 상호작용 오브젝트</b>다.
-/// 문 뒤가 눈에 보이게 됐지만(별동이 본관에 붙었다) 걸어서 지날 수 있는 통로는 아니다 —
-/// 철창과 문짝 콜라이더가 개구부를 막고 셀 바닥은 여전히 NavMesh 섬이다. E를 누르는 지점이다.
-///
-/// <b>여닫는 개념 자체가 없다</b> (#537). 자동 개폐(#522)는 "닫힌 문을 신병이 뚫고 지나간다"를 막으려고
-/// 넣은 것인데(문짝 콜라이더가 CharacterController만 막고 NavMeshAgent·밧줄 끌기는 통과했다),
-/// 문턱을 넘는 이동 자체가 없어져 막을 대상이 사라졌다. 미끄러지는 연출도 함께 걷어냈다 — 통과가
-/// 아니라 순간이동이라 문짝이 열릴 이유가 없다.
-///
-/// <b>이 문은 잠금을 다루지 않는다</b> (#744). 잠그는 갈래가 여기 있었지만(#492), 열린 채 방치하는
-/// 것이 이득이 되고 그동안 탈출 이벤트가 재발동하지 못하는 원인이었다. 개방은 배전반 해킹이,
-/// 복구는 <see cref="JailLock"/>의 자동 재잠금이 맡는다 — 플레이어가 손댈 것이 없다.
-///
-/// <b>이 문은 내 몸이 오가는 것만 담당한다.</b> 신병을 넣는 것은 옆에 둔 <see cref="JailIntakeButton"/>이다 —
-/// 같은 키가 상황에 따라 다른 일을 하면 조준 윤곽선이 무엇을 약속하는지 흐려지기 때문이다
-/// (그쪽 주석에 근거가 있다). E는 두 갈래이고 <b>서 있는 위치로 갈린다</b>:
-///
-///  1. <b>셀 안에 있으면 나온다</b> — 따라오던 반출 대상도 함께 문 밖으로 나온다. 확보한 대상이
-///     없어도 언제든 나올 수 있다.
-///  2. <b>밖에서 빈손이면 들어간다</b> — 셀 안 입장 지점으로 순간이동한다.
-///     신병을 <b>끌고 있으면 막는다</b>: 이 문은 플레이어만 옮기므로, 묶인 신병을 둔 채 들어가면
-///     줄이 늘어나 끊기고 신병만 밖에 남는다. 넣는 것은 옆 버튼의 일이다.
-///
-/// <b>같은 문 하나가 양방향을 겸한다</b> (#722) — 갈래가 위치로 갈리므로 셀 안쪽에 출구 문을 따로
-/// 둘 이유가 없다.
-///
-/// <b>이 문으로 감옥에 들어가는 것은 플레이어뿐이다.</b> NPC는 상호작용을 걸 수단이 없고
-/// (E는 <see cref="PlayerInteractor"/>만 쏜다), 서버 처리도 <see cref="PlayerMovement"/>가 있는
-/// 대상에서만 진행한다. NPC가 감옥 안으로 들어가는 경로는 <b>판정을 통과한 수감뿐</b>이며
-/// (<see cref="JailIntakeButton"/> → <see cref="JailIntake"/>의 배치 순간이동), 반출한 대상은
-/// 따라다니다 플레이어가 문을 쓸 때 <b>밖으로만</b> 함께 나온다 — 들어오는 방향은 없다.
-///
-/// 씬 배치: 조준용 콜라이더를 <b>Interactable 레이어</b>에 둘 것 — PlayerInteractor의 조준 마스크가 그
-/// 레이어만 본다 (다른 상호작용물과 같은 관례).
-///
-/// 서버 권위 — 순간이동 판단은 전부 서버가 한다. 동기화할 자체 상태가 없어 NetworkVariable도 없다.
+/// 본부와 격리된 유치장을 잇는 철창문 — E를 누르면 서 있는 위치에 따라 셀로 들어가거나 나온다.
+/// 나올 때는 따라오던 반출 대상도 함께 나온다. 순간이동은 서버 권위다.
 /// </summary>
 public class JailDoor : NetworkBehaviour, IInteractable
 {
@@ -55,7 +21,6 @@ public class JailDoor : NetworkBehaviour, IInteractable
 
     private void Awake()
     {
-        // 감옥 방이 도시에서 떨어져 있어 부모 탐색으로는 닿지 않는다 — 장소 오브젝트라 씬 탐색을 쓴다
         if (m_intake == null)
             m_intake = App.Game.JailIntake;
 
@@ -63,35 +28,25 @@ public class JailDoor : NetworkBehaviour, IInteractable
             Debug.LogWarning("JailDoor: JailIntake를 찾지 못했다 — 출입·수감이 동작하지 않는다", this);
     }
 
-    // ---- 플레이어 상호작용 ----
-
-    /// <summary>
-    /// 항상 뜬다 — 문은 이제 조작이 아니라 출입구다. (사거리·가시선은 PlayerInteractor가 이미 걸러 준다)
-    /// 철창문이 열려 있든 닫혀 있든 막지 않는다: 잠금은 침입자(#231)를 막는 장치이지 경찰의 출입을
-    /// 막는 것이 아니고, 애초에 이 문은 잠금을 보지 않는다 (#744).
-    /// </summary>
+    /// <summary>항상 상호작용 가능하다(잠금과 무관한 출입구).</summary>
     public bool CanInteract(GameObject interactor) => m_intake != null;
 
-    /// <summary>
-    /// 조준 안내 (#664) — <see cref="ServerHandleInteract"/>의 갈래 순서를 그대로 따라간다.
-    /// 저쪽을 고치면 여기도 함께 고칠 것. 보는 값은 전부 클라에서 읽힌다.
-    /// </summary>
+    /// <summary>서 있는 위치에 따른 출입 동작 안내 문구를 돌려준다.</summary>
     public LocalizedString PromptLabel(GameObject interactor)
     {
         JailZone zone = m_intake != null ? m_intake.Zone : null;
         if (zone == null || interactor == null)
             return null;
 
-        if (zone.ContainsPoint(interactor.transform.position)) // 1. 나오기
+        if (zone.ContainsPoint(interactor.transform.position))
             return InteractPrompts.JailExit;
 
-        return InteractPrompts.JailEnter; // 2. 들어가기 (신병을 끌고 있으면 아래에서 막힌다)
+        return InteractPrompts.JailEnter;
     }
 
     /// <summary>신병을 끌고는 들어갈 수 없다 (갈래 2) — 눌러 보고 알던 것을 겨눌 때 알린다.</summary>
     public LocalizedString BlockedReason(GameObject interactor)
     {
-        // 나오기 갈래는 끌고 있어도 성립한다 — 들어가기로 갈 때만 막힌다.
         if (!ReferenceEquals(PromptLabel(interactor), InteractPrompts.JailEnter))
             return null;
 
@@ -101,23 +56,18 @@ public class JailDoor : NetworkBehaviour, IInteractable
             : null;
     }
 
-    /// <summary>E — 셀 안이면 나오기, 밖이면 들어가기. (#537/#744)</summary>
+    /// <summary>E — 셀 안이면 나오기, 밖이면 들어가기.</summary>
     public void Interact(GameObject interactor)
     {
         if (!IsSpawned)
         {
-            ServerHandleInteract(interactor); // 오프라인 단독 테스트
+            ServerHandleInteract(interactor);
             return;
         }
 
         RequestInteractRpc(new NetworkObjectReference(interactor.GetComponentInParent<NetworkObject>()));
     }
 
-    // 클라 입력을 서버로 넘긴다 — 소유권을 요구하지 않는다(씬 오브젝트이고 누구나 드나든다).
-    // 판정·순간이동 권위는 서버에 있으므로 여기서 상태를 직접 건드리지 않는다 (CCTVSwitcher와 같은 관례, #362).
-    //
-    // 누른 사람을 참조로 실어 보낸다: RPC의 senderClientId로 되찾으려면 서버가 그 클라의 플레이어
-    // 오브젝트를 다시 조회해야 하는데, 그쪽은 스폰 타이밍에 따라 null이 될 수 있다.
     [Rpc(SendTo.Server)]
     private void RequestInteractRpc(NetworkObjectReference interactorRef)
     {
@@ -125,7 +75,6 @@ public class JailDoor : NetworkBehaviour, IInteractable
             ServerHandleInteract(interactor.gameObject);
     }
 
-    // E 처리 — 서버(또는 오프라인) 전용. 갈래 순서는 클래스 주석 참고.
     private void ServerHandleInteract(GameObject interactor)
     {
         if (IsSpawned && !IsServer)
@@ -142,18 +91,12 @@ public class JailDoor : NetworkBehaviour, IInteractable
         if (mover == null)
             return;
 
-        // 1. 안에 있으면 나온다 — 따라오던 반출 대상도 함께 (JailIntake가 동행을 찾는다).
         if (zone.ContainsPoint(interactor.transform.position))
         {
             m_intake.ServerExitJail(mover);
             return;
         }
 
-        // 2. <b>신병을 끌고 있으면 들여보내지 않는다.</b>
-        //
-        // 이 문은 <b>플레이어만</b> 옮긴다(클래스 주석). 묶인 신병을 둔 채 들어가면 줄이 늘어나
-        // 끊기고, 신병은 문 밖에 홀로 남는다 — 판정도 안 받은 채 방치돼 결국 달아난다.
-        // 넣는 조작은 옆 버튼이므로 여기서는 막고 그쪽으로 보낸다.
         PlayerEscorter escorter = interactor.GetComponent<PlayerEscorter>();
         if (escorter != null && escorter.TetheredCount > 0)
         {
@@ -162,27 +105,15 @@ public class JailDoor : NetworkBehaviour, IInteractable
             return;
         }
 
-        // 3. 빈손 — 셀 안으로 들어간다. 신병 수감은 이 문이 아니라 옆 버튼이다 (JailIntakeButton)
         m_intake.ServerEnterJail(mover);
     }
 
-    // ---- 거절 안내 (누른 사람에게만) ----
-
-    /// <summary>
-    /// 누른 사람 <b>한 명에게만</b> 안내를 띄운다 — 서버(또는 오프라인)에서 호출. (#537)
-    ///
-    /// <see cref="OwnerFeedback"/>를 쓸 수 없다: 그 경로는 <b>오브젝트의 오너</b>에게
-    /// 보내는데 이 문은 씬 오브젝트라 오너가 서버다 — 원격 클라가 눌러도 호스트 화면에 뜬다.
-    /// 그래서 누른 클라를 지목해 보낸다.
-    ///
-    /// <b>문구를 RPC에 싣지 않는다.</b> <see cref="LocalizedString"/>은 직렬화해 보낼 수 없기도 하고,
-    /// 애초에 각 피어가 같은 프리팹 필드를 들고 있어 보낼 이유가 없다 — "띄워라"만 보내면 된다.
-    /// </summary>
+    /// <summary>누른 클라이언트 한 명에게만 안내를 띄운다. 서버(또는 오프라인)에서 호출한다.</summary>
     private void NotifyInteractor(GameObject interactor)
     {
         if (!IsSpawned)
         {
-            ShowNeedButtonLocal(); // 오프라인 단독 테스트
+            ShowNeedButtonLocal();
             return;
         }
 
@@ -192,7 +123,7 @@ public class JailDoor : NetworkBehaviour, IInteractable
 
         if (netObject.OwnerClientId == NetworkManager.LocalClientId)
         {
-            ShowNeedButtonLocal(); // 누른 사람이 호스트 자신 — 보낼 것 없이 로컬 표시
+            ShowNeedButtonLocal();
             return;
         }
 
@@ -202,6 +133,5 @@ public class JailDoor : NetworkBehaviour, IInteractable
     [Rpc(SendTo.SpecifiedInParams)]
     private void ShowNeedButtonRpc(RpcParams rpcParams) => ShowNeedButtonLocal();
 
-    // HUD가 없는 환경(데디케이티드 서버 등)에선 App.UI.Toast가 null이라 무동작 — PlayerPenaltyView와 같은 방침
     private void ShowNeedButtonLocal() => App.UI.Toast?.Show(m_needButtonMessage, m_messageSeconds);
 }

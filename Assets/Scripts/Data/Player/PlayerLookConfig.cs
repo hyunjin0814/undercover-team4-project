@@ -1,11 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// 플레이어 시점 튜닝 수치 (#967) — 스크립트마다 흩어져 있던 값을 한 자산에 모은다.
-/// 설계 정본: GDD 10-4 — 데이터는 ScriptableObject.
-///
-/// 스무딩 강도·시야각은 여기 없다 — 사람마다 달라야 하는 값이라 설정 창(<see cref="GameSettings"/>,
-/// #665)에 있다. 카메라·몸 루트 같은 인스턴스별 참조도 컴포넌트에 남는다.
+/// 플레이어 시점 튜닝 수치를 모은 SO.
 /// </summary>
 [CreateAssetMenu(fileName = "PlayerLookConfig", menuName = "Scriptable Objects/PlayerLookConfig")]
 public class PlayerLookConfig : ScriptableObject

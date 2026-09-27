@@ -3,7 +3,10 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-// 미니맵을 찍어주는 컴포넌트.
+/// <summary>
+/// 월드 영역을 UI 좌표로 환산해 미니맵 위에 대상 아이콘과 범위 오버레이를 그린다.
+/// 먹통 중에는 지도를 가린다.
+/// </summary>
 public class MinimapViewer : MonoBehaviour
 {
     [Header("맵이 덮는 월드 영역")]
@@ -13,8 +16,8 @@ public class MinimapViewer : MonoBehaviour
     [SerializeField] private float m_worldSizeZ = 100f;
 
     [Header("UI 참조")]
-    [SerializeField] private RectTransform m_mapRect;       // 정적 맵 이미지의 RectTransform
-    [SerializeField] private RectTransform m_iconContainer; // 아이콘 부모
+    [SerializeField] private RectTransform m_mapRect;
+    [SerializeField] private RectTransform m_iconContainer;
     [SerializeField] private Image m_iconPrefab;
 
     [Header("범위 오버레이 (#610)")]
@@ -62,19 +65,16 @@ public class MinimapViewer : MonoBehaviour
     private readonly Dictionary<MinimapTarget, Image> m_targetIcons = new();
     private readonly Dictionary<MinimapTarget, Image> m_targetAreas = new();
 
-    // 아이콘 안의 글자(CCTV 채널 번호) — 아이콘 프리팹에 있으면 잡히고 없으면 null이다.
     private readonly Dictionary<MinimapTarget, TMP_Text> m_targetLabels = new();
     private readonly List<MinimapTarget> m_removeBuffer = new();
 
     private RectTransform AreaParent => m_areaContainer != null ? m_areaContainer : m_iconContainer;
 
-    // 배선된 덮개가 켜진 채 저장돼 있으면 첫 먹통 전까지 지도가 검다 — 시작 상태를 여기서 맞춘다.
     private void Awake()
     {
         if (m_blackoutCover != null)
             m_blackoutCover.enabled = false;
 
-        // 크기를 비운 타겟이 돌아갈 기본값 — 프리팹은 인스턴스화하면서 바뀔 수 있으니 미리 재둔다
         if (m_iconPrefab != null)
             m_iconPrefabSize = m_iconPrefab.rectTransform.sizeDelta;
     }
@@ -84,8 +84,6 @@ public class MinimapViewer : MonoBehaviour
         ApplySceneAreaOnce();
         ApplyBlackout(IsBlackout());
 
-        // 먹통 중에는 아이콘을 돌리지 않는다 — 덮여서 보이지도 않고, 해제되는 프레임의 SyncIcons가
-        // 그동안의 스폰·디스폰을 한 번에 맞춘다.
         if (m_covered)
             return;
 
@@ -94,11 +92,6 @@ public class MinimapViewer : MonoBehaviour
         UpdatePositions();
     }
 
-    // ---- 맵 씬 연동 (#835) ----
-
-    // MinimapArea는 씬의 다른 오브젝트라 Awake 순서가 보장되지 않는다 — 모든 Awake/OnEnable이
-    // 끝난 뒤인 LateUpdate에서 읽으면 항상 준비돼 있다. Current가 아직 없으면(로드 도중) 다음
-    // 프레임에 다시 시도한다.
     private void ApplySceneAreaOnce()
     {
         if (m_sceneAreaApplied || !m_useSceneArea)
@@ -112,8 +105,6 @@ public class MinimapViewer : MonoBehaviour
         area.ApplyTo(mapImage, out m_worldCenterX, out m_worldCenterZ, out m_worldSizeX, out m_worldSizeZ);
         m_sceneAreaApplied = true;
     }
-
-    // ---- 카테고리 필터 (#835) ----
 
     private bool IsVisible(MinimapTarget target)
     {
@@ -129,10 +120,6 @@ public class MinimapViewer : MonoBehaviour
         return true;
     }
 
-    // ---- 내 위치 추종 크롭 (#835) ----
-
-    // 지도(m_mapRect)를 (worldSize * 픽셀/미터) 크기로 늘리고 로컬 플레이어 위치가 프레임 중앙에
-    // 오도록 이동시킨다. 두 축에 같은 배율을 써서 정사각형 크롭이 비율 왜곡 없이 보이게 한다.
     private void ApplyFollowCrop()
     {
         if (!m_followsLocalPlayer || m_viewFrame == null || m_mapRect == null)
@@ -160,19 +147,12 @@ public class MinimapViewer : MonoBehaviour
         return null;
     }
 
-    // ---- 먹통 차단 (#762) ----
-
-    // 먹통 플래그를 구독하지 않고 매 프레임 묻는다 (JailSirenButton과 같은 방식) — 미니맵은 씬에 놓인
-    // 프리팹이고 SuddenEventManager는 세션 스폰이라, 구독하려면 스폰을 기다리는 배선이 따로 필요하다.
-    // 여기는 이미 LateUpdate가 도는 자리라 묻는 편이 싸고, 복구·이벤트 도중 입장이 배선 없이 따라온다.
     private bool IsBlackout()
     {
         DeviceBlackoutEvent blackout = ResolveBlackout();
         return blackout != null && blackout.IsCommsBlackout;
     }
 
-    // ??= 대신 Unity의 == 오버로드로 확인한다 — 파괴된 참조(fake null)를 통과시키면 다음 라운드에서
-    // 죽은 컴포넌트를 계속 붙들고 묻는다. (HqPanelView의 '?. 금지' 주석과 같은 이유)
     private DeviceBlackoutEvent ResolveBlackout()
     {
         if (m_blackout != null)
@@ -183,8 +163,6 @@ public class MinimapViewer : MonoBehaviour
         return m_blackout;
     }
 
-    // CCTV가 먹통에 모니터를 검게 지우는 것과 같은 언어다(CCTVSwitcher.ClearMonitor) — 지도와 아이콘을
-    // 통째로 덮는다. 지형까지 안 보이는 것이 의도다.
     private void ApplyBlackout(bool blackout)
     {
         if (blackout == m_covered)
@@ -196,15 +174,12 @@ public class MinimapViewer : MonoBehaviour
         if (cover == null)
             return;
 
-        // 켤 때마다 맨 앞으로 올린다 — 아이콘은 지도의 자식이라 나중에 만들어진 것이 위에 그려진다.
         if (blackout)
             cover.rectTransform.SetAsLastSibling();
 
         cover.enabled = blackout;
     }
 
-    // 배선을 잊어도 동작하게 런타임에 만든다 (RopeDragView.Build와 같은 방침). 지도를 부모로 잡고
-    // 네 변을 붙여 늘리므로 지도 크기가 바뀌어도 따라간다.
     private Image EnsureCover()
     {
         if (m_blackoutCover != null)
@@ -212,7 +187,7 @@ public class MinimapViewer : MonoBehaviour
 
         if (m_mapRect == null)
         {
-            enabled = false; // 지도 참조가 없으면 가릴 대상도 없다 — 매 프레임 헛돌지 않게 스스로 꺼진다
+            enabled = false;
             Debug.LogWarning($"MinimapViewer: m_mapRect가 없어 먹통 차단을 만들 수 없다. {name} 프리팹에 지정할 것", this);
             return null;
         }
@@ -227,28 +202,26 @@ public class MinimapViewer : MonoBehaviour
 
         m_blackoutCover = built.GetComponent<Image>();
         m_blackoutCover.color = Color.black;
-        m_blackoutCover.raycastTarget = false; // 지도 위 클릭을 먹지 않는다
+        m_blackoutCover.raycastTarget = false;
         m_blackoutCover.enabled = false;
         return m_blackoutCover;
     }
 
-    private void SyncIcons()    // 레지스트리와 아이콘 개수 맞추기 (스폰/디스폰 대응)
+    private void SyncIcons()
     {
         m_removeBuffer.Clear();
         foreach (var pair in m_targetIcons)
         {
-            // 레지스트리에서 없어졌거나(스폰 해제) 필터가 바뀌어 더는 안 보여야 하면 제거 대상
             if (pair.Key == null || !MinimapTarget.ActiveTargets.Contains(pair.Key) || !IsVisible(pair.Key))
                 m_removeBuffer.Add(pair.Key);
         }
         foreach (var target in m_removeBuffer) 
         {
-            if (m_targetIcons[target] != null)  // 아이콘이 존재하면 제거
+            if (m_targetIcons[target] != null)
                 Destroy(m_targetIcons[target].gameObject);
             m_targetIcons.Remove(target);
-            m_targetLabels.Remove(target); // 글자는 아이콘의 자식이라 같이 사라진다
+            m_targetLabels.Remove(target);
 
-            // 범위 오버레이도 같은 수명 — 납치가 끝나 디스폰되면 아이콘과 함께 사라진다
             if (m_targetAreas.TryGetValue(target, out Image area))
             {
                 if (area != null)
@@ -256,12 +229,11 @@ public class MinimapViewer : MonoBehaviour
                 m_targetAreas.Remove(target);
             }
         }
-        foreach (var target in MinimapTarget.ActiveTargets) // 레지스트리 타겟 순회
+        foreach (var target in MinimapTarget.ActiveTargets)
         {
             if (target == null || m_targetIcons.ContainsKey(target) || !IsVisible(target))
                 continue;
 
-            // ▼ 아이콘 생성, 초기화
             Image icon = Instantiate(m_iconPrefab, m_iconContainer);
 
             if (target.IconSprite != null)
@@ -271,18 +243,16 @@ public class MinimapViewer : MonoBehaviour
             m_targetIcons.Add(target, icon);
             m_targetLabels.Add(target, icon.GetComponentInChildren<TMP_Text>(true));
 
-            // ▼ 범위 오버레이 — 반경이 있는 대상에만 만든다.
-            // "범위가 있는가"는 프리팹 값이라 여기서 한 번만 가르고, 크기·색은 매 프레임 갱신한다.
             if (m_areaPrefab != null && target.AreaRadius > 0f)
             {
                 Image area = Instantiate(m_areaPrefab, AreaParent);
-                area.rectTransform.SetAsFirstSibling(); // 아이콘에 깔린다 (부모를 공유할 때를 대비)
+                area.rectTransform.SetAsFirstSibling();
                 m_targetAreas.Add(target, area);
             }
         }
     }
 
-    private void UpdatePositions()  // 아이콘 위치, 색 갱신
+    private void UpdatePositions()
     {
         foreach (var pair in m_targetIcons)
         {
@@ -304,9 +274,6 @@ public class MinimapViewer : MonoBehaviour
         }
     }
 
-    // 글자는 보는 사람 기준으로 세운다. 각도를 빼는 것으로는 부족하다 — 아이콘의 IconAngle 말고도
-    // 미니맵 캔버스 자체가 눕혀져 있을 수 있다(Apocalypse는 z -90°). 화면 평면은 그대로 두고
-    // 위쪽만 월드 up으로 맞추면 위쪽 무엇이 돌아가 있든 숫자는 똑바로 선다.
     private void UpdateLabel(MinimapTarget target)
     {
         if (!m_targetLabels.TryGetValue(target, out TMP_Text label) || label == null)
@@ -322,14 +289,12 @@ public class MinimapViewer : MonoBehaviour
             return;
 
         if (label.text != text)
-            label.text = text; // TMP는 대입만 해도 메시를 다시 만든다 — 바뀔 때만 넣는다
+            label.text = text;
 
-        // 글자 색은 건드리지 않는다 — IconColor는 아이콘 원판이 이미 쓰고 있어서, 같이 칠하면
-        // 같은 색끼리 겹쳐 글자가 사라진다. 대비색은 아이콘 프리팹에 authoring한다.
         RectTransform rect = label.rectTransform;
         Vector3 forward = rect.forward;
         Vector3 up = Mathf.Abs(Vector3.Dot(forward, Vector3.up)) > 0.99f
-            ? m_iconContainer.up // 천장·바닥에 눕힌 화면 — 월드 up으로는 방향이 안 정해진다
+            ? m_iconContainer.up
             : Vector3.up;
 
         rect.rotation = Quaternion.LookRotation(forward, up);
@@ -340,15 +305,12 @@ public class MinimapViewer : MonoBehaviour
             ? new Vector2(target.IconSize, target.IconSize)
             : m_iconPrefabSize;
 
-    // 월드 yaw는 위에서 볼 때 시계 방향이고 UI z 회전은 반시계다 — 부호를 뒤집어야 지도에서
-    // 아이콘이 실제로 보는 쪽을 가리킨다. 스프라이트가 위(+Y)를 보고 있다는 전제.
     private float IconAngleOf(MinimapTarget target)
     {
         float facing = target.IconFollowsFacing ? -target.transform.eulerAngles.y : 0f;
         return facing + target.IconAngle + m_iconAngleCorrection;
     }
 
-    // 월드 XZ -> 맵 좌표
     private Vector2 WorldToMap(Vector3 worldPos)
     {
         float u = (worldPos.x - m_worldCenterX) / m_worldSizeX;
@@ -358,8 +320,6 @@ public class MinimapViewer : MonoBehaviour
         return new Vector2(u * mapSize.x, v * mapSize.y);
     }
 
-    // 월드 반경(m) -> 오버레이 지름(px). 축마다 따로 재는 이유는 WorldToMap과 같다 —
-    // 맵이 XZ로 다르게 눌려 있으면 원도 같이 눌려야 실제 범위와 겹친다.
     private Vector2 WorldRadiusToMapSize(float radius)
     {
         Vector2 mapSize = m_mapRect.rect.size;

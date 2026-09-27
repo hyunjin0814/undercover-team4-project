@@ -7,18 +7,8 @@ using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 
 /// <summary>
-/// 로비 명단 카드에 넣을 <b>얼굴</b>을 만든다 — 무대에 캐릭터를 세우고 머리만 잡아 RenderTexture로 굽는다. (#598)
-///
-/// 무대는 <b>로비와 상점 두 곳</b>에 있다 (#863) — 두 곳 모두 명부 전원의 조합을 굽는다.
-///
-/// 그림은 사람이 아니라 <b>색 조합 단위</b>로 굽는다 (#432) — 같은 색을 고른 두 사람은 같은 얼굴이다.
-/// 무대는 씬 밖 먼 곳에 세운다: 전용 레이어 없이도 카메라 far clip이 짧아 아무것도 안 잡힌다.
-///
-/// 실행 순서를 패널보다 앞에 둔다 — 카드가 첫 그리기에서 얼굴을 받아 간다. 텍스처는 요청 즉시
-/// 건네고 그림만 나중에 채운다.
-///
-/// <b>Awake에서 굽지 않는다</b> — URP 첫 프레임 전에는 환경광·반사가 준비되지 않아 실행할 때마다
-/// 밝기가 달라진다. 첫 프레임이 끝난 뒤에 굽는다.
+/// 로비·상점 명단 카드용 얼굴을 무대 캐릭터로 렌더해 RenderTexture로 굽는다(색·치장 조합 단위).
+/// 첫 프레임이 끝난 뒤 굽는다.
 /// </summary>
 [DefaultExecutionOrder((int)EExecutionOrder.UIContent)]
 public class LobbyPortraitStage : MonoBehaviour
@@ -65,11 +55,6 @@ public class LobbyPortraitStage : MonoBehaviour
 
     [SerializeField] private Vector2Int m_bodyTextureSize = new Vector2Int(384, 640);
 
-    /// <summary>
-    /// 얼굴 한 장을 가리키는 열쇠 — <b>색 + 치장</b>이다 (#432 · #818).
-    /// 색만으로 잡으면 같은 색을 고른 두 사람이 같은 얼굴을 쓰는데, 모자가 생긴 뒤로는
-    /// 그 둘의 머리가 서로 다르다. 같은 조합이면 여전히 한 장을 나눠 쓴다.
-    /// </summary>
     public readonly struct PortraitKey : System.IEquatable<PortraitKey>
     {
         public readonly PlayerColorSet Colors;
@@ -92,44 +77,34 @@ public class LobbyPortraitStage : MonoBehaviour
         public override int GetHashCode() => (Colors.Key * 397) ^ Accessories.GetHashCode();
     }
 
-    // 색·치장 조합 → 그 조합으로 구운 얼굴
     private readonly Dictionary<PortraitKey, RenderTexture> m_portraits =
         new Dictionary<PortraitKey, RenderTexture>();
-    private readonly HashSet<PortraitKey> m_pending = new HashSet<PortraitKey>(); // 아직 그림이 안 채워진 것
-    private readonly HashSet<PortraitKey> m_live = new HashSet<PortraitKey>(); // 지금 쓰이는 조합
+    private readonly HashSet<PortraitKey> m_pending = new HashSet<PortraitKey>();
+    private readonly HashSet<PortraitKey> m_live = new HashSet<PortraitKey>();
     private readonly List<PortraitKey> m_stale = new List<PortraitKey>();
 
     private Camera m_camera;
     private Camera m_bodyCamera;
     private RenderTexture m_bodyTexture;
-    private bool m_bodyDirty = true; // 내 색이 바뀌면 다시 그린다
+    private bool m_bodyDirty = true;
     private BodyTint m_tint;
-    private Transform m_stageHead; // 치장을 붙일 무대 모델의 머리 본 (#818)
+    private Transform m_stageHead;
     private readonly GameObject[] m_accessories = new GameObject[System.Enum.GetValues(
         typeof(EAccessorySlot)
     ).Length];
     private readonly GameObject[] m_worn = new GameObject[System.Enum.GetValues(
         typeof(EAccessorySlot)
-    ).Length]; // 슬롯마다 지금 붙어 있는 원본 프리팹 — 같은 것이면 다시 만들지 않는다
-    private readonly Color[] m_tintBuffer = new Color[3]; // 인덱스 = EBodyPart
+    ).Length];
+    private readonly Color[] m_tintBuffer = new Color[3];
     private bool m_baking;
-    private bool m_lit; // 첫 프레임(조명 확정)을 지났는가
-    private SessionRoster m_roster; // 전원의 조합을 굽는 근거 (#863)
+    private bool m_lit;
+    private SessionRoster m_roster;
 
-    // 무대가 있는 씬을 떠나도 살려 두는 얼굴들 — 게임 씬에서 다시 구우면 맵 조명을 타 어둡게
-    // 나오므로, 직전에 거친 무대(=상점)에서 구운 것을 쓴다. 명부에서 사라진 조합은 EvictUnused가
-    // 놓아 준다. (#720 · #863)
-    // 열쇠는 색·치장 조합 — 게임 씬 상황판이 각 플레이어의 조합으로 찾아 간다. (#432 · #818)
-    //
-    // RenderTexture가 아니라 Texture2D인 것은 씬 너머로 들고 가야 해서다 — RenderTexture는
-    // 오브젝트만 남고 GPU 쪽은 놓여, 게임 씬에서는 빈 칸이 그려졌다.
     private static readonly Dictionary<PortraitKey, Texture2D> s_sessionPortraits =
         new Dictionary<PortraitKey, Texture2D>();
 
-    /// <summary>내 색·치장으로 구운 얼굴. (#432 · #818)</summary>
     public Texture Portrait => GetPortrait(PortraitKey.Mine);
 
-    /// <summary>내 색으로 그린 전신 — 색 고르는 창이 쓴다. 무대가 없으면 null. (#432)</summary>
     public Texture BodyPreview
     {
         get
@@ -143,25 +118,19 @@ public class LobbyPortraitStage : MonoBehaviour
         }
     }
 
-    /// <summary>로비에서 구워 세션 동안 유지되는 <b>내</b> 얼굴. 준비 전이면 null. (#720)</summary>
     public static Texture SessionPortrait => GetSessionPortrait(PortraitKey.Mine);
 
-    // 도메인 리로드를 끄면 지난 플레이의 (이미 파괴된) 텍스처 참조가 static에 남는다 —
-    // Unity 가짜 null이라 받는 쪽 null 검사도 통과한다. 플레이 시작마다 비운다. (GameSettings.Load와 같은 이유)
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     private static void ResetStatics() => s_sessionPortraits.Clear();
 
-    /// <summary>그 조합으로 로비에서 구워 둔 얼굴 — 게임 씬 UI가 읽는다. 없으면 null. (#432)</summary>
+    /// <summary>그 조합으로 로비에서 구워 둔 얼굴 — 게임 씬 UI가 읽는다. 없으면 null.</summary>
     public static Texture GetSessionPortrait(PlayerColorSet colors, AccessorySet accessories) =>
         GetSessionPortrait(new PortraitKey(colors, accessories));
 
     public static Texture GetSessionPortrait(PortraitKey key) =>
         s_sessionPortraits.TryGetValue(key, out Texture2D portrait) ? portrait : null;
 
-    /// <summary>
-    /// 그 색 조합으로 구운 얼굴 — 무대가 없으면 null. 처음 묻는 조합이면 빈 텍스처를 먼저 건네고
-    /// 그림은 곧 채운다.
-    /// </summary>
+    /// <summary>색·치장 조합의 얼굴 텍스처를 돌려준다. 처음 요청이면 빈 텍스처를 먼저 주고 곧 채운다. 무대가 없으면 null.</summary>
     public Texture GetPortrait(PlayerColorSet colors, AccessorySet accessories) =>
         GetPortrait(new PortraitKey(colors, accessories));
 
@@ -192,7 +161,6 @@ public class LobbyPortraitStage : MonoBehaviour
         BuildStage();
     }
 
-    // 내 색이 바뀌면 세션용 얼굴을 다시 챙긴다 — 게임 씬 상황판이 예전 색을 들고 가지 않게 (#432)
     private void OnEnable()
     {
         CosmeticLoadout.OnPlayerColorChanged += HandleOwnColorChanged;
@@ -207,14 +175,12 @@ public class LobbyPortraitStage : MonoBehaviour
         UnbindRoster();
     }
 
-    // 아직 못 잡았을 때만 도는 폴링 — 잡는 즉시 이벤트 구동으로 넘어간다 (LobbyRosterPanel과 같은 방식)
     private void Update()
     {
         if (m_roster == null)
             TryBindRoster();
     }
 
-    // 명부는 세션 상주라 씬에 없다 — App 경유로 잡는다. 세션 없이 씬을 직접 Play하면 끝내 null이다.
     private void TryBindRoster()
     {
         SessionRoster roster = App.Game.Roster;
@@ -223,7 +189,7 @@ public class LobbyPortraitStage : MonoBehaviour
 
         m_roster = roster;
         m_roster.Players.OnListChanged += HandleRosterChanged;
-        m_roster.OnListReady += BakeRoster; // late-join은 초기 내용을 OnListChanged로 받지 못한다
+        m_roster.OnListReady += BakeRoster;
         BakeRoster();
     }
 
@@ -243,8 +209,7 @@ public class LobbyPortraitStage : MonoBehaviour
         BakeNow();
     }
 
-    /// <summary>프레임을 기다리지 않고 지금 굽는다 — 출동 직전 외형 변경이 씬 전환에 지지 않게. (#863)</summary>
-    // m_baking을 보지 않는다 — 직전 GetPortrait이 이미 그 값을 동기적으로 켜 둬서, 보면 항상 걸려 절대 안 돈다.
+    /// <summary>프레임을 기다리지 않고 지금 굽는다 — 출동 직전 외형 변경이 씬 전환에 지지 않게.</summary>
     private void BakeNow()
     {
         if (!m_lit || m_camera == null || m_pending.Count == 0)
@@ -253,7 +218,7 @@ public class LobbyPortraitStage : MonoBehaviour
         BakePending();
     }
 
-    /// <summary>명부에 있는 사람 전부의 얼굴을 확보한다. (#863)</summary>
+    /// <summary>명부에 있는 사람 전부의 얼굴을 확보한다.</summary>
     private void BakeRoster()
     {
         if (m_roster == null || !m_roster.IsSpawned)
@@ -265,8 +230,6 @@ public class LobbyPortraitStage : MonoBehaviour
 
     private void OnDestroy()
     {
-        // RenderTexture는 GC 대상이 아니다 — 씬을 오갈 때마다 쌓이지 않게 직접 놓는다.
-        // 세션용 얼굴은 별도 Texture2D라 여기서 놓지 않는다 — 다음 씬이 그것을 쓴다 (#720 · #863)
         foreach (RenderTexture texture in m_portraits.Values)
         {
             if (texture == null)
@@ -286,28 +249,20 @@ public class LobbyPortraitStage : MonoBehaviour
         m_bodyTexture = null;
     }
 
-    // 내 색 얼굴을 확보해 두면 굽기가 끝날 때 세션용으로 옮겨진다. 전신도 같이 다시 그린다.
     private void HandleOwnColorChanged(EBodyPart _)
     {
         m_bodyDirty = true;
         GetPortrait(PortraitKey.Mine);
     }
 
-    // 치장은 전신 미리보기에만 태운다 — 얼굴 카드는 색 조합 단위로 캐시되므로(같은 색이면 같은 그림)
-    // 여기에 내 모자를 태우면 남의 카드에도 내 모자가 붙는다. (#818)
     private void HandleOwnAccessoryChanged(EAccessorySlot _)
     {
         m_bodyDirty = true;
         GetPortrait(PortraitKey.Mine);
-        BakeAsync().Forget(); // 이미 구워 둔 조합이면 GetPortrait가 굽기를 걸지 않는다
+        BakeAsync().Forget();
     }
 
-    /// <summary>
-    /// 무대 모델에 그 사람의 치장을 갈아 끼운다 (#818) — <c>PlayerAccessories.Apply</c>와 같은 규칙이다.
-    /// 색(<see cref="Tint"/>)과 마찬가지로 굽기 직전에 갈아입히므로 무대 하나로 모두의 얼굴을 굽는다.
-    /// <b>즉시 파괴</b>해야 한다 — 굽기는 한 프레임 안에서 조합마다 도는데, 지연 파괴면 앞사람 모자가
-    /// 다음 얼굴에 함께 찍힌다.
-    /// </summary>
+    /// <summary>무대 모델의 치장을 즉시 갈아 끼운다.</summary>
     private void Wear(AccessorySet accessories)
     {
         if (m_stageHead == null || m_accessoryCatalog == null)
@@ -322,7 +277,7 @@ public class LobbyPortraitStage : MonoBehaviour
                 ? null
                 : m_accessoryCatalog.Get(slot, accessories[slot]);
             if (m_worn[i] == prefab && (prefab == null) == (m_accessories[i] == null))
-                continue; // 같은 것을 이미 쓰고 있다
+                continue;
 
             if (m_accessories[i] != null)
             {
@@ -341,7 +296,6 @@ public class LobbyPortraitStage : MonoBehaviour
 
     private void BuildStage()
     {
-        // 세션용 얼굴은 여기서 비우지 않는다 — 상점 무대가 로비에서 구운 것을 지워 버렸다 (#863)
         var stage = new GameObject("PortraitStage");
         stage.transform.SetParent(transform, false);
         stage.transform.position = m_stageOrigin;
@@ -349,7 +303,7 @@ public class LobbyPortraitStage : MonoBehaviour
         GameObject model = Instantiate(m_characterPrefab, m_stageOrigin, Quaternion.identity, stage.transform);
         model.name = "PortraitCharacter";
 
-        m_tint = model.AddComponent<BodyTint>(); // 색은 BodyTint 하나에만 맡긴다 (#478)
+        m_tint = model.AddComponent<BodyTint>();
 
         Transform head = FindDeep(model.transform, m_headBoneName);
         if (head == null)
@@ -365,17 +319,15 @@ public class LobbyPortraitStage : MonoBehaviour
         camGo.transform.SetParent(stage.transform, false);
         m_camera = camGo.AddComponent<Camera>();
         m_camera.clearFlags = CameraClearFlags.SolidColor;
-        m_camera.backgroundColor = new Color(0f, 0f, 0f, 0f); // 카드 종이색이 비치게 투명 배경
+        m_camera.backgroundColor = new Color(0f, 0f, 0f, 0f);
         m_camera.fieldOfView = m_fieldOfView;
         m_camera.nearClipPlane = 0.05f;
-        m_camera.farClipPlane = 5f; // 무대 밖은 아무것도 안 잡힌다
+        m_camera.farClipPlane = 5f;
 
-        // 캐릭터 정면(모델 forward) 쪽에서 얼굴 높이로 바라본다
         Vector3 focus = head.position + Vector3.up * m_heightOffset;
         camGo.transform.position = focus + model.transform.forward * m_distance;
         camGo.transform.LookAt(focus);
 
-        // 모델도 카메라도 움직이지 않으므로 필요할 때만 그린다 — 켜 둔 채로 두면 매 프레임 다시 그린다.
         m_camera.enabled = false;
 
         m_bodyTexture = CreateTexture(m_bodyTextureSize, "LobbyBodyPreview");
@@ -394,7 +346,6 @@ public class LobbyPortraitStage : MonoBehaviour
         bodyGo.transform.position = bodyFocus + model.transform.forward * m_bodyDistance;
         bodyGo.transform.LookAt(bodyFocus);
 
-        // 내 얼굴은 아무도 묻기 전에 챙겨 둔다 — 게임 씬으로 들고 갈 그림이라 로비에서 구워야 한다
         GetPortrait(PortraitKey.Mine);
     }
 
@@ -409,7 +360,6 @@ public class LobbyPortraitStage : MonoBehaviour
             antiAliasing = 2,
         };
 
-        // 굽기 전까지 카드에 걸릴 텍스처다 — 새 RenderTexture의 내용은 보장되지 않아 명시적으로 비운다
         texture.Create();
         RenderTexture prev = RenderTexture.active;
         RenderTexture.active = texture;
@@ -419,8 +369,6 @@ public class LobbyPortraitStage : MonoBehaviour
         return texture;
     }
 
-    // 조명이 확정된 뒤에 굽는다 (클래스 주석 참고). 여러 색이 한꺼번에 밀려도 굽기는 하나만 돈다 —
-    // 명단이 바뀔 때마다 카드 전부가 얼굴을 다시 물어 오기 때문이다.
     private async UniTaskVoid BakeAsync()
     {
         if (m_baking)
@@ -431,13 +379,10 @@ public class LobbyPortraitStage : MonoBehaviour
 
         try
         {
-            // URP가 첫 프레임을 온전히 끝낼 때까지 기다린다 — 그래야 조명/환경 셰이더 상수가 채워져 있다
             await UniTask.WaitForEndOfFrame(token);
 
             if (!m_lit)
             {
-                // 스카이박스 환경광과 기본 반사를 지금 확정한다 — 로드 직후엔 아직 갱신 전일 수 있다.
-                // 갱신은 프레임 끝에 반영되므로 한 프레임 더 기다린 뒤 굽는다.
                 DynamicGI.UpdateEnvironment();
                 await UniTask.WaitForEndOfFrame(token);
                 m_lit = true;
@@ -479,8 +424,6 @@ public class LobbyPortraitStage : MonoBehaviour
         EvictUnused();
     }
 
-    // 쓰지 않는 조합을 버린다 — 팔레트를 눌러 볼 때마다 조합이 하나씩 늘어 그대로 두면
-    // 텍스처가 세션 내내 쌓인다. 살아 있는 것은 명부에 있는 색과 내 색뿐이다. (#432)
     private void EvictUnused()
     {
         m_live.Clear();
@@ -497,12 +440,10 @@ public class LobbyPortraitStage : MonoBehaviour
 
         Sweep(m_portraits);
 
-        // 세션용은 명부를 읽을 수 있을 때만 쓸어 낸다 — 못 읽는 동안 버리면 직전 씬에서 구운 것이 통째로 날아간다 (#863)
         if (rosterReady)
             Sweep(s_sessionPortraits);
     }
 
-    // 명부에 없는 조합의 텍스처를 놓는다 — RenderTexture는 GPU 쪽도 함께 반납한다
     private void Sweep<TTexture>(Dictionary<PortraitKey, TTexture> cache) where TTexture : Texture
     {
         m_stale.Clear();
@@ -526,21 +467,19 @@ public class LobbyPortraitStage : MonoBehaviour
         }
     }
 
-    // 창에 띄울 전신 — 내 색으로만 그린다
     private void BakeBody()
     {
         if (!m_bodyDirty || m_bodyCamera == null || m_bodyTexture == null)
             return;
 
         Tint(PlayerColorSet.FromSettings());
-        Wear(AccessorySet.FromSettings()); // 얼굴을 굽느라 남의 것을 입고 있을 수 있다
+        Wear(AccessorySet.FromSettings());
         m_bodyCamera.targetTexture = m_bodyTexture;
         Render(m_bodyCamera, m_bodyTexture);
         m_bodyCamera.targetTexture = null;
         m_bodyDirty = false;
     }
 
-    // 무대 모델을 그 사람 색으로 갈아입힌다 — 얼굴만 잡지만 부위 색을 그대로 태운다 (#432)
     private void Tint(PlayerColorSet colors)
     {
         if (m_tint == null || m_palette == null)
@@ -552,10 +491,8 @@ public class LobbyPortraitStage : MonoBehaviour
         m_tint.SetBase(m_tintBuffer, m_tintBuffer[(int)EBodyPart.Torso]);
     }
 
-    // 씬 너머로 들고 갈 Texture2D로 옮겨 둔다 — RenderTexture는 씬을 넘기면 내용이 날아간다. (#720/#432)
     private void CaptureSession(PortraitKey key, RenderTexture source)
     {
-        // MSAA가 걸린 판은 그대로 읽을 수 없다 — 안티에일리어싱 없는 임시 판에 한 번 옮긴다
         RenderTexture resolved = RenderTexture.GetTemporary(source.width, source.height, 0, RenderTextureFormat.ARGB32);
         Graphics.Blit(source, resolved);
 
@@ -580,7 +517,6 @@ public class LobbyPortraitStage : MonoBehaviour
 
     private void RenderPortrait(RenderTexture destination) => Render(m_camera, destination);
 
-    // SRP에서 Camera.Render()는 파이프라인 밖 경로다 — URP가 지원하는 렌더 요청을 먼저 쓴다.
     private static void Render(Camera camera, RenderTexture destination)
     {
         if (camera == null || destination == null)
@@ -593,7 +529,6 @@ public class LobbyPortraitStage : MonoBehaviour
             camera.Render();
     }
 
-    // 본 이름은 계층 어디에 있을지 모른다 — 이름으로 깊이 우선 탐색한다.
     private static Transform FindDeep(Transform root, string name)
     {
         if (root.name == name)

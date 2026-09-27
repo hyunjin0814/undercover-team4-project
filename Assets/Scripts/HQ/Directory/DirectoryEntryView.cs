@@ -2,7 +2,7 @@ using TMPro;
 using UnityEngine;
 
 /// <summary>
-/// 인명부 한 줄 — 정본 이름/종족/세력. CitizenDirectoryView가 Bind로 채운다. 표시 전용. (#223)
+/// 인명부 한 줄 — 정본 이름/종족/세력. CitizenDirectoryView가 Bind로 채운다. 표시 전용.
 /// </summary>
 public class DirectoryEntryView : MonoBehaviour
 {
@@ -19,7 +19,6 @@ public class DirectoryEntryView : MonoBehaviour
     {
         if (m_nameText != null)
             m_nameText.text = entry.Name.ToString();
-        // 표기 문구는 지금 언어로 조회한다 — 언어가 바뀌면 CitizenDirectoryView가 목록을 다시 그린다. (#497)
         if (m_typeText != null)
             m_typeText.text = OfficialRecords.TypeName(entry.Type);
         if (m_factionText != null)

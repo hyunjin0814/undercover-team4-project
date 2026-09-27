@@ -3,8 +3,7 @@ using Cysharp.Threading.Tasks;
 using UnityEngine;
 
 /// <summary>
-/// 본부 밖 배달 지점 (#824). HQ.prefab과 맵이 별개 프리팹이라 ShopDelivery가 인스펙터로 참조할 수
-/// 없어 BombCrate.All과 같은 방식으로 씬에서 찾는다. 패드가 없는 씬(Tutorial 등)은 폴백한다.
+/// 본부 밖 배달 지점 마커. ShopDelivery가 씬에서 찾아 배달 상자를 놓는다.
 /// </summary>
 public class DeliveryPad : MonoBehaviour
 {
@@ -51,7 +50,6 @@ public class DeliveryPad : MonoBehaviour
     public Vector3 ResolveCratePosition() =>
         DeliveryScatter.SnapToGround(DeliveryPoint.position, m_groundMask);
 
-    // 로컬 전용 연출 — 상자엔 NetworkTransform이 없어 각 피어가 자기 화면에서만 움직여도 무방하다.
     public void PlayDroneDelivery(Transform crate, float landSeconds) =>
         PlayDroneDeliveryAsync(crate, landSeconds).Forget();
 
@@ -60,8 +58,6 @@ public class DeliveryPad : MonoBehaviour
         if (crate == null)
             return;
 
-        // crate.position(초기 동기화 값)이 아니라 착지 지점을 다시 계산한다 — 호스트가
-        // 이미 상승시킨 뒤 스폰 메시지가 전송되면 클라가 받는 초기 위치가 공중일 수 있다 (#884).
         Vector3 landedPosition = ResolveCratePosition();
         Vector3 startPosition = landedPosition + Vector3.up * m_descentHeight;
         var cancellation = crate.gameObject.GetCancellationTokenOnDestroy();
@@ -72,7 +68,6 @@ public class DeliveryPad : MonoBehaviour
 
         App.Sound?.PlaySfxAt(EAudioClip.DroneApproach, startPosition);
 
-        // 하강 — 드론이 상자를 매달고 내려온다.
         float elapsed = 0f;
         while (elapsed < landSeconds)
         {
@@ -95,7 +90,6 @@ public class DeliveryPad : MonoBehaviour
         if (drone == null)
             return;
 
-        // 내려놓고 다시 떠오른다 — 착지 판정(HasLanded)엔 영향 없는 뒷정리 연출이다.
         try
         {
             Vector3 hoverPosition = landedPosition + Vector3.up * m_droneHoverOffset;

@@ -1,12 +1,8 @@
-// Assets/Scripts/UI/CrosshairPreviewView.cs
 using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// 크로스헤어 설정 패널의 실시간 미리보기 (#945) — 실제 게임 크로스헤어(HUD의 CrosshairUI)와
-/// 같은 <see cref="CrosshairRenderer"/> 계산을 쓰므로 미리보기와 실제가 항상 같은 그림이 된다.
-/// CommonManagerBase가 아닌 평범한 컴포넌트다 — 씬에 이미 있는 CrosshairUI와 별개로,
-/// 패널이 열려 있는 동안만 켜지는 인스턴스라 매니저 등록이 필요 없다.
+/// 크로스헤어 설정 패널의 실시간 미리보기 — 실제 HUD와 같은 CrosshairRenderer로 그린다.
 /// </summary>
 public class CrosshairPreviewView : MonoBehaviour
 {

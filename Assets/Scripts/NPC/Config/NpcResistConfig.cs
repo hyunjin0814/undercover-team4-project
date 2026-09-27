@@ -1,9 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// 저항(Attack) 전투 튜닝 값. (#79, #220, #259 — NpcController에서 분리)
-/// 체력·타격량은 NpcCommonConfig로 이관됐다 (#366) — 저항 전용 값이 아니게 됐기 때문이다.
-/// ThreatSearchRadiusMultiplier는 AttackRange와 곱해져 위협 탐색 반경(#205/#213)을 정한다.
+/// 저항(Attack) 전투 튜닝 SO — 사거리·스윙 타이밍·포기 거리 등.
 /// </summary>
 [CreateAssetMenu(fileName = "NpcResistConfig", menuName = "Undercover/NPC/Resist Config")]
 public class NpcResistConfig : ScriptableObject
@@ -46,8 +44,6 @@ public class NpcResistConfig : ScriptableObject
     public int AttackDamage => m_attackDamage;
     public float NoTargetIdleSeconds => m_noTargetIdleSeconds;
 
-    /// <summary>유발자를 표적에서 놓는 거리(m). 도주의 이탈 거리와 같은 기준이다 — "쫓다가 포기하는
-    /// 거리"와 "도망쳐서 벗어난 거리"가 어긋나면 같은 상황을 두 규칙이 다르게 판정한다. (#366)</summary>
     public float GiveUpDistance => m_giveUpDistance;
     public float StrikeOffsetSeconds => m_strikeOffsetSeconds;
     public float AttackConeAngle => m_attackConeAngle;
@@ -55,16 +51,12 @@ public class NpcResistConfig : ScriptableObject
     public float SwingHoldSeconds => m_swingHoldSeconds;
     public float ThreatSearchRadiusMultiplier => m_threatSearchRadiusMultiplier;
 
-    /// <summary>저항 추격 중 에이전트 가속도 — 곧 <b>선회 반경</b>이다(반경 = 속도² / 이 값). (#568 후속)
-    /// <see cref="AttackTurnSpeed"/>와 혼동하지 말 것: 저쪽은 부채꼴 기준 방향을 맞추는 <b>몸통 회전</b>이고,
-    /// 이쪽은 <b>이동 궤적</b>을 정한다. 저항 중에는 updateRotation이 꺼져 있어 각속도가 궤적에 관여하지 않는다.</summary>
     public float ChaseAcceleration => m_chaseAcceleration;
 
-    /// <summary>스윙 변형 개수 — 오프셋 배열 길이(=블렌드 트리 클립 수). 비어 있으면 단일 변형(0)으로 폴백. (#220)</summary>
     public int SwingVariantCount =>
         m_swingImpactOffsets != null && m_swingImpactOffsets.Length > 0 ? m_swingImpactOffsets.Length : 1;
 
-    /// <summary>변형 index에 해당하는 타격 오프셋(초). 범위 밖이면 고정 폴백값. (#220)</summary>
+    /// <summary>변형 index에 해당하는 타격 오프셋(초). 범위 밖이면 고정 폴백값.</summary>
     public float SwingImpactOffset(int variant) =>
         m_swingImpactOffsets != null && variant >= 0 && variant < m_swingImpactOffsets.Length
             ? m_swingImpactOffsets[variant]

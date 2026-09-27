@@ -4,21 +4,13 @@ using UnityEditor;
 using UnityEngine;
 
 /// <summary>
-/// 감정표현 아이콘 굽기 — 메뉴: Tools/감정표현 아이콘 굽기
-///
-/// 손으로 뽑아 둔 아이콘이 실제 동작과 어긋나 있었다: 전부 등을 보이고, 거의 중립 자세라 춤 18종이
-/// 서로 구별되지 않고, 박수(clap)는 주먹 든 그림이었다. 클립에서 직접 찍으면 어긋날 수 없다.
-///
-/// <b>대표 프레임은 클립 길이의 비율로 고른다</b> — 시작·끝은 대개 중립 자세라 특징이 안 나온다.
-/// 기본 50%로 굽고, 그 지점이 애매한 클립만 목록에서 비율을 조정한다.
-///
-/// 렌더 방식은 몽타주 굽기(<see cref="MontageBakeRig"/>, #607)와 같은 계열이지만 리그를 공유하지
-/// 않는다 — 저쪽은 머리만 잡는 근접 카메라에 평면 머티리얼이고, 이쪽은 전신·조명 렌더다.
+/// 감정표현 클립의 대표 프레임을 전신 렌더로 찍어 아이콘을 굽는다.
+/// 메뉴: Tools/감정표현 아이콘 굽기.
 /// </summary>
 public class EmoteIconBaker : EditorWindow
 {
-    private const int k_resolution = 256; // 기존 아이콘과 같은 크기 — .meta(스프라이트 설정)를 그대로 물려받는다
-    private const float k_ringOuter = 124f; // 원형 테두리 바깥 반지름(px) — 기존 아이콘 실측
+    private const int k_resolution = 256;
+    private const float k_ringOuter = 124f;
     private const float k_ringInner = 114f;
 
     private const string k_defaultOutput = "Assets/Imported/Art/EmoteIcons";
@@ -37,16 +29,11 @@ public class EmoteIconBaker : EditorWindow
 
     [SerializeField] private string m_outputFolder = k_defaultOutput;
 
-    // 프리팹 안에는 애니메이터가 돌리지 않는 사본이 함께 들어 있다 — 1인칭 팔(Camera 밑)과 시체
-    // 래그돌(Corpse 밑). 그대로 두면 바인드 포즈 팔이 T자로 뻗은 채 함께 찍힌다.
-    // NameTag(월드 캔버스)는 "Name" 글자가 그림 위에 얹히므로 함께 뺀다.
     [SerializeField]
     private List<string> m_excluded = new List<string> { "Camera", "Corpse", "NameTag", "Canvas" };
 
-    // 클립별 비율 덮어쓰기 — 인덱스로 잡는다(카탈로그 인덱스가 곧 네트워크 계약이라 안정적이다)
     private readonly Dictionary<int, float> m_ratioOverrides = new Dictionary<int, float>();
 
-    // 미리 구운 결과 — 저장 전에 눈으로 확인한다. 저장은 이 결과를 그대로 쓴다.
     private readonly Dictionary<int, Texture2D> m_preview = new Dictionary<int, Texture2D>();
 
     private Vector2 m_scroll;
@@ -117,7 +104,6 @@ public class EmoteIconBaker : EditorWindow
 
             EditorGUILayout.BeginHorizontal("box");
 
-            // 왼쪽: 지금 배선된 아이콘 / 오른쪽: 방금 구운 것 — 나란히 놓아야 나아졌는지 보인다
             DrawThumb(definition.Icon != null ? definition.Icon.texture : null, "현재");
             DrawThumb(m_preview.TryGetValue(i, out Texture2D baked) ? baked : null, "구운 것");
 
@@ -156,8 +142,6 @@ public class EmoteIconBaker : EditorWindow
         EditorGUILayout.EndVertical();
     }
 
-    // ---- 굽기 ----
-
     private void BakeAll()
     {
         ClearPreview();
@@ -184,11 +168,8 @@ public class EmoteIconBaker : EditorWindow
     {
         float ratio = m_ratioOverrides.TryGetValue(index, out float over) ? over : m_frameRatio;
 
-        // 배경(원판+테두리) 색은 지금 아이콘에서 뽑아 쓴다 — 자세만 갈아끼우고 색 규약은 건드리지 않는다
         SampleBackground(definition, out Color fill, out Color ring);
 
-        // 원판 색을 <b>카메라 배경으로</b> 깔고 찍는다 — URP 렌더 타깃의 알파는 믿을 게 못 돼(MontageBakeRig가
-        // 흰·검 2패스로 알파를 역산하는 이유), 어차피 불투명 원판 위에 얹을 그림이면 배경째 찍는 편이 낫다.
         Texture2D icon = RenderPose(definition.Clip, ratio, fill);
         if (icon == null)
             return;
@@ -202,11 +183,10 @@ public class EmoteIconBaker : EditorWindow
         Repaint();
     }
 
-    // 클립의 한 순간을 전신으로 찍는다 — 배경은 원판 색으로 채운 채.
     private Texture2D RenderPose(AnimationClip clip, float ratio, Color background)
     {
         var root = new GameObject("~EmoteIconBake") { hideFlags = HideFlags.HideAndDontSave };
-        root.transform.position = new Vector3(0f, -10000f, 0f); // 열려 있는 씬이 화면에 들어오지 않게 멀리 둔다
+        root.transform.position = new Vector3(0f, -10000f, 0f);
 
         RenderTexture target = null;
         RenderTexture previous = RenderTexture.active;
@@ -226,10 +206,6 @@ public class EmoteIconBaker : EditorWindow
                 return null;
             }
 
-            // AnimationMode로 샘플한다 — clip.SampleAnimation은 휴머노이드 리타깃을 태우지 않아
-            // 팔이 T-포즈 그대로 남는다(실측). 에디터가 애니메이션 창에서 쓰는 경로가 이쪽이다.
-            //
-            // ⚠ 끄는 순간 자세가 되돌아간다 — 찍기까지 끝낸 뒤(아래 finally) 꺼야 한다.
             AnimationMode.StartAnimationMode();
             AnimationMode.BeginSampling();
             AnimationMode.SampleAnimationClip(sampleTarget, clip, Mathf.Clamp01(ratio) * clip.length);
@@ -241,7 +217,6 @@ public class EmoteIconBaker : EditorWindow
                 return null;
             }
 
-            // 카메라 쪽에서 비스듬히 내려 비춘다 — 몽타주 리그와 같은 배치라 결과 톤이 튀지 않는다
             var lightObject = new GameObject("~BakeLight");
             lightObject.transform.SetParent(root.transform, false);
             lightObject.transform.rotation = Quaternion.LookRotation(
@@ -263,9 +238,8 @@ public class EmoteIconBaker : EditorWindow
             camera.clearFlags = CameraClearFlags.SolidColor;
             camera.backgroundColor = background;
             camera.cullingMask = ~0;
-            camera.enabled = false; // Render()로만 돈다
+            camera.enabled = false;
 
-            // 정면에서 본다 — 대상의 앞쪽(+Z)에 서서 되돌아본다. 등을 찍던 것이 원래 문제였다.
             cameraObject.transform.position = bounds.center + subject.transform.forward * 10f;
             cameraObject.transform.rotation = Quaternion.LookRotation(-subject.transform.forward, Vector3.up);
 
@@ -297,7 +271,6 @@ public class EmoteIconBaker : EditorWindow
         }
     }
 
-    // 제외 목록에 든 하위 오브젝트를 끈다 — 렌더에서도, 프레이밍 계산에서도 빠진다.
     private void HideExcluded(GameObject subject)
     {
         Transform[] all = subject.GetComponentsInChildren<Transform>(true);
@@ -312,18 +285,12 @@ public class EmoteIconBaker : EditorWindow
         }
     }
 
-    // Animator를 든 오브젝트 — 샘플링은 아바타를 든 쪽에 걸어야 휴머노이드 리타깃이 돈다
     private static GameObject ResolveAnimatorObject(GameObject subject)
     {
         Animator animator = subject.GetComponentInChildren<Animator>(true);
         return animator != null ? animator.gameObject : null;
     }
 
-    // 자세의 실제 경계 — 프레이밍 기준이다.
-    //
-    // <see cref="Renderer.bounds"/>를 쓰면 안 된다: 스킨 메시의 경계는 어떤 자세에서도 안 잘리게
-    // 부풀려 둔 값이라 실측이 1.5배 넘게 컸다(가로 1.07 vs 실제 0.56). 그만큼 인물이 작게 찍힌다.
-    // 구운 메시에서 재면 그 프레임의 진짜 크기가 나온다.
     private static bool TryGetBounds(GameObject subject, out Bounds bounds)
     {
         bounds = default;
@@ -343,7 +310,7 @@ public class EmoteIconBaker : EditorWindow
 
                 if (renderers[i] is SkinnedMeshRenderer skinned && skinned.sharedMesh != null)
                 {
-                    skinned.BakeMesh(baked, true); // useScale — 스케일까지 먹인 로컬 좌표로 나온다
+                    skinned.BakeMesh(baked, true);
                     world = TransformBounds(skinned.transform, baked.bounds);
                 }
                 else
@@ -369,7 +336,6 @@ public class EmoteIconBaker : EditorWindow
         return found;
     }
 
-    // 로컬 경계를 월드로 — BakeMesh가 스케일을 이미 먹였으므로 위치·회전만 태운다.
     private static Bounds TransformBounds(Transform transform, Bounds local)
     {
         Matrix4x4 matrix = Matrix4x4.TRS(transform.position, transform.rotation, Vector3.one);
@@ -389,9 +355,6 @@ public class EmoteIconBaker : EditorWindow
         return result;
     }
 
-    // ---- 배경 ----
-
-    // 지금 아이콘에서 원판·테두리 색을 읽는다 — 못 읽으면 기존 춤 아이콘 색으로 떨어진다.
     private static void SampleBackground(EmoteDefinition definition, out Color fill, out Color ring)
     {
         fill = new Color32(43, 46, 79, 255);
@@ -404,15 +367,12 @@ public class EmoteIconBaker : EditorWindow
         if (string.IsNullOrEmpty(path) || !File.Exists(path))
             return;
 
-        // 임포트 설정(읽기 불가·압축)을 우회해 원본 파일에서 직접 읽는다
         var source = new Texture2D(2, 2, TextureFormat.RGBA32, false);
         try
         {
             if (!source.LoadImage(File.ReadAllBytes(path)) || source.width < k_resolution)
                 return;
 
-            // 한 점만 찍으면 그 자리에 캐릭터가 있을 때 몸 색을 배경으로 착각한다 — 실제로 화난
-            // 표현(#637 아이콘)은 치켜든 주먹이 테두리에 닿아 있다. 여러 각도로 찍어 최빈색을 쓴다.
             float scale = source.height / (float)k_resolution;
             ring = SampleRingMode(source, (k_ringInner + k_ringOuter) * 0.5f * scale);
             fill = SampleRingMode(source, (k_ringInner - 14f) * scale);
@@ -423,7 +383,6 @@ public class EmoteIconBaker : EditorWindow
         }
     }
 
-    // 반지름 하나를 한 바퀴 돌며 찍어 가장 많이 나온 색을 고른다 — 캐릭터가 걸친 자리는 소수라 밀린다.
     private static Color SampleRingMode(Texture2D source, float radius)
     {
         const int k_samples = 24;
@@ -454,8 +413,6 @@ public class EmoteIconBaker : EditorWindow
         return best;
     }
 
-    // 찍은 그림을 원형으로 오린다 — 테두리 띠를 덮어 그리고 바깥은 투명. 기존 아이콘과 같은 구도다.
-    // 경계 한 칸은 알파로 뭉갠다(안 그러면 원 둘레가 톱니로 보인다).
     private static void MaskCircle(Texture2D icon, Color ring)
     {
         Color[] pixels = icon.GetPixels();
@@ -471,7 +428,7 @@ public class EmoteIconBaker : EditorWindow
                 if (distance >= k_ringInner)
                     pixels[i] = ring;
 
-                float alpha = Mathf.Clamp01(k_ringOuter - distance); // 바깥 경계 1px 페이드
+                float alpha = Mathf.Clamp01(k_ringOuter - distance);
                 pixels[i].a = alpha;
             }
         }
@@ -479,8 +436,6 @@ public class EmoteIconBaker : EditorWindow
         icon.SetPixels(pixels);
         icon.Apply();
     }
-
-    // ---- 저장 ----
 
     private void SaveAll()
     {
@@ -498,7 +453,6 @@ public class EmoteIconBaker : EditorWindow
             if (definition == null || entry.Value == null)
                 continue;
 
-            // 기존 파일에 덮어쓴다 — .meta가 남아 스프라이트 임포트 설정과 GUID 배선이 그대로 유지된다
             string path =
                 definition.Icon != null
                     ? AssetDatabase.GetAssetPath(definition.Icon)

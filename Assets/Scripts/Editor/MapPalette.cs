@@ -2,20 +2,12 @@ using System;
 using UnityEngine;
 
 /// <summary>
-/// 맵 격자 생성기(<see cref="MapGridBuilder"/>)가 읽는 팔레트 — <b>레이아웃 글자마다 어떤 프리팹을 깔지</b>를 담는다. (#215)
-///
-/// 프리팹을 스크립트에 박아두면 맵 하나 늘 때마다 C#을 고쳐야 한다. 그래서 배치 <b>규칙</b>만 생성기에 두고
-/// 무엇을 깔지는 전부 이쪽 에셋으로 뺐다 — 새 테마는 팔레트를 하나 더 만들어 프리팹을 끌어다 넣으면 끝이다.
-///
-/// <b>만드는 법.</b> Project 창에서 Create ▸ Map ▸ Map Palette.
-/// 레이아웃 .txt를 물리고 기호별로 프리팹을 채운 뒤, 그 팔레트를 고른 채 메뉴 Tools/맵 격자 생성.
-///
-/// Editor 폴더에 있으므로 빌드에 포함되지 않는다 — 맵 제작용 데이터이지 런타임 데이터가 아니다.
+/// 맵 격자 생성기가 읽는 팔레트 SO — 레이아웃 글자마다 깔 프리팹을 담는다.
+/// Create ▸ Map ▸ Map Palette로 만든다. 에디터 전용 데이터다.
 /// </summary>
 [CreateAssetMenu(fileName = "MapPalette", menuName = "Map/Map Palette")]
 public class MapPalette : ScriptableObject
 {
-    /// <summary>레이아웃 글자 한 자에 대응하는 배치 규칙.</summary>
     [Serializable]
     public class Entry
     {
@@ -61,7 +53,6 @@ public class MapPalette : ScriptableObject
         [SerializeField]
         private bool m_randomYaw;
 
-        /// <summary>이 규칙이 맡는 글자 — 비어 있으면 '\0'(무시된다).</summary>
         public char Symbol => string.IsNullOrEmpty(m_symbol) ? '\0' : m_symbol[0];
 
         public string Group => string.IsNullOrEmpty(m_group) ? "Tiles" : m_group;
@@ -73,11 +64,9 @@ public class MapPalette : ScriptableObject
         public float Scale => m_scale;
         public bool RandomYaw => m_randomYaw;
 
-        /// <summary>접한 방향에 맞춰 프리팹을 돌려 놓을지 — 연석 프리팹이 채워져 있을 때만.</summary>
         public bool UsesEdgeFacing => m_edgePrefabs != null && m_edgePrefabs.Length > 0;
     }
 
-    /// <summary>경계벽 — 조각을 쌓아 한 짝을 세우고, 물리는 상자 하나가 든다.</summary>
     [Serializable]
     public class WallSettings
     {
@@ -176,7 +165,6 @@ public class MapPalette : ScriptableObject
         public float Height => m_height;
         public float ColumnWidth => m_columnWidth;
 
-        /// <summary>세울 조각이 하나라도 있는가 — 전부 비어 있으면 경계를 만들지 않는다.</summary>
         public bool HasAnyPiece => m_bottom != null || m_top != null || m_cap != null || m_column != null;
 
         public bool IsWallSymbol(char symbol) => Symbols.IndexOf(symbol) >= 0;

@@ -4,13 +4,8 @@ using UnityEngine;
 using UnityEngine.Rendering;
 
 /// <summary>
-/// 1인칭 FP 팔 메시·프리팹을 현재 플레이어 모델의 오른팔에서 다시 뽑는 에디터 툴. (#265)
-/// 지금 팔은 임시 캐릭터 모델에서 추출한 것이라, 정식 모델로 교체하면 이 메뉴로 재생성한다.
-/// 메뉴: Tools/FP Arm/Regenerate Right Arm From Player Model
-///
-/// 재생성은 메시 에셋과 FPArm_Right.prefab만 갈아끼운다 — Player.prefab의 배선(m_handsModel 참조,
-/// 카메라, 화면 위치)은 건드리지 않는다. PlayerHandView가 Viewmodel 레이어와 아이템 앵커·손가락 본을
-/// 런타임에 다시 잡으므로, 팔 프리팹 내부 구조가 바뀌어도 재배선은 필요 없다.
+/// 현재 플레이어 모델의 오른팔에서 1인칭 팔 메시·프리팹을 다시 생성한다.
+/// 메뉴: Tools/FP Arm/Regenerate Right Arm From Player Model.
 /// </summary>
 public static class FPArmGenerator
 {
@@ -18,7 +13,7 @@ public static class FPArmGenerator
     private const string k_dir = "Assets/Prefabs/FPArm";
     private const string k_meshPath = k_dir + "/FPArm_Right_Mesh.asset";
     private const string k_armPrefabPath = k_dir + "/FPArm_Right.prefab";
-    private const string k_shoulderBone = "Shoulder_R"; // 이 본 하위 전체를 '오른팔'로 본다 (Synty 리그)
+    private const string k_shoulderBone = "Shoulder_R";
 
     [MenuItem("Tools/FP Arm/Regenerate Right Arm From Player Model")]
     public static void Regenerate()
@@ -39,7 +34,6 @@ public static class FPArmGenerator
             return;
         }
 
-        // 메시 에셋은 GUID를 유지해야 프리팹 SMR 참조가 안 끊긴다 — 기존 에셋이 있으면 내용만 채운다.
         bool isNewMesh = false;
         Mesh armMesh = AssetDatabase.LoadAssetAtPath<Mesh>(k_meshPath);
         if (armMesh == null)
@@ -55,7 +49,7 @@ public static class FPArmGenerator
             {
                 Object.DestroyImmediate(armMesh);
             }
-            return; // FillArmMesh가 실패 이유를 로그로 남긴다
+            return;
         }
 
         if (!AssetDatabase.IsValidFolder(k_dir))
@@ -76,7 +70,6 @@ public static class FPArmGenerator
         );
     }
 
-    // FPArm_Right 하위가 아닌 첫 SkinnedMeshRenderer = 플레이어 몸. (FP 팔 자신을 다시 뽑지 않게 제외)
     private static SkinnedMeshRenderer FindBodyRenderer(GameObject root)
     {
         foreach (SkinnedMeshRenderer smr in root.GetComponentsInChildren<SkinnedMeshRenderer>(true))
@@ -98,7 +91,6 @@ public static class FPArmGenerator
         return null;
     }
 
-    // 몸 메시에서 Shoulder_R 하위 본에 지배적으로 가중된 삼각형만 골라 팔 메시를 target에 채운다.
     private static bool FillArmMesh(SkinnedMeshRenderer body, Mesh target)
     {
         Mesh src = body.sharedMesh;
@@ -172,7 +164,7 @@ public static class FPArmGenerator
                     c = tris[t + 2];
                 if (!isArm[a] || !isArm[b] || !isArm[c])
                 {
-                    continue; // 세 꼭짓점이 모두 팔일 때만 — 어깨 이음새의 늘어진 삼각형 배제
+                    continue;
                 }
                 foreach (int oldIndex in new[] { a, b, c })
                 {
@@ -210,7 +202,7 @@ public static class FPArmGenerator
         if (hasUv)
             target.SetUVs(0, newUvs);
         target.boneWeights = newWeights.ToArray();
-        target.bindposes = src.bindposes; // boneWeights가 원본 본 인덱스를 참조하므로 전체 bindpose 유지
+        target.bindposes = src.bindposes;
         target.SetTriangles(newTris, 0);
         if (!hasNormals)
             target.RecalculateNormals();
@@ -218,7 +210,6 @@ public static class FPArmGenerator
         return true;
     }
 
-    // 몸 리그 스켈레톤 + 팔 메시만 남긴 정적 뷰모델 프리팹을 만든다 (애니메이터·스크립트 없음).
     private static void BuildArmPrefab(GameObject player, Mesh armMesh)
     {
         GameObject clone = Object.Instantiate(player);
@@ -227,10 +218,9 @@ public static class FPArmGenerator
         {
             SkinnedMeshRenderer arm = FindBodyRenderer(clone);
             arm.sharedMesh = armMesh;
-            arm.shadowCastingMode = ShadowCastingMode.Off; // 뷰모델은 월드에 그림자 드리우지 않는다
+            arm.shadowCastingMode = ShadowCastingMode.Off;
             arm.receiveShadows = false;
 
-            // 스켈레톤 루트(플레이어 루트의 직속 본 자식)와 팔 SMR만 새 루트로 옮긴다.
             Transform skeletonTop = arm.rootBone;
             while (skeletonTop != null && skeletonTop.parent != clone.transform)
             {
@@ -249,7 +239,6 @@ public static class FPArmGenerator
             skeletonTop.SetParent(newRoot.transform, true);
             arm.transform.SetParent(newRoot.transform, true);
 
-            // 어깨를 원점 근처로 옮겨 카메라 하위 배치를 쉽게 한다.
             Transform shoulder = System.Array.Find(
                 arm.bones,
                 b => b != null && b.name == k_shoulderBone

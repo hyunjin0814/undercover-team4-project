@@ -1,6 +1,8 @@
 using UnityEngine;
 
-// 빌드가 어느 커밋에서 나왔는지 진단용 값 (#622) — 참가 차단에는 절대 쓰지 않는다.
+/// <summary>
+/// 빌드가 나온 커밋 sha를 제공한다(에디터는 git, 빌드는 구워 둔 리소스). 진단 전용이다.
+/// </summary>
 public static class BuildStamp
 {
     public const string k_unknownSha = "?";

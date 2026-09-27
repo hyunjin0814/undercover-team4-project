@@ -3,9 +3,7 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// 본부 재고 게시판의 한 줄 (#840) — 아이콘 / 품목 이름 / 오른쪽에 남은 개수. 표시 전용.
-/// 개수를 오른쪽 끝에 붙여 줄이 여럿일 때 숫자가 한 열로 읽히게 한다.
-/// 문구는 <see cref="Bind"/> 때 지금 언어로 한 번 읽는다 — 언어가 바뀌면 게시판이 통째로 다시 그린다 (#497).
+/// 본부 재고 게시판의 한 줄 — 아이콘·품목 이름·남은 개수를 표시한다.
 /// </summary>
 public class HqStockRowView : MonoBehaviour
 {

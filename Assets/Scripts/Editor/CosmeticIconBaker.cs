@@ -5,16 +5,8 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 
 /// <summary>
-/// 치장 아이콘 굽기 (#818) — 메뉴: Tools/치장 아이콘 굽기
-///
-/// 카탈로그의 전 아이템을 로봇 머리에 씌워 한 장씩 찍고, 구운 스프라이트를 카탈로그에 바로 물린다.
-/// 모자·수염·안경은 이름만 봐서는 뭐가 뭔지 모른다 — 실제 착용 모습이 곧 설명이다.
-///
-/// 저장 자리가 <b>Assets/Imported</b>인 것은 감정표현 아이콘(<see cref="EmoteIconBaker"/>)과 같은
-/// 이유다: 구운 그림은 저장소에 넣지 않는다(그 폴더는 .gitignore 대상). 그래서 이 메뉴가 정본이고,
-/// 아이콘이 없는 사람은 여기서 다시 구우면 된다.
-///
-/// 무대는 <see cref="EditorSceneManager.NewPreviewScene"/>이라 열어 둔 씬을 건드리지 않는다.
+/// 카탈로그의 치장 아이템을 로봇 머리에 씌워 아이콘을 찍고 카탈로그에 배선한다.
+/// 메뉴: Tools/치장 아이콘 굽기.
 /// </summary>
 public static class CosmeticIconBaker
 {
@@ -90,7 +82,7 @@ public static class CosmeticIconBaker
             var camera = camGo.AddComponent<Camera>();
             camera.scene = scene;
             camera.clearFlags = CameraClearFlags.SolidColor;
-            camera.backgroundColor = new Color(0f, 0f, 0f, 0f); // 투명 — 칸 배경이 비친다
+            camera.backgroundColor = new Color(0f, 0f, 0f, 0f);
             camera.orthographic = true;
             camera.orthographicSize = 0.24f;
             camera.nearClipPlane = 0.01f;
@@ -128,7 +120,6 @@ public static class CosmeticIconBaker
         }
     }
 
-    // 1인칭 팔 리그에도 같은 이름의 본이 있는 프리팹이 있어, 몸통 리그(Root 아래)를 집는다
     private static Transform FindHead(Transform root)
     {
         Transform body = root.Find("Root");

@@ -5,13 +5,13 @@ using UnityEngine;
 using UnityEngine.Localization;
 using Random = UnityEngine.Random;
 
-// 외형 특징 축별 옵션 정의 (ScriptableObject).
-// 각 옵션은 무전으로 말로 전달 가능한 표시 이름과 시각 리소스(색/머티리얼/프롭)를 가진다.
-// 몽타주 텍스트도 여기서 생성. — 본부 수배 리스트 UI의 원본.
+/// <summary>
+/// 외형 특징 축별 옵션(표시 이름·색·머티리얼·프롭) 정의 SO.
+/// NPC 외형 적용과 몽타주 텍스트·포트레이트 조립의 원본이다.
+/// </summary>
 [CreateAssetMenu(fileName = "AppearanceDatabase", menuName = "Scriptable Objects/AppearanceDatabase")]
 public class AppearanceDatabase : ScriptableObject
 {
-    /// <summary>축 하나의 옵션 — 표시 이름 + 시각 리소스.</summary>
     [Serializable]
     public class AppearanceOption
     {
@@ -32,32 +32,19 @@ public class AppearanceDatabase : ScriptableObject
         )]
         public GameObject[] PropPrefabs;
 
-        /// <summary>
-        /// 몽타주가 대표로 쓰는 프롭 — 그림을 굽고 '이 값에 프롭이 있는가'를 판정하는 기준.
-        /// 여러 메시를 물려도 그림은 한 장이라 대표가 하나여야 한다 (#619).
-        /// </summary>
         public GameObject MontageProp => FirstPropFrom(0);
 
-        /// <summary>
-        /// 이 NPC가 쓸 메시 하나. <paramref name="seed"/>가 같으면 어느 피어에서도 같은 것이 나온다 —
-        /// 변형은 <see cref="AppearanceProfile"/>에 없어 네트워크로 오지 않으므로, 이미 동기화된 값
-        /// (NetworkObjectId)에서 결정론적으로 뽑아야 전 클라이언트가 같은 외형을 본다 (#56).
-        /// </summary>
+        /// <summary>seed로 결정론적으로 NPC 메시 하나를 고른다 — 모든 피어에서 같은 결과가 나온다.</summary>
         public GameObject PickProp(ulong seed)
         {
             if (PropPrefabs == null || PropPrefabs.Length == 0)
                 return null;
 
-            // 곱셈 해시 — 인접한 NetworkObjectId가 같은 변형으로 몰리지 않게 흩는다
             ulong mixed = seed * 2654435761UL + 1013904223UL;
             return FirstPropFrom((int)(mixed % (ulong)PropPrefabs.Length));
         }
 
-        /// <summary>
-        /// <paramref name="start"/>부터 돌면서 처음 만나는 빈칸 아닌 프롭. 배열의 빈칸은 인스펙터 손편집으로만
-        /// 생기는데, 걸러 주지 않으면 그 자리에 걸린 NPC만 프롭 없이 나오고 몽타주는 대표 그림을 그려
-        /// §1이 조용히 깨진다. 건너뛰는 순서가 배열 순서라 어느 피어에서 계산해도 결과가 같다.
-        /// </summary>
+        /// <summary>start부터 순회하며 처음 만나는 비어 있지 않은 프롭을 돌려준다.</summary>
         private GameObject FirstPropFrom(int start)
         {
             if (PropPrefabs == null || PropPrefabs.Length == 0)
@@ -82,11 +69,6 @@ public class AppearanceDatabase : ScriptableObject
         public bool ExcludeFromMontage;
     }
 
-    /// <summary>
-    /// 축 하나의 정의 — 옵션 목록. 축 이름은 여기 없다.
-    /// 축은 데이터가 아니라 <see cref="AppearanceAxis"/>가 정하는 목록이라, 이름은 규약 키
-    /// (<c>Npc.Axis.</c> + enum 이름)로 조회한다 — 에셋에 두면 배선할 곳이 하나 더 생긴다. (#497)
-    /// </summary>
     [Serializable]
     public class AxisDefinition
     {
@@ -110,7 +92,7 @@ public class AppearanceDatabase : ScriptableObject
     [SerializeField] private AxisDefinition m_hairColor;
     [SerializeField] private AxisDefinition m_skinColor;
     [SerializeField] private AxisDefinition m_facialHair;
-    [SerializeField] private AxisDefinition m_headwear;   // 기존 m_accessory에서 개명
+    [SerializeField] private AxisDefinition m_headwear;
     [SerializeField] private AxisDefinition m_eyewear;
 
     [Header("몽타주 포트레이트 (#607) — 축에 속하지 않는 공용 레이어")]
@@ -123,13 +105,10 @@ public class AppearanceDatabase : ScriptableObject
     [Tooltip("라운드가 진행될수록 몽타주를 흐리게 하는 표 (#724). 비우면 항상 원본 화질 그대로다")]
     [SerializeField] private MontageClarityTable m_clarityTable;
 
-    /// <summary>포트레이트 바닥 레이어 — 피부색을 칠하는 대상.</summary>
     public Sprite MontageBase => m_montageBase;
 
-    /// <summary>머리 스타일 미공개용 머리 레이어 — 머리색만 공개된 몽타주에서 색을 얹는 자리.</summary>
     public Sprite MontageUnknownHair => m_montageUnknownHair;
 
-    /// <summary>라운드별 몽타주 화질 표 — null이면 표시하는 쪽이 원본 화질을 쓴다.</summary>
     public MontageClarityTable ClarityTable => m_clarityTable;
 
     public AxisDefinition GetAxis(AppearanceAxis axis) => axis switch
@@ -149,11 +128,10 @@ public class AppearanceDatabase : ScriptableObject
         return definition?.Options?.Length ?? 0;
     }
 
-    /// <summary>축 이름을 지금 언어로 읽는다 — 규약 키 <c>Npc.Axis.&lt;AppearanceAxis&gt;</c>. (#497)</summary>
+    /// <summary>축 이름을 지금 언어로 읽는다 — 규약 키 <c>Npc.Axis.&lt;AppearanceAxis&gt;</c>.</summary>
     public static string GetAxisName(AppearanceAxis axis) =>
         LocalizedStrings.Get(k_table, "Npc.Axis." + axis);
 
-    /// <summary>공개되지 않은 축의 값 자리에 넣는 말 — "미상".</summary>
     public static string UnknownValueName => LocalizedStrings.Get(k_table, "Npc.Appearance.Unknown");
 
     /// <summary>옵션의 표시 이름을 지금 언어로 읽는다. 배선이 빠진 옵션은 물음표로 둔다.</summary>
@@ -184,7 +162,7 @@ public class AppearanceDatabase : ScriptableObject
                 result.Add(i);
         }
 
-        if (result.Count == 0) // 안전 폴백: 전부 SciFiOnly면 제한하지 않는다
+        if (result.Count == 0)
         {
             for (int i = 0; i < definition.Options.Length; i++)
                 result.Add(i);
@@ -192,28 +170,17 @@ public class AppearanceDatabase : ScriptableObject
         return result;
     }
 
-    /// <summary>
-    /// 이 조합의 머리가 화면에 보이는가 — 머리 스타일 옵션에 프롭이 있는지로 판정한다. (#556)
-    /// '없음(대머리)'·'가림'은 프롭이 없어 머리색이 화면에 나타날 자리가 없다.
-    /// SciFi 카탈로그 경로도 같은 기준이다 — 프롭을 쓰지 않지만 머리 스타일 값은 같은 옵션 목록을 가리킨다.
-    /// </summary>
+    /// <summary>이 조합에서 머리카락이 화면에 보이는지(머리 스타일에 프롭이 있는지) 판정한다.</summary>
     public bool HasVisibleHair(in AppearanceProfile profile) =>
         GetOption(AppearanceAxis.HairStyle, profile.HairStyleIndex)?.MontageProp != null;
 
-    /// <summary>
-    /// 이 값을 몽타주 포트레이트로 그릴 수 있는가 (#607) — 공개 축 후보를 거르는 기준이다 (#556과 같은 취지).
-    /// SciFi 전용 값(가림·후드·풀헬멧·특수 안경)은 Generic 프롭이 없어 레이어를 자동 생성할 수 없다 —
-    /// 그림이 없는 값이 공개되면 본부 화면이 빈 채로 남는다. 나중에 그림을 채우면 저절로 후보로 돌아온다.
-    /// 색 축은 다른 레이어를 칠할 뿐이라 언제나 가능하고, '없음/대머리'는 안 그리는 것이 곧 그 값이다.
-    /// </summary>
+    /// <summary>이 값을 몽타주 포트레이트로 그릴 수 있는지 판정한다(공개 축 후보 필터).</summary>
     public bool CanDepict(AppearanceAxis axis, int index)
     {
         AppearanceOption option = GetOption(axis, index);
         if (option == null)
             return false;
 
-        // 정면에서 '없음'과 구분되지 않는 값 — 그리면 본부가 대머리와 같은 그림을 받는다 (#619).
-        // 색 축보다 먼저 본다 — 피부색을 축째로 몽타주에서 빼는 자리다 (docs §13-17)
         if (option.ExcludeFromMontage)
             return false;
 
@@ -223,20 +190,13 @@ public class AppearanceDatabase : ScriptableObject
         if (option.MontageLayer != null)
             return true;
 
-        // 머리 스타일은 프롭이 없다는 것이 곧 '머리가 화면에 안 보인다'(대머리·가림)이고,
-        // 그건 안 그리는 것으로 정확히 표현된다 — 무엇이 덮었는지는 모자 축이 말할 몫이다.
         if (axis == AppearanceAxis.HairStyle)
             return option.MontageProp == null;
 
-        // 나머지 축에서 프롭 없는 SciFi 전용 값(후드·헬멧·바이저·발광렌즈)은 '그릴 것이 있는데
-        // 그림이 없는' 경우다 — 안 그리면 '없음'으로 읽혀 화면과 어긋난다.
         return option.MontageProp == null && !option.SciFiOnly;
     }
 
-    /// <summary>
-    /// Generic 경로용 랜덤 옵션 인덱스 — SciFiOnly 값은 제외하고, 축에 <see cref="AxisDefinition.NoneChance"/>가
-    /// 있으면 '없음'(0번)을 그 확률로 먼저 뽑는다. 색 축은 0번이 '없음'이 아니라 그냥 균등이다.
-    /// </summary>
+    /// <summary>Generic 경로용 랜덤 옵션 인덱스를 뽑는다(SciFi 전용 값 제외, 없음 확률 적용).</summary>
     public int GetRandomGenericIndex(AppearanceAxis axis)
     {
         List<int> indices = GetGenericSelectableIndices(axis);
@@ -266,14 +226,7 @@ public class AppearanceDatabase : ScriptableObject
         return profile;
     }
 
-    /// <summary>
-    /// 공개 축들의 특징을 글 방식 몽타주 텍스트로 만든다 (GDD 10-3).
-    /// 예: "머리색: 빨강 / 수염: 콧수염" — 무전 구두 전달이 핵심 재미라 이산 값 이름만 나열한다.
-    ///
-    /// <b>문장은 만든 쪽의 언어로 나온다 — 그래서 표시하는 피어에서 조립한다.</b>
-    /// 수배 항목은 완성 문장이 아니라 프로필 인덱스 + 공개 축(<see cref="RevealedAxisSet"/>)만 실어 보내고,
-    /// 본부 화면이 이 메서드로 각자 자기 언어로 조립한다 (#497 — 호스트·클라 언어가 갈려도 각자 언어로 보인다).
-    /// </summary>
+    /// <summary>공개 축의 특징을 현재 언어로 글 몽타주 텍스트로 조립한다.</summary>
     public string BuildMontageText(in AppearanceProfile profile, RevealedAxisSet revealedAxes)
     {
         var builder = new StringBuilder();
@@ -292,10 +245,7 @@ public class AppearanceDatabase : ScriptableObject
         return builder.ToString();
     }
 
-    /// <summary>
-    /// 몽타주가 말할 수 있는 축인가 — 값이 하나도 그려지지 않으면 축째로 뺀 것이다(피부색, docs §13-17).
-    /// '미상'은 "이 축을 모른다"는 정보인데 영영 공개될 일 없는 축에 붙으면 잡음이라, 문장에서도 뺀다.
-    /// </summary>
+    /// <summary>몽타주가 다룰 수 있는 축인지(그릴 수 있는 값이 하나라도 있는지) 판정한다.</summary>
     public bool IsMontageAxis(AppearanceAxis axis)
     {
         AppearanceOption[] options = GetAxis(axis)?.Options;

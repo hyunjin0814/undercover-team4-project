@@ -3,8 +3,7 @@ using UnityEngine.UI;
 using TMPro;
 
 /// <summary>
-/// 감정표현 휠의 칸 하나 — 아이콘·이름·강조. (#219)
-/// 배치 각도는 EmoteWheelView가 정한다(판정과 같은 값을 써야 하므로).
+/// 감정표현 휠의 칸 하나 — 아이콘·이름·강조를 표시한다.
 /// </summary>
 public class EmoteWheelSlotView : MonoBehaviour
 {
@@ -25,7 +24,6 @@ public class EmoteWheelSlotView : MonoBehaviour
     [SerializeField]
     private float m_emptyAlpha = 0.25f;
 
-    // 지금 구독 중인 표시 이름 — 갈아끼울 때 이전 구독을 끊기 위해 들고 있는다
     private UnityEngine.Localization.LocalizedString m_boundName;
 
     private void Awake()
@@ -58,9 +56,6 @@ public class EmoteWheelSlotView : MonoBehaviour
             m_icon.color = color;
         }
 
-        // LocalizedString은 비동기 조회라 즉시 값이 없을 수 있어 준비되면 채우도록 구독한다.
-        // 구독을 갈아끼울 때 이전 것을 반드시 끊는다 — 로비 편집에서는 같은 칸이 계속 다시
-        // Bind되므로, 안 끊으면 구독이 쌓여 한 칸에 여러 문구가 번갈아 들어온다.
         UnsubscribeLabel();
 
         if (!filled)
@@ -70,8 +65,6 @@ public class EmoteWheelSlotView : MonoBehaviour
             return;
         }
 
-        // 키가 안 붙은 감정표현은 id를 그대로 보여 준다 — 빈 칸으로 두면 비슷한 자세가 여럿이라
-        // 아이콘만으로 구분이 안 된다. (배선 누락을 화면에서 바로 알아채는 효과도 있다)
         if (definition.DisplayName == null || definition.DisplayName.IsEmpty)
         {
             m_boundName = null;

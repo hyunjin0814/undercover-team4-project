@@ -1,8 +1,9 @@
 using UnityEngine;
 using UnityEngine.UI;
 
-// 맵 씬의 미니맵 좌표계·항공뷰 단일 출처 (#835) — 본부·휴대용 두 MinimapViewer가 같은 지점을
-// 가리키려면 같은 사각형을 읽어야 한다. MinimapTarget.ActiveTargets와 같은 idiom을 쓴다.
+/// <summary>
+/// 맵 씬의 미니맵 월드 영역과 항공뷰 스프라이트의 단일 출처. 본부·휴대용 MinimapViewer가 함께 읽는다.
+/// </summary>
 public class MinimapArea : MonoBehaviour
 {
     public static MinimapArea Current { get; private set; }

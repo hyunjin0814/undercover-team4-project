@@ -2,18 +2,8 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// <b>혼자 다니는 현장 플레이어</b>를 지켜보는 감시기 — 반경 안에 동료가 없는 상태가 일정 시간 이어진
-/// 플레이어를 표적 후보로 내놓는다. (#371)
-///
-/// 납치 이벤트(<see cref="AbductionEvent"/>)에서 뽑아냈다. 뽑은 이유는 <b>재는 주기가 이벤트 수명과 다르기
-/// 때문</b>이다 — 스케줄러는 <see cref="ISuddenEvent.CanTrigger"/>를 수십 초 간격으로 드물게 부르므로 그 안에서
-/// "20초 동안 혼자였는가"를 잴 수 없다. 그래서 이벤트가 활성이 아닐 때도 <see cref="Tick"/>이 굴러 플레이어별
-/// '혼자가 된 시각'을 쌓아 두고, CanTrigger는 그 타이머만 읽는다.
-///
-/// MonoBehaviour가 아니라 <b>직렬화 가능한 값 묶음</b>이다 — 쓰는 쪽이
-/// 자기 Update에서 Tick을 굴리므로 씬에 컴포넌트를 하나 더 배선하지 않아도 되고, 서버 권한 게이트도 쓰는 쪽 것을 탄다.
-///
-/// <b>표적을 어떻게 쓸지는 정하지 않는다</b> — "누가 가장 오래 혼자인가"까지만 답한다.
+/// 반경 안에 동료가 없는 상태가 일정 시간 이어진 현장 플레이어를 추적하는 직렬화 값 묶음.
+/// 쓰는 쪽이 Update에서 Tick을 굴리고, 납치 이벤트가 표적 후보로 읽는다.
 /// </summary>
 [System.Serializable]
 public class LonePlayerWatch
@@ -32,10 +22,8 @@ public class LonePlayerWatch
     [Tooltip("혼자 판정 갱신 주기(초) — 매 프레임 돌 필요가 없다")]
     [SerializeField] private float m_scanInterval = 0.25f;
 
-    // 플레이어별 '혼자가 된 시각'(Time.time) — 값이 없으면 지금 혼자가 아니다.
     private readonly Dictionary<PlayerHealth, float> m_aloneSince = new Dictionary<PlayerHealth, float>();
 
-    // 사라진 플레이어 정리용 임시 버퍼.
     private readonly List<PlayerHealth> m_staleBuffer = new List<PlayerHealth>();
 
     private float m_scanCooldown;
@@ -43,7 +31,6 @@ public class LonePlayerWatch
     /// <summary>비어 있는 씬 참조를 채운다 — 쓰는 쪽 Awake에서 한 번 부른다.</summary>
     public void ResolveSceneRefs()
     {
-        // 본부 구역은 씬 설치물이라 부모 탐색으로 닿지 않는다 — 장소 오브젝트 관례대로 씬 탐색으로 폴백한다
         if (m_hqZone == null)
             m_hqZone = UnityEngine.Object.FindFirstObjectByType<HqOccupancyZone>();
     }
@@ -59,7 +46,7 @@ public class LonePlayerWatch
         TickLoneTimers();
     }
 
-    /// <summary>지속 조건까지 채운 후보 중 <b>가장 오래 혼자인</b> 플레이어 — 없으면 null.</summary>
+    /// <summary>지속 조건까지 채운 후보 중 가장 오래 혼자인 플레이어 — 없으면 null.</summary>
     public Transform FindTarget()
     {
         Transform best = null;
@@ -82,10 +69,7 @@ public class LonePlayerWatch
         return best;
     }
 
-    /// <summary>
-    /// 지속 조건을 무시하고 표적을 하나 고른다 — <b>개발자 강제 발동 전용</b>. (#775)
-    /// 지금 혼자인 현장 플레이어를 먼저 보고, 없으면 아무나(본부 안 포함) 고른다.
-    /// </summary>
+    /// <summary>지속 조건 없이 표적을 하나 고른다(강제 발동 전용). 혼자인 현장 플레이어를 우선한다.</summary>
     public Transform FindForcedTarget()
     {
         IReadOnlyList<PlayerHealth> players = PlayerHealth.All;
@@ -94,7 +78,6 @@ public class LonePlayerWatch
             if (IsLoneCandidate(players[i], players))
                 return players[i].transform;
 
-        // 아무도 혼자가 아니다 — 붙어 다니는 중이거나 본부 안이다. 테스트는 되게 한다.
         for (int i = 0; i < players.Count; i++)
             if (players[i] != null && players[i].IsTargetable)
                 return players[i].transform;
@@ -109,11 +92,6 @@ public class LonePlayerWatch
         m_scanCooldown = 0f;
     }
 
-    // 현장 플레이어 각자가 '혼자'인지 갱신한다. 혼자가 아니게 되면 타이머를 버린다(다시 혼자가 되면 처음부터).
-    //
-    // 목록은 <b>주기당 한 번</b> 잡아 반경 판정에 그대로 넘긴다 — 예전에는 여기서 한 번,
-    // 반경 판정이 플레이어마다 SuddenEventUtil.CollectFieldPlayers로 또 한 번 훑어 N명이면 주기당
-    // N+1회였다(6인이면 초당 28회 + 매번 배열 할당). 스캔 자체도 이제 레지스트리 순회다 (#961).
     private void TickLoneTimers()
     {
         IReadOnlyList<PlayerHealth> players = PlayerHealth.All;
@@ -133,7 +111,6 @@ public class LonePlayerWatch
             }
         }
 
-        // 접속을 끊거나 파괴된 플레이어의 항목을 걷어낸다 — 남겨두면 목록이 자라고 죽은 키를 표적으로 고른다
         m_staleBuffer.Clear();
         foreach (PlayerHealth tracked in m_aloneSince.Keys)
             if (tracked == null)
@@ -143,21 +120,14 @@ public class LonePlayerWatch
             m_aloneSince.Remove(m_staleBuffer[i]);
     }
 
-    // 지금 이 순간 혼자인가 — 후보 자격의 순간 조건. 지속 시간은 타이머가 본다.
-    // scanned는 이번 주기에 이미 잡아 둔 전체 플레이어 목록이다(위 TickLoneTimers 주석 참고).
     private bool IsLoneCandidate(PlayerHealth player, IReadOnlyList<PlayerHealth> scanned)
     {
-        // 다운·기능 정지된 플레이어는 제외한다 — 이미 무력한 대상은 쓰는 쪽에서도 다룰 것이 없다
-        // (SuddenEventUtil의 현장 플레이어 판정과 같은 기준)
         if (player == null || !player.IsTargetable)
             return false;
 
-        // 본부 안은 세지 않는다 — 관제가 혼자 남는 것은 정상 상황이고, 그걸 표적으로 삼으면 역할 분담이 깨진다 (팀 확정)
         if (m_hqZone != null && m_hqZone.Contains(player))
             return false;
 
-        // 반경 안에 다른 현장 플레이어가 하나라도 있으면 혼자가 아니다.
-        // 판정 기준(IsTargetable + 반경)은 SuddenEventUtil.CollectFieldPlayers와 같지만 스캔을 다시 돌지 않는다.
         Vector3 origin = player.transform.position;
         float radiusSqr = m_loneRadius * m_loneRadius;
 

@@ -6,10 +6,8 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// 화면 하단 인벤토리 핫바 (#144, 오너 로컬 HUD). 고정 5칸 슬롯에 보유 아이템을 표시하고
-/// 장착 슬롯을 하이라이트한다. 선택/줍기 시 아이템 이름 팝업을 띄우며,
-/// I 편집 모드에서는 커서를 풀어 드래그 정렬·호버 툴팁을 지원한다 (WASD 이동 시 자동 닫힘).
-/// 데이터는 PlayerLoadout.Slots가 진실 — 이 클래스는 표시만 한다.
+/// 화면 하단 5칸 인벤토리 핫바 — 보유 아이템과 장착 슬롯을 표시하고 이름 팝업을 띄운다.
+/// I 편집 모드에서는 드래그 정렬·툴팁을 지원한다. 데이터는 PlayerLoadout.Slots가 진실이다.
 /// </summary>
 public class InventoryBarView : NetworkBehaviour
 {
@@ -63,15 +61,13 @@ public class InventoryBarView : NetworkBehaviour
     private Color m_barEditColor = new Color(0.2f, 0.5f, 1f, 0.35f);
 
     private bool m_isEditMode;
-    private int m_itemNameVersion; // 팝업 연속 발생 시 이전 숨김 예약 무효화용
-    private readonly ItemBase[] m_lastSlots = new ItemBase[PlayerLoadout.k_maxHeldItems]; // 줍기 감지 스냅샷
+    private int m_itemNameVersion;
+    private readonly ItemBase[] m_lastSlots = new ItemBase[PlayerLoadout.k_maxHeldItems];
 
-    /// <summary>I 편집 모드 여부 — 슬롯 드래그·툴팁이 이때만 동작한다.</summary>
     public bool IsEditMode => m_isEditMode;
 
     public override void OnNetworkSpawn()
     {
-        // 내 화면에만 표시 — 비오너 인스턴스는 바를 통째로 끈다. (PlayerHpUI 관례)
         if (!IsOwner)
         {
             m_barRoot.SetActive(false);
@@ -92,7 +88,7 @@ public class InventoryBarView : NetworkBehaviour
         m_itemNameLabel.gameObject.SetActive(false);
         m_tooltipPanel.SetActive(false);
         m_barBackground.color = m_barNormalColor;
-        HandleSlotsChanged(); // 초기 표시 (스폰 시점에 이미 지급됐을 수 있음)
+        HandleSlotsChanged();
     }
 
     public override void OnNetworkDespawn()
@@ -102,7 +98,7 @@ public class InventoryBarView : NetworkBehaviour
             return;
         }
 
-        SetEditMode(false); // 편집 모드인 채 디스폰되면 커서 해제 요청이 남는다 — 여기서 거둔다 (#352)
+        SetEditMode(false);
 
         m_loadout.OnSlotsChanged -= HandleSlotsChanged;
         m_loadout.OnEquippedSlotChanged -= RefreshHighlight;
@@ -117,20 +113,14 @@ public class InventoryBarView : NetworkBehaviour
             return;
         }
 
-        // 편집 모드 자동 종료 — WASD 이동 입력이 들어오면 조준 복귀 (UX).
-        // (구 "커서가 다시 잠기면 함께 닫기" 조건은 제거 — 커서 상태는 이제 CursorLock이 단독 소유라
-        //  편집 모드가 요청을 거두기 전에 외부가 강제로 잠그는 일이 없다. #352)
         if (m_inputHandler.MoveInput != Vector2.zero)
         {
             SetEditMode(false);
         }
     }
 
-    // ---- 슬롯 표시 ----
-
     private void HandleSlotsChanged()
     {
-        // 스냅샷에 없던 아이템이 정확히 하나면 줍기 — 이름 팝업. (초기 지급 2개는 장착 팝업이 대신 알린다)
         ItemBase newItem = null;
         int newCount = 0;
         for (int i = 0; i < m_slotViews.Length; i++)
@@ -157,8 +147,6 @@ public class InventoryBarView : NetworkBehaviour
         }
     }
 
-    // 장착 아이템이 바뀌면 이름 팝업만 띄운다. 하이라이트는 이 이벤트를 부르는 두 경로(EquipSlot→
-    // OnEquippedSlotChanged, RebuildHeldItems→OnSlotsChanged)가 직후에 각자 RefreshHighlight하므로 여기선 불필요.
     private void HandleEquippedItemChanged(ItemBase item)
     {
         if (item != null)
@@ -167,7 +155,6 @@ public class InventoryBarView : NetworkBehaviour
         }
     }
 
-    // 선택 슬롯 인덱스로 하이라이트 — 빈 칸을 선택해도 그 칸이 강조돼 현재 위치가 보인다 (#144).
     private void RefreshHighlight()
     {
         int equipped = m_loadout.EquippedIndex;
@@ -177,11 +164,8 @@ public class InventoryBarView : NetworkBehaviour
         }
     }
 
-    // ---- 아이템 이름 팝업 ----
-
     private void ShowItemName(ItemBase item)
     {
-        // 표시 시점마다 새로 가져오는 일회성 텍스트라 동기 호출로 충분 — 언어 전환 갱신 구독 불필요 (#251)
         m_itemNameLabel.text = item.ItemName.GetLocalizedString();
         m_itemNameLabel.gameObject.SetActive(true);
         HideItemNameAsync(++m_itemNameVersion).Forget();
@@ -191,7 +175,6 @@ public class InventoryBarView : NetworkBehaviour
     {
         await UniTask.Delay(TimeSpan.FromSeconds(m_itemNameDuration));
 
-        // 파괴됐거나 그 사이 새 팝업이 떠서 예약이 낡았으면 무시.
         if (this == null || version != m_itemNameVersion)
         {
             return;
@@ -200,19 +183,13 @@ public class InventoryBarView : NetworkBehaviour
         m_itemNameLabel.gameObject.SetActive(false);
     }
 
-    // ---- 편집 모드 (I) ----
-
     private void ToggleEditMode()
     {
-        // 다운(무력화) 중에는 편집 모드 진입 차단 — 커서 해제·슬롯 정렬이 다운 상태와 충돌 (#105).
-        // 이미 편집 모드였다면 닫는 건 허용(정리).
         if (m_loadout.IsIncapacitated && !m_isEditMode)
         {
             return;
         }
 
-        // 복구 단말을 보는 중에도 막는다 (#762) — 여기서 커서가 풀리면 PlayerInteractor가 E를
-        // 막아(#352) 단말에서 나갈 수단이 사라진다.
         if (m_loadout.IsTerminalFocused && !m_isEditMode)
         {
             return;
@@ -230,11 +207,8 @@ public class InventoryBarView : NetworkBehaviour
 
         m_isEditMode = on;
 
-        // 드래그 정렬·호버 툴팁을 쓰도록 커서를 푼다 — 해제 중엔 시점 회전도 정지 (PlayerMovement).
         if (on)
         {
-            // 좌클릭을 누른 채 I를 치면 채널링이 그대로 완주한다 — 다른 UI는 SetSuspended가 액션을 꺼
-            // Input System이 canceled를 쏘지만, 편집 모드는 WASD를 감지해야 해 액션을 못 끈다. (#352)
             m_itemUser.CancelUse();
             CursorLock.PushUnlock();
         }
@@ -249,8 +223,6 @@ public class InventoryBarView : NetworkBehaviour
 
     /// <summary>슬롯 드래그 정렬 완료 — PlayerLoadout에 스왑을 위임한다. 표시는 OnSlotsChanged로 돌아온다.</summary>
     public void RequestSwap(int from, int to) => m_loadout.SwapSlots(from, to);
-
-    // ---- 툴팁 (편집 모드 호버) ----
 
     /// <summary>슬롯 호버 진입 — 편집 모드에서 아이템 이름·설명 툴팁을 슬롯 위에 띄운다.</summary>
     public void ShowTooltip(InventorySlotView slot)

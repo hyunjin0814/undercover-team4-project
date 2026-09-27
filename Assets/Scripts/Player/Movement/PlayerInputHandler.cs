@@ -4,6 +4,10 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Controls;
 
+/// <summary>
+/// 오너의 Input System 액션을 구독해 게임플레이 입력 이벤트로 발행한다.
+/// 입력 일시 정지와 키 표기 조회를 제공한다.
+/// </summary>
 public class PlayerInputHandler : NetworkBehaviour
 {
     [Header("Input Actions")]
@@ -17,7 +21,7 @@ public class PlayerInputHandler : NetworkBehaviour
     private InputActionReference m_interactAction;
 
     [SerializeField]
-    private InputActionReference m_lootAction; // R — 쓰러진 동료 뒤지기 (#725)
+    private InputActionReference m_lootAction;
 
     [SerializeField]
     private InputActionReference m_sprintAction;
@@ -47,20 +51,15 @@ public class PlayerInputHandler : NetworkBehaviour
     private InputActionReference m_jumpAction;
 
     [SerializeField]
-    private InputActionReference m_emoteAction; // T 홀드 — 감정표현 휠 (#219)
+    private InputActionReference m_emoteAction;
 
     [SerializeField]
-    private InputActionReference m_teamStatusAction; // Tab 홀드 — 팀 상황판 (#720)
+    private InputActionReference m_teamStatusAction;
 
     public Vector2 MoveInput { get; private set; }
     public Vector2 LookInput { get; private set; }
     public bool IsSprinting { get; private set; }
 
-    /// <summary>
-    /// 상호작용 키 표기 — 조준 안내가 "무슨 키를 누르라"를 적을 때 쓴다. (#664)
-    /// 매 프레임 읽히는 자리라 캐시한다(만들 때마다 문자열이 새로 생긴다).
-    /// 재바인딩은 <see cref="HandleActionChange"/>가 캐시를 비워 반영한다.
-    /// </summary>
     public string InteractBinding
     {
         get
@@ -72,7 +71,6 @@ public class PlayerInputHandler : NetworkBehaviour
         }
     }
 
-    /// <summary>아이템 사용(좌클릭) 키 표시 문자열 — 안내 문구용. (#664)</summary>
     public string UseItemBinding
     {
         get
@@ -84,7 +82,6 @@ public class PlayerInputHandler : NetworkBehaviour
         }
     }
 
-    /// <summary>뒤지기(R) 키 표시 문자열 — 조준 안내용. (#725)</summary>
     public string LootBinding
     {
         get
@@ -96,12 +93,7 @@ public class PlayerInputHandler : NetworkBehaviour
         }
     }
 
-    /// <summary>
-    /// 안내에 적을 키 표기 하나를 고른다 — 키보드·마우스 스킴의 첫 바인딩. 타깃이 PC라서다(GDD). (#664)
-    /// 인자 없는 GetBindingDisplayString은 못 쓴다: 바인딩을 전부 이어 붙여 상호작용은 "E | Y",
-    /// 아이템 사용은 "X | LMB | Primary Touch/Tap | Trigger | PrimaryAction | Enter"가 나온다.
-    /// 한 스킴 안에서도 여럿일 수 있어(아이템 사용은 LMB·Enter) 첫 번째로 자른다.
-    /// </summary>
+    /// <summary>키보드·마우스 스킴의 첫 바인딩 표기를 돌려준다.</summary>
     private static string BindingDisplay(InputActionReference reference)
     {
         if (reference == null || reference.action == null)
@@ -119,59 +111,42 @@ public class PlayerInputHandler : NetworkBehaviour
             return action.GetBindingDisplayString(i);
         }
 
-        // 그 스킴에 바인딩이 없다 — 있는 것으로라도 적는다.
         return action.GetBindingDisplayString();
     }
 
-    public event Action OnInteractStarted; // 상호작용 버튼 누름
-    public event Action OnInteractPerformed; // 상호작용 발동 — 순수 Button이라 누르는 즉시 발화 (즉시발동)
-    public event Action OnInteractCanceled; // 상호작용 버튼 뗌 — 자가 부활 등 홀드형 취소용 (#820)
-    public event Action OnLootPerformed; // R — 쓰러진 동료 뒤지기, 즉시발동 (#725)
-    public event Action OnUseItemStarted; // 아이템 사용 시작 (좌클릭 누름 — 채널링 시작, #91)
-    public event Action OnUseItemCanceled; // 아이템 사용 중단 (좌클릭 뗌 — 채널링 취소, #91)
-    public event Action OnPreviousItem; // 마우스 휠 위 — 이전 아이템으로 전환 (#46)
-    public event Action OnNextItem; // 마우스 휠 아래 — 다음 아이템으로 전환 (#46)
-    public event Action OnDropItem; // 장착 아이템 버리기 (#88)
-    public event Action<int> OnSelectSlot; // 숫자키 1~5 — 슬롯 직접 선택, 인덱스 0~4 (#144/#793)
-    public event Action OnToggleInventory; // I — 인벤토리 편집 모드 토글 (#144, Tab을 상황판에 내주고 옮김 #720)
-    public event Action<bool> OnCrouchChanged; // Left Ctrl 홀드 — 누르면 true, 떼면 false (#236)
-    public event Action OnJumpPressed; // Space 누름 — 홀드가 아닌 단발 입력 (#189)
-    public event Action OnEmoteWheelOpened; // T 누름 — 감정표현 휠 열기 (#219)
-    public event Action OnEmoteWheelClosed; // T 뗌 — 가리키던 칸 발동 (#219)
-    public event Action OnTeamStatusOpened; // Tab 누름 — 팀 상황판 열기 (#720)
-    public event Action OnTeamStatusClosed; // Tab 뗌 — 닫기 (#720)
+    public event Action OnInteractStarted;
+    public event Action OnInteractPerformed;
+    public event Action OnInteractCanceled;
+    public event Action OnLootPerformed;
+    public event Action OnUseItemStarted;
+    public event Action OnUseItemCanceled;
+    public event Action OnPreviousItem;
+    public event Action OnNextItem;
+    public event Action OnDropItem;
+    public event Action<int> OnSelectSlot;
+    public event Action OnToggleInventory;
+    public event Action<bool> OnCrouchChanged;
+    public event Action OnJumpPressed;
+    public event Action OnEmoteWheelOpened;
+    public event Action OnEmoteWheelClosed;
+    public event Action OnTeamStatusOpened;
+    public event Action OnTeamStatusClosed;
 
-    // <b>"내 플레이어인가"는 스폰 시점에 굳힌다 — IsOwner로 매번 묻지 않는다.</b> (#774)
-    // 사망하면 소유권이 서버로 넘어가므로(PlayerIncapacitation, #763 A-1) 호스트에서는 <b>남의 시체가
-    // 내 것으로 보인다.</b> 그 시체가 디스폰될 때 오너 경로가 돌면, 액션 참조가 가리키는 것이
-    // 인스턴스별이 아니라 공용 InputActionAsset이라 <b>살아 있는 내 입력이 꺼진다.</b>
-    // (PlayerNameTag.m_isLocalPlayer와 같은 이유·같은 방식)
     private bool m_isLocalOwner;
 
     private bool m_isSuspended;
 
-    // 팀 상황판(Tab)을 들여다보는 중인가. (#720)
     private bool m_isPeekingTeamStatus;
 
-    // 안내에 적을 키 표기를 고르는 기준 스킴 — 타깃이 PC다 (#664, BindingDisplay 참고)
     private const string k_displayScheme = "Keyboard&Mouse";
 
-    // 키 표기 캐시 — null이면 다음 요청 때 다시 만든다 (#664)
     private string m_interactBinding;
     private string m_useItemBinding;
     private string m_lootBinding;
 
-    /// <summary>
-    /// 게임플레이 입력이 정지된 상태인지 — 텍스트 입력 UI(신호 해석기 #108) 등이 켠다.
-    /// 정지 중에는 이동·시점·아이템·상호작용 입력이 전부 끊긴다.
-    /// </summary>
     public bool IsSuspended => m_isSuspended;
 
-    /// <summary>
-    /// 게임플레이 입력을 일시 정지/재개한다. 타이핑 중 WASD가 이동으로 새는 것을 막는 용도다.
-    /// (인벤토리 편집 모드는 "이동 입력이 들어오면 닫기" 방식이라 타이핑에는 쓸 수 없다 — InventoryBarView.Update)
-    /// 오너에서만 의미가 있다. 정지/재개는 구독을 건드리지 않고 액션만 켜고 끈다.
-    /// </summary>
+    /// <summary>게임플레이 입력 액션을 일시 정지/재개한다(구독은 유지).</summary>
     public void SetSuspended(bool suspended)
     {
         if (!m_isLocalOwner || m_isSuspended == suspended)
@@ -182,32 +157,18 @@ public class PlayerInputHandler : NetworkBehaviour
 
         if (suspended)
         {
-            // 액션을 끄면 진행 중이던 입력의 canceled 콜백이 돌아 캐시값이 비워지지만, 순서에 기대지 않고
-            // 여기서 확실히 비운다 — 남아 있으면 정지 중에도 마지막 입력값으로 계속 이동한다.
             MoveInput = Vector2.zero;
             LookInput = Vector2.zero;
             IsSprinting = false;
         }
     }
 
-    /// <summary>
-    /// 상호작용 키가 이번 프레임에 눌렸는가 — <b>입력 정지 중에도 답한다</b>. (#487 후속)
-    ///
-    /// 액션 콜백(<see cref="OnInteractPerformed"/>)이 아니라 <b>바인딩된 컨트롤을 직접</b> 읽는다.
-    /// 이걸 묻는 자리가 스스로 입력을 정지시킨 UI(약탈 창)이기 때문이다 — <see cref="SetSuspended"/>가
-    /// 상호작용 액션까지 꺼 버리므로 콜백은 오지 않는다. 그렇다고 창이 E를 상수로 박으면
-    /// <see cref="InteractBinding"/>이 안내하는 키와 갈라진다.
-    ///
-    /// <b>정지를 우회하는 것이 아니다</b> — 정지 중에는 이벤트가 아무 곳에도 가지 않고, 이 함수를
-    /// 부른 쪽만 자기 키를 본다. 게임플레이 입력으로 새지 않는다.
-    /// </summary>
+    /// <summary>상호작용 키가 이번 프레임에 눌렸는지 컨트롤을 직접 읽는다(입력 정지 중에도 동작).</summary>
     public bool WasInteractPressedThisFrame()
     {
         if (m_interactAction == null || m_interactAction.action == null)
             return false;
 
-        // 액션이 꺼져 있어도 controls는 해석된다(필요하면 접근 시점에 해석한다) — 컨트롤의
-        // wasPressedThisFrame은 장치 상태를 직접 보므로 액션의 켜짐 여부와 무관하다.
         foreach (InputControl control in m_interactAction.action.controls)
         {
             if (control is ButtonControl button && button.wasPressedThisFrame)
@@ -217,11 +178,7 @@ public class PlayerInputHandler : NetworkBehaviour
         return false;
     }
 
-    /// <summary>
-    /// 뒤지기(R) 키가 이번 프레임에 눌렸는가 — <b>입력 정지 중에도 답한다</b>. (#725)
-    /// 약탈 창(LootPanel)이 스스로 입력을 정지시킨 뒤 "연 키로 닫기"를 판정하는 자리라
-    /// <see cref="WasInteractPressedThisFrame"/>과 같은 이유로 콜백 대신 컨트롤을 직접 읽는다.
-    /// </summary>
+    /// <summary>뒤지기(R) 키가 이번 프레임에 눌렸는지 컨트롤을 직접 읽는다(입력 정지 중에도 동작).</summary>
     public bool WasLootPressedThisFrame()
     {
         if (m_lootAction == null || m_lootAction.action == null)
@@ -236,11 +193,7 @@ public class PlayerInputHandler : NetworkBehaviour
         return false;
     }
 
-    /// <summary>
-    /// 팀 상황판을 보는 동안인지 알린다 — 그 사이 감정표현 휠·인벤토리 편집 입력을 흘리지 않는다. (#720)
-    /// 액션을 끄지 않고 이벤트만 막는다 — 끄면 진행 중이던 입력의 canceled가 돌아 감정표현이 오발동한다.
-    /// <see cref="SetSuspended"/>는 팀 상황판 액션까지 함께 꺼서 홀드가 끊기므로 쓸 수 없다.
-    /// </summary>
+    /// <summary>팀 상황판을 보는 동안 감정표현 휠·인벤토리 편집 입력 이벤트를 막는다.</summary>
     public void SetTeamStatusPeeking(bool peeking)
     {
         if (!m_isLocalOwner)
@@ -249,7 +202,6 @@ public class PlayerInputHandler : NetworkBehaviour
         m_isPeekingTeamStatus = peeking;
     }
 
-    // 15개 액션을 한꺼번에 켜고 끈다 — 스폰/디스폰/정지가 같은 목록을 쓰도록 한 곳에 모은다.
     private void SetActionsEnabled(bool value)
     {
         InputActionReference[] actions =
@@ -285,7 +237,7 @@ public class PlayerInputHandler : NetworkBehaviour
 
     public override void OnNetworkSpawn()
     {
-        m_isLocalOwner = IsOwner; // 여기서 굳힌다 — 사망 중 뒤집히는 값이다 (#774)
+        m_isLocalOwner = IsOwner;
 
         if (!m_isLocalOwner)
         {
@@ -320,7 +272,7 @@ public class PlayerInputHandler : NetworkBehaviour
         m_teamStatusAction.action.started += OnTeamStatusStartedHandler;
         m_teamStatusAction.action.canceled += OnTeamStatusCanceledHandler;
 
-        InputSystem.onActionChange += HandleActionChange; // 키 표기 캐시 무효화 (#664)
+        InputSystem.onActionChange += HandleActionChange;
     }
 
     public override void OnNetworkDespawn()
@@ -356,11 +308,9 @@ public class PlayerInputHandler : NetworkBehaviour
         InputSystem.onActionChange -= HandleActionChange;
 
         SetActionsEnabled(false);
-        m_isSuspended = false; // 재접속·재스폰 시 정지 상태가 남지 않도록 초기화
+        m_isSuspended = false;
     }
 
-    // 바인딩이 바뀌면 키 표기 캐시를 버린다 — 다음에 읽을 때 새 키로 만든다. (#664)
-    // 재바인딩 UI가 아직 없어 지금은 발화하지 않지만, 생겼을 때 옛 키를 계속 적는 것을 막는다.
     private void HandleActionChange(object obj, InputActionChange change)
     {
         if (change != InputActionChange.BoundControlsChanged)
@@ -403,7 +353,6 @@ public class PlayerInputHandler : NetworkBehaviour
 
     private void OnDropItemHandler(InputAction.CallbackContext ctx) => OnDropItem?.Invoke();
 
-    // 숫자키 1~5 바인딩이 한 액션에 묶여 있어, 눌린 키 이름("1"~"5")으로 슬롯 인덱스(0~4)를 구한다.
     private void OnSelectSlotHandler(InputAction.CallbackContext ctx)
     {
         if (int.TryParse(ctx.control.name, out int keyNumber))
@@ -412,7 +361,6 @@ public class PlayerInputHandler : NetworkBehaviour
         }
     }
 
-    // 상황판을 보는 동안은 무시한다 — 커서가 풀리는데 인벤토리 바는 상황판 밑에 깔려 보이지도 않는다. (#720)
     private void OnToggleInventoryHandler(InputAction.CallbackContext ctx)
     {
         if (m_isPeekingTeamStatus)
@@ -427,14 +375,10 @@ public class PlayerInputHandler : NetworkBehaviour
     private void OnCrouchCanceledHandler(InputAction.CallbackContext ctx) =>
         OnCrouchChanged?.Invoke(false);
 
-    // 눌리는 순간(started)에 발화 — 홀드해도 한 번만 나가야 연타/장풍 점프가 안 생긴다. (#189)
     private void OnJumpStartedHandler(InputAction.CallbackContext ctx) => OnJumpPressed?.Invoke();
 
-    // 홀드 방식이라 started/canceled 두 지점을 모두 쓴다 — performed 하나로는 "누르고 있는 동안"을
-    // 표현할 수 없다. 크라우치(m_crouchAction)가 같은 형태다.
     private void OnEmoteStartedHandler(InputAction.CallbackContext context)
     {
-        // 여는 쪽만 막는다 — 닫는 쪽까지 막으면 미리 펼쳐 둔 휠이 닫힐 길을 잃는다. (#720)
         if (m_isPeekingTeamStatus)
             return;
 

@@ -2,18 +2,11 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// 씬에 미리 놓아둔 폭탄 상자 — 추격 폭탄이 여기서 나온다. (GDD 6-4, #399)
-///
-/// <b>상자는 이벤트가 만들지 않는다.</b> 레벨에 미리 배치돼 평소에도 소품으로 서 있고, 추첨되면
-/// 그중 한 곳이 열린다 — 폭탄과 함께 상자가 허공에서 생기면 미리 알아보고 경계할 여지가 없다.
-/// 후보 지점 역할도 겸한다(<see cref="BombChaseEvent"/>가 <see cref="All"/>에서 고른다).
-/// <b>여는 연출에는 동기화가 없다.</b> 각 피어가 "내 앞에 등장 중(<see cref="BombState.Emerging"/>)인
-/// 폭탄이 있는가"만 보고 스스로 연다 — 폭탄의 위치·상태가 이미 전 피어에서 같으므로 어느 상자가
-/// 뽑혔는지를 따로 실어 보낼 필요가 없다.
+/// 씬에 미리 배치된 폭탄 상자 — 추격 폭탄의 스폰 후보이자 등장 연출을 맡는다.
+/// 근처 폭탄이 Emerging 상태이면 각 피어가 스스로 상자를 연다.
 /// </summary>
 public class BombCrate : MonoBehaviour
 {
-    /// <summary>씬에 살아 있는 상자들 — <see cref="BombChaseEvent"/>가 등장 지점으로 고른다.</summary>
     public static readonly List<BombCrate> All = new List<BombCrate>();
 
     [Tooltip("폭탄이 나올 자리 — 비우면 이 오브젝트의 위치를 쓴다. 상자 메시의 피벗이 구석에 있으면 지정할 것")]
@@ -59,13 +52,10 @@ public class BombCrate : MonoBehaviour
     private bool m_opening;
     private float m_elapsed;
 
-    // 내가 연 폭탄 — 열린 자세를 언제까지 유지할지의 기준. 위치로 다시 묻지 않는 이유는 아래 Update 참고.
     private BombDevice m_openedFor;
 
-    /// <summary>폭탄이 나올 위치 — 이벤트가 여기에 스폰한다.</summary>
     public Vector3 SpawnPosition => m_spawnPoint != null ? m_spawnPoint.position : transform.position;
 
-    /// <summary>폭탄이 나올 방향 — 상자가 향한 쪽으로 세운다.</summary>
     public Quaternion SpawnRotation => m_spawnPoint != null ? m_spawnPoint.rotation : transform.rotation;
 
     private void Awake()
@@ -84,7 +74,6 @@ public class BombCrate : MonoBehaviour
 
         if (bomb == null)
         {
-            // 폭탄이 사라졌다(폭발 후 정리·라운드 종료) — 다음 라운드를 위해 닫아 둔다
             if (m_opening)
                 Close();
             return;
@@ -93,9 +82,8 @@ public class BombCrate : MonoBehaviour
         if (!m_opening)
         {
             if (bomb.State != BombState.Emerging)
-                return; // 아직 나오기 전이거나(스폰 직후) 이미 다 나온 뒤 — 열 이유가 없다
+                return;
 
-            // "내 상자에서 나오는가"는 여는 순간에만 묻는다. 이때 폭탄은 아직 상자 앞에 서 있다.
             if (!IsNearestCrateTo(bomb.transform.position))
                 return;
 
@@ -105,7 +93,6 @@ public class BombCrate : MonoBehaviour
         }
         else if (m_openedFor != bomb)
         {
-            // 내가 연 폭탄은 치워지고 다른 폭탄이 이미 올라왔다 — 내 차례는 끝났다
             Close();
             return;
         }
@@ -121,7 +108,6 @@ public class BombCrate : MonoBehaviour
         TickShove(Mathf.Clamp01((m_elapsed - m_shakeSeconds) / m_shoveSeconds));
     }
 
-    // 상자가 제자리에서 들썩인다 — 절댓값 사인이라 바닥을 치고 튀어오르는 리듬이 된다
     private void TickShake(float t)
     {
         float wave = Mathf.Abs(Mathf.Sin(t * m_shakeFrequency * Mathf.PI));
@@ -130,20 +116,11 @@ public class BombCrate : MonoBehaviour
             0f, 0f, Mathf.Sin(t * m_shakeFrequency * Mathf.PI * 0.5f) * m_shakeTilt);
     }
 
-    /// <summary>
-    /// 상자가 뒤로 밀려나며 기운다 — 폭탄이 안에서 밀어젖힌 그림.
-    /// </summary>
-    /// <remarks>
-    /// <b>넘어뜨리지 않는다.</b> 이 상자는 깊이가 높이보다 길어서, 모서리를 축으로 90° 눕히면 오히려
-    /// <b>세로로 곧추선 더 큰 상자</b>가 된다 — "쓰러졌다"가 아니라 "일어섰다"로 읽힌다. 그래서 크게
-    /// 돌리는 대신 뒤로 밀어내고 살짝만 기울인다.
-    /// </remarks>
+    /// <summary>상자가 뒤로 밀려나며 기운다 — 폭탄이 안에서 밀어젖힌 그림.</summary>
     private void TickShove(float t)
     {
-        float eased = 1f - (1f - t) * (1f - t); // 밀쳐진 물건의 감속 — 처음 빠르고 끝에서 잦아든다
+        float eased = 1f - (1f - t) * (1f - t);
 
-        // 밀리는 방향은 상자가 향한 쪽의 뒤다 — 자기 회전을 태우지 않으면 회전된 상자가 엉뚱한 쪽으로
-        // 밀려나 폭탄을 덮은 채 남는다. 띄우는 성분만 부모 기준 위쪽 그대로 둔다.
         Vector3 back = m_closedRotation * Vector3.back;
         transform.localPosition = m_closedPosition
             + back * (m_shoveDistance * eased)
@@ -152,15 +129,7 @@ public class BombCrate : MonoBehaviour
             -m_shoveTilt * eased, m_shoveTilt * 0.5f * eased, 0f);
     }
 
-    /// <summary>
-    /// 등장 중인 폭탄에서 가장 가까운 상자가 연다 — 이 상자가 그 상자인가.
-    /// </summary>
-    /// <remarks>
-    /// 고정 반경으로 자르지 않는다. 이벤트는 상자 자리를 그대로 쓰는 것이 아니라 주변 NavMesh 위로
-    /// 올려서 스폰하므로(<see cref="BombChaseEvent"/>의 샘플 거리, 기본 5m), 반경을 좁게 잡으면
-    /// 인도 가장자리에 놓인 상자에서는 <b>아무 상자도 열리지 않은 채</b> 폭탄만 나타난다.
-    /// 라운드당 폭탄은 1개이고 상자 말고는 나올 곳이 없으므로 "가장 가까운 상자"면 항상 맞다.
-    /// </remarks>
+    /// <summary>등장 중인 폭탄에서 가장 가까운 상자가 연다 — 이 상자가 그 상자인가.</summary>
     private bool IsNearestCrateTo(Vector3 position)
     {
         float mine = (position - SpawnPosition).sqrMagnitude;
@@ -177,7 +146,6 @@ public class BombCrate : MonoBehaviour
         return true;
     }
 
-    // 닫힌 자세로 되돌린다 — 폭탄이 치워진 뒤라 보고 있는 사람이 없다고 보고 즉시 되돌린다
     private void Close()
     {
         m_opening = false;
@@ -187,7 +155,6 @@ public class BombCrate : MonoBehaviour
         transform.localRotation = m_closedRotation;
     }
 
-    // 씬 뷰에서 폭탄이 나올 자리를 눈으로 확인할 수 있게 기즈모를 그린다.
     private void OnDrawGizmosSelected()
     {
         Gizmos.color = Color.red;

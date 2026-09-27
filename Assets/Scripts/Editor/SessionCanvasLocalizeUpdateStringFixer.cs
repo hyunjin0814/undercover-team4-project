@@ -5,12 +5,7 @@ using UnityEngine;
 using UnityEngine.Localization.Components;
 
 /// <summary>
-/// 버튼 배선 재작업으로 새로 생긴 라벨(Text (TMP))은 LocalizeStringEvent 자체가
-/// 새로 붙은 것이라 UpdateString 이벤트에 아무 퍼시스턴트 콜도 없었다. 키를 복원해도
-/// (SessionCanvasLocalizationKeyFixer) 문자열을 TMP_Text로 넘겨줄 리스너가 없어 텍스트가
-/// 갱신되지 않았던 것 — 이 스크립트가 UpdateString -> TMP_Text.set_text 배선을 되살린다.
-/// 값 구성은 이미 정상 동작하는 다른 버튼 라벨(예: AuthGate/Window/Title)의 직렬화 형태를
-/// 그대로 따른다 (m_Mode=0 EventDefined, m_CallState=1 EditorAndRuntime).
+/// SessionCanvas 라벨의 LocalizeStringEvent.UpdateString → TMP_Text.set_text 배선을 복원한다.
 /// </summary>
 public static class SessionCanvasLocalizeUpdateStringFixer
 {

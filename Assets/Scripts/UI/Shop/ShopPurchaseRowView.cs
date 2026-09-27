@@ -3,8 +3,7 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// 주문창 구매 내역의 한 줄 (#840) — 아이콘 / 이름 / "구매 n · 남음 m". 표시 전용.
-/// 문구는 <see cref="Bind"/> 때 지금 언어로 한 번 읽는다 — 언어가 바뀌면 목록이 통째로 다시 그려진다 (#497).
+/// 구매 내역의 한 줄 — 아이콘·이름·구매/남은 수를 표시한다.
 /// </summary>
 public class ShopPurchaseRowView : MonoBehaviour
 {
@@ -28,7 +27,7 @@ public class ShopPurchaseRowView : MonoBehaviour
         {
             Sprite icon = entry != null ? entry.Icon : null;
             m_icon.sprite = icon;
-            m_icon.enabled = icon != null; // 아이콘 미배선이면 이름 글자가 폴백
+            m_icon.enabled = icon != null;
         }
 
         if (m_nameText != null)

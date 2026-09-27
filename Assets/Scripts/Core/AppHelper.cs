@@ -6,67 +6,44 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 
 /// <summary>
-/// 씬 로드 실행 담당 — App.LoadScene의 실제 구현부. 직접 호출하지 말고 App.LoadScene을 쓸 것.
-/// 세션 중이면 NGO 씬 동기화(서버만), 아니면 로컬 로드.
-/// 전제: NetworkManager의 Enable Scene Management가 켜져 있어야 한다.
-///
-/// 로드는 비동기다 (#403) — 동기 로드는 호출 프레임에 씬을 갈아끼워 로딩 화면을 띄울 틈 자체가 없었다.
-/// 완료 판정은 경로마다 다르다: 오프라인은 활성화 시점을 직접 열고, NGO는 열어주지 않으므로 씬 이벤트로 확인한다.
+/// App.LoadScene의 실제 구현 — 세션 중이면 NGO 씬 동기화, 아니면 로컬로 비동기 로드한다.
+/// 직접 호출하지 말고 App.LoadScene을 쓸 것.
 /// </summary>
 public static class AppHelper
 {
-    // LoadSceneAsync는 활성화 대기(allowSceneActivation=false) 상태에서 progress가 1.0이 아니라 0.9에서 멈춘다.
     private const float k_activationReadyProgress = 0.9f;
 
-    // 활성화 직후 첫 프레임은 셰이더 컴파일·텍스처 업로드로 튄다 — 로딩 화면으로 덮은 채 흘려보낸다.
     private const int k_firstRenderFrames = 2;
 
-    // NGO 씬 동기화의 로컬 완료를 기다리는 상한. 무한 대기(로딩 화면 고착) 방지.
     private const float k_networkLoadTimeoutSeconds = 30f;
 
-    // 고른 맵이 없을 때 갈 맵. 세션 밖(에디터에서 Shop을 직접 Play)이거나 목록이 비었을 때 쓰인다.
     private const string k_defaultGameScene = "Map_Apocalypse";
 
-    // 튜토리얼 전용 맵 (#663). 놀고 있던 옛 게임 씬("Main Scene")을 개조해 재사용한다 — 본 게임이
-    // 쓰는 맵은 Assets/Scenes/Maps/* 두 장뿐이다. MapSelection 목록에는 넣지 않는다(고를 대상이 아니다).
     private const string k_tutorialScene = "Tutorial";
 
     /// <summary>EScene → 실제 씬 이름. 빌드 인덱스에 결합하지 않는다 (NGO도 이름 기반 로드).</summary>
     public static string ToSceneName(EScene scene) =>
         scene switch
         {
-            EScene.Title => "Title Scene", // main이 Title.unity → "Title Scene.unity"로 개명 (#214 리베이스 반영)
+            EScene.Title => "Title Scene",
             EScene.Lobby => "Lobby",
             EScene.Shop => "Shop",
-            // 라운드를 진행할 게임 맵. 어느 장으로 갈지는 Shop에서 호스트가 고른다 (#578).
-            // <b>맵을 늘려도 여기에 arm을 추가하지 말 것</b> — EScene.Game은 "게임 맵"이라는 뜻 그대로 두고
-            // 이름만 바꿔치운다. 맵마다 EScene 값을 늘리면 App.CurrentScene == EScene.Game 비교가
-            // 전부 깨진다(PlayerSpawnManager·PlayerItemSupply·SceneIndicatorHud). 목록은 MapSelection이 주인.
             EScene.Game => App.Game.MapSelection?.SelectedSceneName ?? k_defaultGameScene,
-            // 튜토리얼 맵 (#663). 고정 한 장이라 MapSelection을 거치지 않는다 — 고르는 화면(Shop)을
-            // 지나지 않고 타이틀에서 바로 들어오므로 그 홀더가 아예 없다. 목록에 넣지 않는 것도 같은 이유다.
             EScene.Tutorial => k_tutorialScene,
             _ => null,
         };
 
-    // 이름에 없으면 씬 매니저에게 물어본다 — <b>InGameManager가 있는 씬이 곧 게임 맵</b>이다 (#215).
-    // 게임 맵은 여러 개(Assets/Scenes/Maps/*)라서 맵마다 이 스위치에 줄을 늘리지 않기 위한 것이다.
-    // 이 시점에 씬 매니저는 이미 등록돼 있다 — 호출부(sceneLoaded·InitCurrentScene)가 모두 Awake 뒤다.
     private static EScene FromSceneName(string sceneName) =>
         sceneName switch
         {
             "Title Scene" => EScene.Title,
             "Lobby" => EScene.Lobby,
             "Shop" => EScene.Shop,
-            // 튜토리얼 맵도 Game으로 분류한다 — 일부러 그렇게 둔다 (#663). 플레이어 스폰·기본 장비 지급이
-            // App.CurrentScene == EScene.Game으로 갈리므로(PlayerSpawnManager·PlayerItemSupply), 여기서
-            // Tutorial을 돌려주면 튜토리얼에 플레이어가 서지도 장비를 받지도 못한다.
-            // "지금이 튜토리얼인가"는 씬에 TutorialDirector가 있는지로 판별한다.
             "Tutorial" => EScene.Game,
             _ => App.SceneFlow.Game != null ? EScene.Game : EScene.None,
         };
 
-    /// <param name="onProgress">씬 로드 구간의 진행률(0~1)을 매 프레임 보고한다. 표시는 호출부(LoadingScreen) 담당. (#582)</param>
+    /// <summary>씬을 비동기로 로드하고 진행률(0~1)을 onProgress로 보고한다.</summary>
     internal static async UniTask LoadSceneAsync(
         EScene scene,
         CancellationToken token,
@@ -82,12 +59,10 @@ public static class AppHelper
 
         NetworkManager net = NetworkManager.Singleton;
 
-        // 네트워크 세션 중 — 서버가 NGO 씬 동기화로 로드해야 전 클라이언트가 따라온다
         if (net != null && net.IsListening)
         {
             if (!net.IsServer)
             {
-                // 클라이언트가 임의로 씬을 바꾸면 세션에서 이탈한다 — 조용히 무시하지 않고 알린다
                 Debug.LogError($"[AppHelper] 세션 중 씬 전환은 서버만 할 수 있습니다: {scene}");
                 return;
             }
@@ -96,11 +71,9 @@ public static class AppHelper
             return;
         }
 
-        // 오프라인 (에디터 단독 테스트 포함) — 로컬 로드
         await LoadLocalAsync(sceneName, token, onProgress);
     }
 
-    // 오프라인 경로만 활성화 시점을 제어할 수 있다 — 에셋 로드가 끝난 뒤 우리가 활성화를 연다.
     private static async UniTask LoadLocalAsync(
         string sceneName,
         CancellationToken token,
@@ -116,7 +89,6 @@ public static class AppHelper
 
         op.allowSceneActivation = false;
 
-        // progress는 활성화 대기 탓에 0.9가 상한이다 — 그대로 넘기면 게이지가 90%에서 끝난다 (#582)
         while (op.progress < k_activationReadyProgress)
         {
             onProgress?.Invoke(op.progress / k_activationReadyProgress);
@@ -125,15 +97,12 @@ public static class AppHelper
 
         onProgress?.Invoke(1f);
 
-        // 활성화 프레임 — 새 씬 전체의 Awake/OnEnable/Start가 여기서 한 번에 돈다(쪼갤 수 없다).
-        // 이 프레임의 스파이크는 없앨 수 없고, 로딩 화면으로 가리는 것이 최선이다.
         op.allowSceneActivation = true;
         await op.ToUniTask(cancellationToken: token);
 
         await UniTask.DelayFrame(k_firstRenderFrames, PlayerLoopTiming.Update, token);
     }
 
-    // NGO 씬 동기화는 활성화 시점을 열어주지 않는다 — 로컬 로드 완료를 씬 이벤트로 확인한다.
     private static async UniTask LoadViaNetworkAsync(
         NetworkManager net,
         string sceneName,
@@ -143,7 +112,6 @@ public static class AppHelper
     {
         bool localLoaded = false;
 
-        // NGO는 활성화 시점을 열어주지 않아 이 핸들은 진행률을 읽는 용도로만 쓴다 (#582)
         AsyncOperation localOp = null;
 
         void HandleLoad(
@@ -163,7 +131,6 @@ public static class AppHelper
                 localLoaded = true;
         }
 
-        // LoadScene 호출 전에 걸어야 한다 — 완료가 먼저 울려 신호를 놓치는 경우를 없앤다
         net.SceneManager.OnLoad += HandleLoad;
         net.SceneManager.OnLoadComplete += HandleLoadComplete;
         try
@@ -178,8 +145,6 @@ public static class AppHelper
                 return;
             }
 
-            // 데드라인 폴링 — SessionFlow.WaitForNetworkShutdownAsync와 같은 방침(강제하지 않고 경고 후 진행).
-            // 세션이 도중에 끊기면 완료 신호가 영영 안 오므로 IsListening도 종료 조건에 넣는다.
             float deadline = Time.realtimeSinceStartup + k_networkLoadTimeoutSeconds;
             while (!localLoaded && net.IsListening && Time.realtimeSinceStartup < deadline)
             {
@@ -188,7 +153,6 @@ public static class AppHelper
                 await UniTask.Yield(PlayerLoopTiming.Update, token);
             }
 
-            // 확인된 완료에만 100%를 보고한다 — 타임아웃·세션 끊김으로 빠져나온 경우는 아니다
             if (localLoaded)
                 onProgress?.Invoke(1f);
             else
@@ -198,7 +162,6 @@ public static class AppHelper
         }
         finally
         {
-            // 세션이 내려가면 SceneManager 자체가 사라진다
             if (net.SceneManager != null)
             {
                 net.SceneManager.OnLoad -= HandleLoad;
@@ -209,7 +172,6 @@ public static class AppHelper
         await UniTask.DelayFrame(k_firstRenderFrames, PlayerLoopTiming.Update, token);
     }
 
-    // 어떤 경로로 씬이 로드되든(App.LoadScene, NGO 동기화, 에디터 직접 Play) App의 씬 상태를 갱신한다
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void HookSceneLoaded()
     {
@@ -217,8 +179,6 @@ public static class AppHelper
         SceneManager.sceneLoaded += OnSceneLoaded;
     }
 
-    // 특정 씬에서 바로 Play하면 그 초기(활성) 씬은 sceneLoaded가 울리지 않아 CurrentScene이 None으로 남는다.
-    // 최초 활성 씬을 한 번 반영한다 — 이후 전환은 위 sceneLoaded 훅이 담당.
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void InitCurrentScene()
     {

@@ -2,8 +2,7 @@ using NUnit.Framework;
 using UnityEngine;
 
 /// <summary>
-/// 휠 방향 → 슬롯 인덱스 매핑. 경계각이 어느 쪽으로 떨어지는지가 조작감을 정하므로
-/// 눈으로 확인하기 어려운 이 계산만 테스트로 못박는다. (#219)
+/// 휠 방향 → 슬롯 인덱스 매핑 테스트.
 /// </summary>
 public class EmoteWheelGeometryTests
 {
@@ -31,7 +30,6 @@ public class EmoteWheelGeometryTests
     [Test]
     public void 경계각은_다음_슬롯으로_넘어간다()
     {
-        // 22.5도가 0번과 1번의 경계 — 경계 바로 앞뒤가 서로 다른 슬롯이어야 한다
         Assert.AreEqual(0, EmoteWheelGeometry.SlotFromDirection(DirectionAt(22f)), "22도");
         Assert.AreEqual(1, EmoteWheelGeometry.SlotFromDirection(DirectionAt(23f)), "23도");
     }
@@ -59,7 +57,6 @@ public class EmoteWheelGeometryTests
         Assert.AreEqual(315f, EmoteWheelGeometry.SlotCenterDegrees(7), 0.001f);
     }
 
-    // 12시에서 시계방향으로 degrees만큼 돈 단위 벡터
     private static Vector2 DirectionAt(float degrees)
     {
         float radians = degrees * Mathf.Deg2Rad;

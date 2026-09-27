@@ -2,22 +2,8 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// 사망 관전 시점 — 기능 정지(<see cref="IncapacitationCause.Die"/>) 동안 내 시체 또는 살아 있는
-/// 동료를 중심으로 도는 3인칭 오빗 카메라. (#576, #590)
-///
-/// <b>피벗이 대상에 따라 다르다.</b> 내 시체는 루트가 아니라 골반(<see cref="RagdollRig.Hips"/>)이다
-/// — 래그돌 비행 중(#506) 루트는 제자리에 남고 yaw만 몸을 따라가므로, 루트에 붙은 카메라는 폭발로
-/// 날아가는 자기 몸을 화면에서 놓친다. 살아 있는 동료는 거꾸로 <b>루트</b>가 피벗이다 — 골반은
-/// 달리기 클립이 흔드는 뼈라 그대로 쓰면 화면이 흔들린다(#963).
-///
-/// <b>포즈를 스스로 대입하지 않는다</b> — 월드 포즈를 내주기만 하고 카메라에 넣는 것은
-/// <see cref="PlayerLook.UpdateCameraPose"/>다. 카메라 transform을 밖에서 만지면 그쪽이 매 프레임
-/// 통째로 덮어써 그 프레임에 지워진다(#477).
-///
-/// <b>좌클릭으로 [내 시체, 살아 있는 동료들] 순환</b> (#590). 대상마다 좌우 각 기준이 다르다 —
-/// 내 시체는 월드 절대각, 동료는 그 동료 yaw에 얹는 상대각(뒤통수 기준)이다.
-///
-/// 순수 로컬 표현이다 — 동기화할 상태가 없고 서버 권위와 무관하다(<see cref="PlayerRagdoll"/>과 같은 성격).
+/// 기능 정지 동안 내 시체(골반) 또는 살아 있는 동료(루트)를 중심으로 도는 3인칭 관전 오빗 카메라.
+/// 좌클릭으로 대상을 순환하며, 포즈는 PlayerLook이 카메라에 적용한다.
 /// </summary>
 public class PlayerSpectateCamera : MonoBehaviour
 {
@@ -73,61 +59,44 @@ public class PlayerSpectateCamera : MonoBehaviour
     [SerializeField]
     private float m_inputGraceSeconds = 0.3f;
 
-    private RagdollRig m_ownRig; // 내 골반 — 대상이 없을 때(내 시체)의 피벗
-    private PlayerIncapacitation m_self; // 나 자신 — 순환 목록에서 걸러낼 기준
-    private PlayerInputHandler m_input; // 좌클릭 순환 입력 (#590)
+    private RagdollRig m_ownRig;
+    private PlayerIncapacitation m_self;
+    private PlayerInputHandler m_input;
 
-    // 지금 보고 있는 동료 — null이면 내 시체다. 순환 고리의 원점이라 "없음"을 별도 플래그로 두지 않는다.
     private PlayerIncapacitation m_target;
 
-    // 동료 피벗·기준 yaw 감쇠 추종 상태 (#963) — m_followValid가 거짓이면 다음 표본에서 스냅한다.
     private Vector3 m_followPivot;
     private float m_followYaw;
     private bool m_followValid;
 
-    // 순환 고리 재사용 버퍼 — 좌클릭마다 새로 만들지 않는다. 0번은 항상 내 시체(null)다.
     private readonly List<PlayerIncapacitation> m_ring = new();
 
-    // 벽 충돌 SphereCast 재사용 버퍼 — 모든 인스턴스가 공유해도 된다(같은 프레임에 재진입하지 않는다).
     private static readonly RaycastHit[] s_wallProbeBuffer = new RaycastHit[8];
 
-    private float m_activatedAt; // 관전이 켜진 시각(Time.time) — 좌클릭 순환 입력 유예 판정 기준 (#899)
+    private float m_activatedAt;
 
     private bool m_active;
-    private float m_blend; // 1인칭(0) ↔ 관전(1) 진행도
-    private bool m_snap; // 다음 Tick에서 보간을 끊고 현재 상태를 즉시 반영한다
+    private float m_blend;
+    private bool m_snap;
     private float m_pitch;
 
-    // 좌우 각. <b>기준이 대상에 따라 다르다</b> — 내 시체를 볼 때는 월드 절대각이고(피벗이 override든
-    // hips든 동일하게 적용), 동료를 볼 때는 그 동료의 yaw에 얹는 <b>상대각</b>이다(0이면 정확히
-    // 뒤통수). 동료는 계속 움직이므로 절대각으로 잡으면 조금만 걸어가도 옆구리·정면이 보인다.
     private float m_yaw;
 
-    /// <summary>관전이 요청된 상태인가 — 블렌드가 끝났는지와는 별개다.</summary>
     public bool IsActive => m_active;
 
-    // 오빗 중심 덮어쓰기 — 몸이 지하로 사라진 경우에만 쓴다 (#775)
     private Vector3 m_pivotOverride;
     private bool m_hasPivotOverride;
 
-    /// <summary>
-    /// 피벗이 시체가 아니라 고정 지점인가 — <b>사망 전에도 관전으로 넘어가는 신호</b>다. (#775)
-    /// 맨홀 하강은 사망 확정 전에 몸이 지면을 통과하므로, PlayerLook이 이 값을 보고 시점을 뺀다.
-    /// </summary>
     public bool HasPivotOverride => m_hasPivotOverride;
 
     private void Awake()
     {
         m_ownRig = GetComponentInChildren<RagdollRig>();
-        m_ownRig?.EnsureCollected(); // Awake 순서는 보장되지 않는다 — 멱등이라 중복 호출은 무해하다
+        m_ownRig?.EnsureCollected();
         m_self = GetComponent<PlayerIncapacitation>();
         m_input = GetComponent<PlayerInputHandler>();
     }
 
-    // 좌클릭(아이템 사용)을 그대로 빌린다 (#590) — 무력화 중에는 아이템 사용이 막히므로
-    // (PlayerItemUser) 죽어 있는 동안 이 입력은 놀고 있다. 비오너 인스턴스는 PlayerInputHandler가
-    // OnNetworkSpawn에서 스스로 비활성화돼 이벤트를 발행하지 않는다 — 그 판정은 스폰 시점 1회라
-    // 사망 중 소유권이 서버로 넘어가도(#763) 다시 갈리지 않는다.
     private void OnEnable()
     {
         if (m_input != null)
@@ -140,28 +109,18 @@ public class PlayerSpectateCamera : MonoBehaviour
             m_input.OnUseItemStarted -= CycleNext;
     }
 
-    // 커서가 풀려 있으면 좌클릭은 UI 것이다 (#352 PlayerItemUser.HandleUseItem과 같은 게이트) —
-    // 사망 중엔 소유권이 서버로 넘어가 PlayerInputHandler.SetSuspended가 무동작이라(#763),
-    // 정산·일시정지 화면의 버튼 클릭이 여기까지 흘러온다. 한 방향으로만 도는 이유는 #590 원안대로
-    // 고리가 작아(보통 3~5칸) 뒤로 갈 일이 거의 없고, 역방향을 주려면 바인딩 없는 우클릭을 새로
-    // 만들어야 한다.
     private void CycleNext()
     {
         if (CursorLock.IsUnlocked || m_self == null || !m_self.IsDead)
             return;
 
-        // 죽는 순간까지 누르고 있던 좌클릭(공격·아이템 사용)의 started 이벤트가 이 프레임에 그대로
-        // 넘어올 수 있다 — 그러면 자기 시체를 보기도 전에 첫 순환이 동료로 튄다 (#899).
         if (Time.time - m_activatedAt < m_inputGraceSeconds)
             return;
 
         CycleTarget(1);
     }
 
-    /// <summary>
-    /// 관전 대상을 한 칸 옮긴다 — 고리는 [내 시체, 살아 있는 동료들…]이다. (#590)
-    /// 죽은 동료는 넣지 않는다: 볼 것이 시체뿐이라 칸만 늘리고, 내 시체와 구분도 안 된다.
-    /// </summary>
+    /// <summary>관전 대상을 [내 시체, 살아 있는 동료들] 고리에서 한 칸 옮긴다.</summary>
     public void CycleTarget(int direction)
     {
         if (!m_active || direction == 0)
@@ -171,18 +130,17 @@ public class PlayerSpectateCamera : MonoBehaviour
 
         int current = m_ring.IndexOf(m_target);
         if (current < 0)
-            current = 0; // 보던 대상이 고리에서 빠졌다 — 내 시체부터 다시 센다
+            current = 0;
 
         int count = m_ring.Count;
         int next = ((current + direction) % count + count) % count;
         SetTarget(m_ring[next]);
     }
 
-    // 고리를 다시 만든다. PlayerIncapacitation.All은 전원 순회용 무할당 목록이다 (#365에서 도입).
     private void RebuildRing()
     {
         m_ring.Clear();
-        m_ring.Add(null); // 0번 = 내 시체 — 언제든 돌아올 수 있어야 한다
+        m_ring.Add(null);
 
         IReadOnlyList<PlayerIncapacitation> all = PlayerIncapacitation.All;
         for (int i = 0; i < all.Count; i++)
@@ -195,8 +153,6 @@ public class PlayerSpectateCamera : MonoBehaviour
         }
     }
 
-    // 대상 전환. 좌우 각의 기준이 대상에 따라 달라지므로(m_yaw 주석) 갈아탈 때 환산해 준다 —
-    // 안 하면 전환 순간 화면이 대상 yaw만큼 홱 돈다.
     private void SetTarget(PlayerIncapacitation target)
     {
         if (m_target == target)
@@ -205,28 +161,22 @@ public class PlayerSpectateCamera : MonoBehaviour
         float previousBase = TargetBaseYaw();
 
         m_target = target;
-        m_followValid = false; // 다음 TryGetPose에서 새 대상 값으로 스냅한다 (#963)
+        m_followValid = false;
 
-        // 동료로 갈아타면 뒤통수(상대각 0)에서 시작한다 — 갈아탄 직후 옆구리가 보이면 누구를 보는지
-        // 알기 어렵다. 내 시체로 돌아올 때는 직전 절대각을 그대로 이어받아 화면이 튀지 않게 한다.
         m_yaw = target != null ? 0f : previousBase + m_yaw;
     }
 
-    // 대상이 사라지거나 죽었으면 고리에서 다음 칸으로 넘긴다 — 아무도 없으면 내 시체로 돌아온다.
     private void EnsureTargetValid()
     {
         if (m_target == null)
             return;
 
-        // Unity의 파괴된 오브젝트는 == null이 참이 되므로 퇴장·디스폰도 여기서 걸린다.
         if (m_target.isActiveAndEnabled && !m_target.IsDead)
             return;
 
-        // 살아 있는 동료가 하나도 없으면 자연히 내 시체로 돌아온다 — 따로 받아낼 필요가 없다.
         CycleTarget(1);
     }
 
-    // 좌우 각의 기준값 — 동료를 볼 때는 그 동료의 (감쇠 추종된) yaw, 내 시체는 월드 절대각(0).
     private float TargetBaseYaw()
     {
         if (m_target == null)
@@ -235,10 +185,7 @@ public class PlayerSpectateCamera : MonoBehaviour
         return m_followValid ? m_followYaw : m_target.transform.eulerAngles.y;
     }
 
-    /// <summary>
-    /// 관전 진입/이탈. <paramref name="entryYaw"/>는 지금 보고 있는 월드 yaw다 —
-    /// 각을 새로 잡으면 전환 첫 프레임에 화면이 홱 돈다.
-    /// </summary>
+    /// <summary>관전에 진입·이탈한다. entryYaw로 시작 각도를 맞춘다.</summary>
     public void SetSpectating(bool spectating, float entryYaw)
     {
         if (m_active == spectating)
@@ -248,9 +195,6 @@ public class PlayerSpectateCamera : MonoBehaviour
 
         if (!spectating)
         {
-            // 관전 대상이 남지 않게 한다 (#590) — 남기면 다음 사망이 엉뚱한 동료를 보며 시작하고,
-            // 라운드가 바뀌어 그 동료가 없어졌으면 첫 프레임이 무효 대상을 잡는다.
-            // 피벗 고정 해제는 여기서 하지 않는다 — PlayerLook이 무력화가 풀리는 것을 보고 한다 (#775).
             SetTarget(null);
             return;
         }
@@ -260,20 +204,14 @@ public class PlayerSpectateCamera : MonoBehaviour
         m_activatedAt = Time.time;
     }
 
-    /// <summary>
-    /// 마우스 입력을 오빗 각에 누적한다 — 좌우는 자유, 상하는 제한.
-    /// 부호는 <see cref="PlayerLook.HandleLook"/>과 같다(양수 피치=아래).
-    /// </summary>
+    /// <summary>마우스 입력을 오빗 각에 누적한다(상하는 제한).</summary>
     public void AddLook(Vector2 delta)
     {
         m_yaw += delta.x;
         m_pitch = Mathf.Clamp(m_pitch - delta.y, m_minPitch, m_maxPitch);
     }
 
-    /// <summary>
-    /// 블렌드를 한 프레임 진행시키고 그 값(1인칭 0 ↔ 관전 1)을 낸다.
-    /// 관전 중이 아니어도 매 프레임 불러야 이탈 보간이 진행된다.
-    /// </summary>
+    /// <summary>관전 블렌드를 한 프레임 진행하고 값(0 1인칭 ↔ 1 관전)을 돌려준다.</summary>
     public float Tick()
     {
         if (m_snap)
@@ -283,7 +221,6 @@ public class PlayerSpectateCamera : MonoBehaviour
             return m_blend;
         }
 
-        // 주사율이 달라도 같은 속도로 붙게 — PlayerLook.Damp와 같은 식이다. (#665)
         float t = m_blendSpeed <= 0f ? 1f : 1f - Mathf.Exp(-m_blendSpeed * Time.deltaTime);
         m_blend = Mathf.Lerp(m_blend, m_active ? 1f : 0f, t);
 
@@ -293,35 +230,20 @@ public class PlayerSpectateCamera : MonoBehaviour
         return m_blend;
     }
 
-    /// <summary>
-    /// 다음 <see cref="Tick"/>에서 보간을 끊고 현재 상태를 즉시 반영한다 — <b>몸이 순간이동했을 때</b>
-    /// 부른다(<see cref="PlayerMovement"/>의 포즈 대입). 옮겨간 자리에서 옛 화면으로 1초 쓸려 들어올
-    /// 이유가 없다.
-    ///
-    /// <b>0으로 지우는 게 아니라 목표로 튀는 것</b>이 핵심이다 — 죽은 채로 옮겨지는 경로가 실제로
-    /// 있고(본부 부활 장치 안치, #365), 거기서 0으로 지우면 아직 시체인데 화면만 1인칭으로 돌아간다.
-    ///
-    /// 즉시 대입하지 않고 한 프레임 미루는 이유는 <b>호출 순서</b>다. 세션 유지 씬 전환에서 재배치
-    /// (PlayerSpawnManager)와 부활 해제(ShopManager)가 둘 다 씬 로드에 물려 있는데 Start 순서가
-    /// 정해져 있지 않다. Unity는 그 프레임의 Start를 전부 돌린 뒤 Update를 돌리므로, Tick 시점에는
-    /// 어느 쪽이 먼저였든 상태가 확정돼 있다.
-    /// </summary>
+    /// <summary>다음 Tick에서 보간을 끊고 현재 목표로 즉시 튀게 한다(몸 순간이동 시).</summary>
     public void SnapNextTick() => m_snap = true;
 
-    /// <summary>
-    /// 오빗 중심을 <b>시체가 아닌 지점</b>으로 고정한다 — 몸이 회수 불가능한 곳으로 사라졌을 때. (#775)
-    /// 납치 결말은 시체를 지하로 데려가므로, 그대로 두면 땅속 어둠을 도는 화면이 된다.
-    /// </summary>
+    /// <summary>오빗 중심을 지정 지점으로 고정한다(몸이 사라졌을 때).</summary>
     public void SetPivotOverride(Vector3 worldPosition)
     {
         m_pivotOverride = worldPosition;
         m_hasPivotOverride = true;
     }
 
-    /// <summary>피벗 고정을 놓는다 — 부활 등으로 자기 몸을 다시 돌 수 있게 됐을 때. (#775)</summary>
+    /// <summary>피벗 고정을 놓는다 — 부활 등으로 자기 몸을 다시 돌 수 있게 됐을 때.</summary>
     public void ClearPivotOverride() => m_hasPivotOverride = false;
 
-    /// <summary>관전 대상을 곧장 살아있는 동료로 돌린다 — 없으면 내 시체(피벗 고정) 슬롯에 남는다. (#819)</summary>
+    /// <summary>관전 대상을 곧장 살아있는 동료로 돌린다 — 없으면 내 시체(피벗 고정) 슬롯에 남는다.</summary>
     public void SpectateTeammateIfAny()
     {
         RebuildRing();
@@ -335,22 +257,18 @@ public class PlayerSpectateCamera : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// 관전 카메라의 <b>월드</b> 포즈. 골반이 없으면 false — 호출자는 1인칭 포즈를 그대로 쓴다.
-    /// </summary>
+    /// <summary>관전 카메라의 월드 포즈. 골반이 없으면 false — 호출자는 1인칭 포즈를 그대로 쓴다.</summary>
     public bool TryGetPose(out Vector3 position, out Quaternion rotation)
     {
         position = default;
         rotation = default;
 
-        EnsureTargetValid(); // 보던 동료가 죽거나 나갔으면 여기서 넘긴다
+        EnsureTargetValid();
 
         Vector3 pivot;
 
         if (m_target != null)
         {
-            // 동료는 루트가 피벗이다 — 골반을 쓰면 달리기 클립 흔들림과 네트워크 보간 노이즈가
-            // 화면에 그대로 실린다(#963). 감쇠 추종으로 그 노이즈를 깎는다.
             Vector3 rawPivot = m_target.transform.position + Vector3.up * m_teammatePivotHeight;
             float rawYaw = m_target.transform.eulerAngles.y;
 
@@ -373,23 +291,18 @@ public class PlayerSpectateCamera : MonoBehaviour
         }
         else
         {
-            // 피벗 고정(#775)은 내 시체 슬롯에만 걸린다.
             Transform hips = m_ownRig != null ? m_ownRig.Hips : null;
             bool useOverride = m_hasPivotOverride;
 
             if (hips == null && !useOverride)
-                return false; // 리그가 없는 구성(테스트 씬 등) — 기존 바닥 시점으로 남는다
+                return false;
 
             Vector3 pivotBase = useOverride ? m_pivotOverride : hips.position;
             pivot = pivotBase + Vector3.up * m_pivotHeight;
         }
 
-        // 동료를 볼 때는 그 동료의 yaw에 얹는다 — 걸어가는 동안 뒤통수를 유지하려면 기준이 함께 돌아야 한다.
         rotation = Quaternion.Euler(m_pitch, TargetBaseYaw() + m_yaw, 0f);
 
-        // 벽을 파고들지 않게 당긴다. 캐릭터는 벽으로 치지 않는다 — 환경과 같은 Default 레이어라
-        // 마스크로 못 거른다(NpcController.SweepHitsObstacle과 같은 사정). 안 걸러내면 맨홀
-        // 하강 중 앞을 막고 내려가는 납치범이 매 프레임 다른 거리로 잡혀 카메라가 떨린다.
         Vector3 back = rotation * Vector3.back;
         float distance = m_distance;
         int hitCount = Physics.SphereCastNonAlloc(

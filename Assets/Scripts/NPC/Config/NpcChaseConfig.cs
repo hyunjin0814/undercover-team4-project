@@ -77,27 +77,17 @@ public class NpcChaseConfig : ScriptableObject
     public float Acceleration => m_acceleration;
     public float MaxLeadSeconds => m_maxLeadSeconds;
 
-    /// <summary>추격을 완전히 접는 거리(m) — <b><see cref="Range"/>보다 넓어야 한다</b>. (#568 후속)
-    /// 좁으면 방금 고른 표적이 즉시 자격을 잃어 물었다 놨다를 반복한다(이력이 없어진다).</summary>
     public float ReleaseDistance => m_releaseDistance;
 
-    /// <summary>납치 기습이 성립하는 표적 후방 부채꼴의 반각(도). (#775)</summary>
     public float AmbushRearHalfAngle => m_ambushRearHalfAngle;
 
-    /// <summary>납치 접근 목적지를 표적 뒤 얼마나 떨어진 곳으로 잡는가(m). (#775)</summary>
     public float AmbushApproachDistance => m_ambushApproachDistance;
 
-    /// <summary>납치 접근 시 2인조를 좌우로 벌리는 거리(m). (#775)</summary>
     public float AmbushSideSpread => m_ambushSideSpread;
 
-    /// <summary>표적이 나를 보고 있다고 볼 정면 반각(도) — 이 안에서는 접근하지 않는다. (#775)</summary>
     public float AmbushViewHalfAngle => m_ambushViewHalfAngle;
 
-    /// <summary>보이는 동안 표적 반대쪽으로 걸어가는 거리(m). (#775)</summary>
     public float AmbushWalkAwayDistance => m_ambushWalkAwayDistance;
 
-    /// <summary>갈아타는 기준 — 다른 후보가 현재 표적보다 이만큼(m) 더 가까울 때만 바꾼다. (#568 후속)
-    /// 거리로 놓았다 다시 고르는 방식과 달리 왕복이 생기지 않는다 — 바꾼 직후에는
-    /// 새 표적이 더 가까우므로 되돌아갈 조건이 성립하지 않는다.</summary>
     public float SwitchAdvantage => m_switchAdvantage;
 }

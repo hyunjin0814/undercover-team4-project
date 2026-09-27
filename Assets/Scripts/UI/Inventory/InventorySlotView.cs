@@ -5,9 +5,8 @@ using UnityEngine.UI;
 using TMPro;
 
 /// <summary>
-/// 인벤토리 핫바의 슬롯 한 칸 (#144). 아이콘 표시와 선택 하이라이트,
-/// 편집 모드(I)에서의 호버 툴팁·드래그 정렬 이벤트를 담당한다. 로직은 InventoryBarView가 소유.
-/// 이름 텍스트는 <b>아이콘이 없는 아이템의 폴백</b>일 뿐이다 (#793) — 아이콘이 있으면 비운다.
+/// 인벤토리 핫바의 슬롯 한 칸 — 아이콘·선택 하이라이트와 편집 모드의 호버 툴팁·드래그 이벤트를 담당한다.
+/// 로직은 InventoryBarView가 소유한다.
 /// </summary>
 public class InventorySlotView : MonoBehaviour,
     IPointerEnterHandler, IPointerExitHandler,
@@ -30,19 +29,13 @@ public class InventorySlotView : MonoBehaviour,
     private int m_index;
     private ItemBase m_item;
 
-    // 이름 갱신을 구독 중인 LocalizedString — 해제 기준을 아이템이 아니라 이 참조로 잡는다. 아이템이
-    // 파괴되면(라운드 종료 회수, #370) m_item이 Unity 가짜 null이라 아이템 기준 해제가 통째로 스킵되고,
-    // 남은 구독이 나중에 발화해 빈 칸에 옛 이름을 쓴다. LocalizedString은 순수 관리 객체라 안전. (#251)
     private LocalizedString m_boundName;
 
-    // 드래그 고스트 복원용 — 드래그 중 아이콘을 캔버스 최상위로 옮겼다가 되돌린다.
     private Transform m_iconOriginalParent;
     private Vector3 m_iconOriginalLocalPosition;
 
-    /// <summary>이 슬롯에 표시 중인 아이템. 빈 칸이면 null.</summary>
     public ItemBase Item => m_item;
 
-    /// <summary>슬롯 인덱스 (0~4).</summary>
     public int Index => m_index;
 
     /// <summary>바가 스폰 시 1회 호출 — 슬롯 인덱스와 소유 바를 연결한다.</summary>
@@ -55,7 +48,6 @@ public class InventorySlotView : MonoBehaviour,
     /// <summary>슬롯 내용 갱신. null = 빈 칸 (프레임만 표시).</summary>
     public void Bind(ItemBase item)
     {
-        // 이전 아이템 구독 해제 — 빈/교체된 슬롯이 언어 전환 시 옛 아이템 이름으로 갱신되는 것 방지 (#251)
         if (m_boundName != null)
         {
             m_boundName.StringChanged -= HandleItemNameChanged;
@@ -74,16 +66,12 @@ public class InventorySlotView : MonoBehaviour,
         m_icon.sprite = item.ItemIcon;
         m_icon.enabled = item.ItemIcon != null;
 
-        // 아이콘이 있으면 칸에 이름을 겹쳐 쓰지 않는다 (#793) — 무엇을 들었는지는 전환할 때마다 뜨는
-        // 이름 팝업(InventoryBarView)과 편집 모드 툴팁이 이미 알려 준다. 아이콘이 아직 없는 아이템만
-        // 이름 텍스트로 버틴다 — 안 그러면 빈 칸과 구분이 안 된다.
         if (item.ItemIcon != null)
         {
             m_nameText.text = string.Empty;
             return;
         }
 
-        // 구독 즉시 현재 언어 값으로 1회 호출되고, 이후 언어 전환 시마다 다시 호출된다 (#251)
         m_boundName = item.ItemName;
         m_boundName.StringChanged += HandleItemNameChanged;
     }
@@ -107,8 +95,6 @@ public class InventorySlotView : MonoBehaviour,
         m_background.color = selected ? SelectedColor : m_normalColor;
     }
 
-    // ---- 편집 모드 상호작용 (바가 편집 모드일 때만 유효) ----
-
     public void OnPointerEnter(PointerEventData eventData) => m_owner.ShowTooltip(this);
 
     public void OnPointerExit(PointerEventData eventData) => m_owner.HideTooltip();
@@ -117,11 +103,10 @@ public class InventorySlotView : MonoBehaviour,
     {
         if (!m_owner.IsEditMode || m_item == null)
         {
-            eventData.pointerDrag = null; // 드래그 취소 — 이후 Drag/Drop 이벤트가 오지 않는다.
+            eventData.pointerDrag = null;
             return;
         }
 
-        // 아이콘을 캔버스 최상위로 옮겨 다른 슬롯 위에 그려지게 하고, 드롭 레이캐스트를 막지 않게 한다.
         m_iconOriginalParent = m_icon.transform.parent;
         m_iconOriginalLocalPosition = m_icon.transform.localPosition;
         m_icon.transform.SetParent(m_icon.canvas.rootCanvas.transform, true);
@@ -137,7 +122,7 @@ public class InventorySlotView : MonoBehaviour,
     {
         m_icon.transform.SetParent(m_iconOriginalParent, false);
         m_icon.transform.localPosition = m_iconOriginalLocalPosition;
-        m_icon.raycastTarget = false; // 아이콘은 항상 레이캐스트 비대상 — 배경이 포인터를 받는다.
+        m_icon.raycastTarget = false;
     }
 
     public void OnDrop(PointerEventData eventData)
@@ -154,7 +139,6 @@ public class InventorySlotView : MonoBehaviour,
         }
     }
 
-    // 배선이 빠지면 흰색으로 뜬다 — 선택 표시가 남아 조용히 넘어가기 쉬우므로 경고를 남긴다. (#951)
     private Color SelectedColor
     {
         get

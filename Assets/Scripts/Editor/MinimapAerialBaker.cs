@@ -4,25 +4,13 @@ using UnityEditor;
 using UnityEngine;
 
 /// <summary>
-/// 미니맵 항공뷰 굽기 — 메뉴: Tools/미니맵 항공뷰 굽기 (#610, #611)
-///
-/// 열려 있는 맵 씬의 <see cref="MinimapViewer"/>가 들고 있는 월드 사각형(worldCenter/worldSize)을
-/// 그대로 읽어, 그 영역만 직교 투영으로 내려찍어 PNG로 저장한다.
-///
-/// <b>카메라를 손으로 놓지 않는 이유</b>: 배경 그림이 좌표계와 어긋나면 그 위에 찍히는 아이콘이
-/// 통째로 틀어진다. 기준값을 뷰어에서 직접 읽으면 어긋날 수가 없고, 맵 크기를 고친 뒤에도
-/// 다시 굽기만 하면 된다.
-///
-/// 결과는 두 곳에 쓴다 — HQ 미니맵 mapView의 스프라이트(#610)와 맵 선택 콘솔의 Preview(#611).
-/// 렌더 방식은 감정표현 아이콘 굽기(<see cref="EmoteIconBaker"/>)와 같은 계열이다.
+/// 열린 맵 씬의 MinimapViewer 월드 영역을 직교 투영으로 내려찍어 PNG로 굽는다.
+/// 메뉴: Tools/미니맵 항공뷰 굽기. 결과는 HQ 미니맵과 맵 선택 콘솔 미리보기에 쓴다.
 /// </summary>
 public class MinimapAerialBaker : EditorWindow
 {
-    // EmoteIconBaker(Assets/Imported/Art/EmoteIcons)와 같은 자리. 이 폴더는 .gitignore에 잡혀
-    // 있지만 에셋 전용 저장소로 따로 push하므로 팀원에게도 전달된다 — 옮기지 말 것.
     private const string k_defaultOutput = "Assets/Imported/Art/Minimap";
 
-    // UI 레이어 — 월드 캔버스(미니맵 자신·이름표)가 항공뷰에 함께 찍히면 안 된다
     private const int k_uiLayer = 5;
 
     [SerializeField]
@@ -42,12 +30,10 @@ public class MinimapAerialBaker : EditorWindow
     [SerializeField]
     private string m_outputFolder = k_defaultOutput;
 
-    // 게임에는 있어야 하지만 지도에는 찍히면 안 되는 표식 — 굽는 동안만 끄고 끝나면 되돌린다.
     [Tooltip("굽는 동안 끌 오브젝트 이름 — 쉼표로 구분. 자식까지 함께 꺼진다")]
     [SerializeField]
     private List<string> m_hidden = new List<string>();
 
-    // 미리 구운 결과 — 저장 전에 눈으로 확인한다. 저장은 이 결과를 그대로 쓴다.
     private Texture2D m_preview;
 
     [MenuItem("Tools/미니맵 항공뷰 굽기")]
@@ -126,12 +112,6 @@ public class MinimapAerialBaker : EditorWindow
     private void TryFindViewer() =>
         m_viewer = FindFirstObjectByType<MinimapViewer>(FindObjectsInactive.Include);
 
-    // worldCenter/worldSize는 private 직렬화 필드다 — 굽기 도구 하나 때문에 런타임 클래스에
-    // 프로퍼티를 새로 뚫는 대신 SerializedObject로 읽는다.
-    //
-    // MinimapArea(#835)가 씬에 있으면 그쪽 값을 우선한다 — m_useSceneArea가 켜진 뷰어는
-    // 자기 직렬화 필드를 런타임에만 덮어써서 에디터 값은 그대로 낡아 있고, 그걸 구우면
-    // 좌표계가 실제 표시와 어긋난다.
     private static bool TryReadArea(MinimapViewer viewer, out Vector2 center, out Vector2 size)
     {
         if (MinimapArea.Current != null)
@@ -187,8 +167,6 @@ public class MinimapAerialBaker : EditorWindow
         RenderTexture target = null;
         RenderTexture previous = RenderTexture.active;
 
-        // 굽는 동안만 안개를 끈다 — 두 맵 다 Linear Fog가 켜져 있어(Apocalypse 25~200m,
-        // Cyberpunk 20~110m) 300m 위에서 내려찍으면 화면 전체가 안개 최대치라 단색이 된다.
         bool fogWasOn = RenderSettings.fog;
         RenderSettings.fog = false;
 
@@ -198,17 +176,15 @@ public class MinimapAerialBaker : EditorWindow
         {
             Camera camera = cameraObject.AddComponent<Camera>();
             camera.orthographic = true;
-            camera.orthographicSize = size.y * 0.5f; // 직교 크기 = 세로 절반. 가로는 타깃 비율이 낸다
+            camera.orthographicSize = size.y * 0.5f;
             camera.nearClipPlane = 0.01f;
             camera.farClipPlane = m_cameraHeight * 2f;
             camera.clearFlags = CameraClearFlags.SolidColor;
             camera.backgroundColor = m_background;
             camera.cullingMask = ~(1 << k_uiLayer);
-            camera.useOcclusionCulling = false; // 맵 위 300m는 오클루전 볼륨 밖이다
-            camera.enabled = false; // Render()로만 돈다
+            camera.useOcclusionCulling = false;
+            camera.enabled = false;
 
-            // 바로 내려다본다 — X +90도면 화면 위가 월드 +Z, 오른쪽이 +X다.
-            // MinimapViewer.WorldToMap의 u(X)·v(Z)와 방향이 그대로 맞는다.
             cameraObject.transform.position = new Vector3(center.x, m_cameraHeight, center.y);
             cameraObject.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
 
@@ -255,7 +231,6 @@ public class MinimapAerialBaker : EditorWindow
         File.WriteAllBytes(path, m_preview.EncodeToPNG());
         AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
 
-        // 스프라이트로 임포트해 둔다 — Image도 MapSelection.Entry.Preview도 Texture2D는 못 받는다
         if (AssetImporter.GetAtPath(path) is TextureImporter importer)
         {
             importer.textureType = TextureImporterType.Sprite;
@@ -270,7 +245,6 @@ public class MinimapAerialBaker : EditorWindow
         EditorGUIUtility.PingObject(AssetDatabase.LoadAssetAtPath<Sprite>(path));
     }
 
-    // 이름이 목록에 든 오브젝트를 끈다 — 껐던 것만 돌려주므로 원래 꺼져 있던 것은 건드리지 않는다.
     private List<GameObject> HideMarkers()
     {
         var hidden = new List<GameObject>();

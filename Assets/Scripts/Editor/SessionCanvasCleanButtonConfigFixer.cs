@@ -4,11 +4,7 @@ using UnityEditor;
 using UnityEngine;
 
 /// <summary>
-/// SessionCanvas 버튼 배선을 다시 하면서 CleanButtonConfig 컴포넌트가 빠진 버튼을 복원한다.
-/// 원인: 버튼 오브젝트를 새로 만들면서 CleanButton(Ricimi GUI 팩) 스크립트는 남았지만
-/// 같이 붙어 있던 CleanButtonConfig가 유실됨 -> Awake()에서 GetComponent가 null을 반환해
-/// OnPointerEnter/Exit에서 NullReferenceException 발생.
-/// 값은 SessionCanvas의 다른 버튼 전부가 동일하게 쓰는 기본값을 그대로 사용한다.
+/// SessionCanvas 버튼 중 CleanButtonConfig가 빠진 것에 기본값으로 컴포넌트를 복원한다.
 /// </summary>
 public static class SessionCanvasCleanButtonConfigFixer
 {

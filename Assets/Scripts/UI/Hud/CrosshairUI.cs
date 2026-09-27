@@ -6,9 +6,7 @@ using UnityEngine.Serialization;
 using UnityEngine.UI;
 
 /// <summary>
-/// 화면 중앙 크로스헤어. HUD 프리팹에 부착되며 App.UI.Crosshair로 접근한다. (#184)
-/// 레이캐스트가 카메라 정중앙에서 나가므로(PlayerInteractor) 화면 중앙 고정 = 조준점.
-/// 네트워크 무관 — 각 클라이언트 로컬 UI.
+/// 화면 중앙 크로스헤어·히트마커·처치 알림 표시. App.UI.Crosshair로 접근한다.
 /// </summary>
 [DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
 public class CrosshairUI : CommonManagerBase
@@ -21,7 +19,7 @@ public class CrosshairUI : CommonManagerBase
     [SerializeField] private RectTransform m_dot;
     [SerializeField] private RectTransform m_circleRing;
     [SerializeField] private Image m_circleImage;
-    [SerializeField] private RectTransform m_crosshairRoot; // SetVisible 대상 — 전 조각의 공통 부모
+    [SerializeField] private RectTransform m_crosshairRoot;
     [SerializeField] private PlayerColorPalette m_colorPalette;
 
     private CrosshairVisualRefs VisualRefs => new CrosshairVisualRefs
@@ -30,20 +28,14 @@ public class CrosshairUI : CommonManagerBase
         Dot = m_dot, CircleRing = m_circleRing, CircleImage = m_circleImage,
     };
 
-    // 마지막으로 적용된 설정 — SetInteractable/SetWeaponTargeting이 색만 덮어쓸 때 모양은 그대로 둬야 하므로 기억해 둔다.
     private CrosshairSettings m_currentSettings = CrosshairSettings.Default();
 
     [Tooltip("공용 색 팔레트 — 상호작용 가능 대상 조준 시 Highlight를 쓴다 (#951)")]
     [SerializeField] private UiColorPalette m_uiPalette;
-    // 조준 무기(테이저·진압봉)가 공유하는 '명중 가능' 색. 무기별로 나누지 않는 이유는 HUD 언어를
-    // 하나로 유지하기 위함이다 — 플레이어가 배워야 할 건 "이 색이면 맞는다" 하나면 된다.
-    // FormerlySerializedAs: 이름을 무기 일반으로 바꾸면서(#217) HUD 프리팹에 저장된 값을 잇는다.
     [Tooltip("조준 무기(테이저·진압봉)로 명중 가능한 대상을 겨눴을 때 색 (#328/#217)")]
     [FormerlySerializedAs("m_taserTargetColor")]
     [SerializeField] private Color m_weaponTargetColor = new Color(1f, 0.25f, 0.2f);
 
-    // 배선이 빠지면 흰색이라 기본 크로스헤어 색과 구분이 안 된다. 조준 중 <b>매 프레임</b> 지나는
-    // 자리라 경고는 한 번만 찍는다 — InteractionFeedback.HighlightColor와 같은 이유다. (#951)
     private bool m_uiPaletteWarned;
 
     private Color InteractableColor
@@ -63,11 +55,7 @@ public class CrosshairUI : CommonManagerBase
         }
     }
 
-    /// <summary>
-    /// 크로스헤어 표시를 켜고 끈다 — 조준할 수 없는 동안 내린다(무력화·입력 정지, #899).
-    /// 히트마커·처치 알림은 별개 오브젝트라 함께 내려가지 않는다: 죽는 순간 들어간 막타의
-    /// 처치 알림(#869)은 관전 화면에서도 보여야 한다.
-    /// </summary>
+    /// <summary>크로스헤어 표시를 켜고 끈다(히트마커·처치 알림은 별개).</summary>
     public void SetVisible(bool visible)
     {
         if (m_crosshairRoot != null)
@@ -81,21 +69,14 @@ public class CrosshairUI : CommonManagerBase
         CrosshairRenderer.ApplyColor(VisualRefs, m_currentSettings, overrideColor, m_colorPalette);
     }
 
-    /// <summary>
-    /// 조준 무기(<see cref="IAimedWeapon"/>) 사용 중, 명중 가능한 대상을 겨눴는지에 따라 색을 바꾼다. (#328/#217)
-    /// 이 무기들은 NPC 윤곽선을 끄므로(InteractionFeedback) 크로스헤어가 유일한 조준 피드백이다.
-    /// </summary>
+    /// <summary>조준 무기로 명중 가능한 대상을 겨눴는지에 따라 크로스헤어 색을 바꾼다.</summary>
     public void SetWeaponTargeting(bool onTarget)
     {
         Color? overrideColor = onTarget ? m_weaponTargetColor : (Color?)null;
         CrosshairRenderer.ApplyColor(VisualRefs, m_currentSettings, overrideColor, m_colorPalette);
     }
 
-    // ---- 히트마커 (#478) ----
-
     [Header("히트마커")]
-    // 단일 Image가 아니라 컨테이너를 켜고 끈다 — 히트마커는 보통 여러 조각(X자 4개 막대)으로 그려지고,
-    // 크로스헤어와 겹치지 않으려면 가운데가 비어 있어야 한다. 조각 수를 표시 코드가 몰라도 되게 한다.
     [Tooltip("명중 순간 잠깐 켜지는 마커 컨테이너 — 하위 그래픽 전부에 색이 칠해진다. 비우면 히트마커가 뜨지 않는다")]
     [SerializeField] private RectTransform m_hitMarker;
 
@@ -109,16 +90,9 @@ public class CrosshairUI : CommonManagerBase
     [Min(0.02f)]
     [SerializeField] private float m_hitMarkerSeconds = 0.15f;
 
-    // 표시가 끝나는 시각. 코루틴을 쓰지 않는 이유는 연타 시 앞선 코루틴을 취소해야 하는데,
-    // 시각 하나를 덮어쓰면 그 문제가 아예 생기지 않기 때문이다(다음 명중이 표시를 연장한다).
     private float m_hitMarkerHideTime;
 
-    /// <summary>
-    /// 명중 순간 히트마커를 잠깐 띄운다 — 때린 사람에게만 보인다(오너 전용 호출). (#478)
-    /// <b>유효타에만 부른다</b> — 이미 제압된 대상을 쳐서 피해가 들어가지 않았을 때는 부르지 않는다.
-    /// 이 표시의 의미를 "데미지가 들어갔다" 하나로 고정하기 위해서다.
-    /// </summary>
-    /// <param name="friendlyFire">동료를 맞혔는가 — 색이 달라진다. 소리로는 구분되지 않는다(둘 다 로봇)</param>
+    /// <summary>유효타 순간 히트마커를 잠깐 띄운다. 오너 전용.</summary>
     public void ShowHit(bool friendlyFire)
     {
         if (m_hitMarker == null)
@@ -132,8 +106,6 @@ public class CrosshairUI : CommonManagerBase
         m_hitMarkerHideTime = Time.time + m_hitMarkerSeconds;
     }
 
-    // 조준 피드백(SetWeaponTargeting)이 매 프레임 크로스헤어 색을 덮어쓰므로 히트마커를 색으로 낼 수 없다 —
-    // 별개 오브젝트를 켜고 끈다. 그래서 끄는 일도 여기서 직접 해야 한다.
     private void Update()
     {
         if (m_hitMarker != null && m_hitMarker.gameObject.activeSelf && Time.time >= m_hitMarkerHideTime)
@@ -147,7 +119,6 @@ public class CrosshairUI : CommonManagerBase
         ApplyCurrentSettings();
     }
 
-    // 계정 설정이 바뀔 때마다(설정 패널에서 슬라이더를 움직이는 즉시) 다시 그린다.
     private void HandleCrosshairSettingsChanged() => ApplyCurrentSettings();
 
     private void ApplyCurrentSettings()
@@ -157,8 +128,6 @@ public class CrosshairUI : CommonManagerBase
         CrosshairRenderer.ApplyColor(VisualRefs, m_currentSettings, null, m_colorPalette);
     }
 
-    // 킬 페이드 타이머(CTS)는 파괴 시점에도 반드시 정리한다 — Update 폴링과 달리 비동기라
-    // 오브젝트가 사라진 뒤에도 계속 돌 수 있다.
     protected override void OnDestroy()
     {
         CosmeticLoadout.OnCrosshairSettingsChanged -= HandleCrosshairSettingsChanged;
@@ -166,19 +135,11 @@ public class CrosshairUI : CommonManagerBase
         base.OnDestroy();
     }
 
-    // 꺼져 있는 자식도 잡아야 하므로 includeInactive로 찾는다(마커는 평소 꺼져 있다).
-    // Awake가 아니라 첫 명중에 캐시하는 이유: HUD는 오너 스폰 시 런타임 생성되고,
-    // 한 판에 한 번도 안 때리는 플레이어(본부)는 이 비용을 아예 치르지 않는다.
     private Graphic[] m_hitMarkerGraphics;
 
     private Graphic[] HitMarkerGraphics =>
         m_hitMarkerGraphics ??= m_hitMarker.GetComponentsInChildren<Graphic>(true);
 
-    // ---- 처치 알림 (#869) ----
-
-    // HudTable/Hud.Kill.Confirm — 인자 {0}=victimName의 Smart String. 오사도 같은 문구를 쓴다(색만 갈린다).
-    // 완성된 문장이 아니라 이름 하나만 오너 로컬에서 조립한다(#497 결정 (g)와 같은 방향) —
-    // PlayerKillCredit이 RPC로 보내는 것도 이름 문자열 하나뿐이라 문장 자체는 언제나 이 로컬 언어로 뜬다.
     private const string k_table = "HudTable";
     private const string k_killKey = "Hud.Kill.Confirm";
 
@@ -197,21 +158,16 @@ public class CrosshairUI : CommonManagerBase
     [Min(0.02f)]
     [SerializeField] private float m_killFadeSeconds = 0.4f;
 
-    // 연속 처치 시 앞선 페이드를 취소하고 새로 시작해야 한다 — VerdictBanner의 자동 숨김과 같은 패턴.
     private CancellationTokenSource m_killFadeCts;
 
-    /// <summary>
-    /// 처치 순간 대상 이름을 크로스헤어 아래에 띄운다 — 막타를 친 사람에게만 보인다(오너 전용 호출). (#869)
-    /// 표시 시간이 끝나면 즉시 꺼지지 않고 m_killFadeSeconds에 걸쳐 서서히 사라진다.
-    /// </summary>
-    /// <param name="victimName">처치한 대상 이름 — NPC는 스캔 표시 이름, 동료는 닉네임.</param>
+    /// <summary>처치 대상 이름을 크로스헤어 아래에 잠깐 띄웠다가 페이드한다. 오너 전용.</summary>
     public void ShowKill(string victimName, bool friendlyFire)
     {
         if (m_killLabel == null)
             return;
 
         if (m_hitMarker != null)
-            m_hitMarker.gameObject.SetActive(false); // 막타는 처치 알림만 — 히트마커와 겹쳐 뜨지 않게
+            m_hitMarker.gameObject.SetActive(false);
 
         m_killLabel.color = m_killColor;
         m_killLabel.text = LocalizedStrings.Get(k_table, k_killKey, victimName);
@@ -223,7 +179,6 @@ public class CrosshairUI : CommonManagerBase
         FadeKillLabelAsync(m_killFadeCts.Token).Forget();
     }
 
-    // 실시간 기준(정산 freeze로 timeScale이 건드려져도 흐르게) 표시 → 페이드 → 비활성화.
     private async UniTaskVoid FadeKillLabelAsync(CancellationToken ct)
     {
         try
@@ -242,7 +197,6 @@ public class CrosshairUI : CommonManagerBase
         }
         catch (OperationCanceledException)
         {
-            // 새 처치로 재시작되거나 파괴됨 — 이전 페이드는 조용히 중단
         }
     }
 

@@ -4,9 +4,7 @@ using UnityEditor;
 using UnityEngine;
 
 /// <summary>
-/// CCTV 설치물의 조준을 루트에서 <c>Head</c>로 옮긴다 — 루트를 돌리면 몸통까지 돌아 마운트가
-/// 벽에서 뜬다. 루트 회전 R을 두 자식에 나눠 넣으므로 보이는 결과는 그대로다.
-/// 루트가 이미 identity면 건너뛴다.
+/// CCTV 설치물의 조준 회전을 루트에서 Head로 옮긴다(보이는 결과는 유지). 루트가 이미 identity면 건너뛴다.
 /// </summary>
 public static class CctvRigFixup
 {
@@ -57,7 +55,6 @@ public static class CctvRigFixup
 
             if (body != null)
             {
-                // Body는 자식이라 위치까지 돌려야 제자리에 남는다
                 body.localPosition = rotation * body.localPosition;
                 body.localRotation = rotation * body.localRotation;
             }
@@ -77,7 +74,6 @@ public static class CctvRigFixup
             Debug.LogWarning("[CCTV 리그] 카메라를 품은 자식을 못 찾아 건너뜀: " + string.Join(", ", problems));
     }
 
-    // 이름이 아니라 구조로 찾는다 — 카메라를 품은 자식이 Head, 나머지가 Body다
     private static bool TryFindParts(Transform root, out Transform head, out Transform body)
     {
         head = null;

@@ -4,20 +4,8 @@ using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// 상점 구매 목록(#182) — 세션 내내 유지되는 상주 홀더. TeamFund와 같은 프리팹에 동거해
-/// SessionObjectSpawner가 세션 시작 시 1회 스폰(destroyWithScene:false)한다. (#214 §6 이월 구조)
-///
-/// 구매품은 구매자 인벤토리로 직행하지 않는다 — <b>팀 소유</b>이고, 게임 씬 진입 시 ShopDelivery가
-/// 이 목록을 훑어 본부 택배 지점에 다시 지급한다. 라운드 사이 이월을 오브젝트 생존이 아니라
-/// 데이터로 처리하는 #370 방침의 지급쪽 근거 데이터다(회수는 ShopManager·PlayerLoadout이 한다).
-///
-/// <b>배달용 컬렉션 2개는 서버 전용이다</b> — 프리팹 참조·enum이라 그대로 실어 보낼 수 없고, 배달과
-/// 중복 구매 판정은 서버가 한다. 그 옆에 <b>보여주기용 집계(#840)</b>를 NetworkList로 함께 둔다:
-/// 주문창 구매 내역과 본부 재고 게시판이 "몇 개 샀고 몇 개 남았나"를 물어 오면서 "클라가 목록을 알
-/// 필요가 없다"는 예전 전제가 뒤집혔다. 집계의 품목 id는 ShopCatalog 인덱스다(<see cref="PurchaseTally"/>).
-///
-/// 세이브(#373)는 여전히 프리팹 이름으로 적고 되찾는 일은 SaveItemLookup이 NGO 등록 명부로 한다 —
-/// 카탈로그 인덱스는 수명이 세션인 집계에만 쓰고 저장에는 쓰지 않는다.
+/// 팀 상점 구매 목록 — 세션 내내 유지되는 상주 홀더로, ShopDelivery가 이 목록으로 매 라운드 배달한다.
+/// 배달용 컬렉션은 서버 전용이고, 표시용 구매 집계는 NetworkList로 동기화한다.
 /// </summary>
 [RequireComponent(typeof(NetworkObject))]
 [DefaultExecutionOrder((int)EExecutionOrder.BaseManagement)]
@@ -27,42 +15,33 @@ public class ShopPurchases : NetworkedManagerBase
     [SerializeField]
     private ShopCatalog m_catalog;
 
-    // 소지형 — 같은 아이템 중복 구매 허용이라 List (산 개수만큼 매 라운드 배달된다).
     private readonly List<ItemBase> m_carried = new List<ItemBase>();
 
-    // 설치형 — 본부 씬 인스턴스를 켜는 방식이라 두 번 사도 의미가 없다. HashSet + 서버가 재구매 거부.
     private readonly HashSet<EInstallable> m_installables = new HashSet<EInstallable>();
 
-    // 서버만 쓰기, 전 클라 읽기 — 표시용 집계다 (#840). 배달·판정은 위 두 컬렉션이 계속 담당한다.
     private readonly NetworkList<PurchaseTally> m_tallies = new NetworkList<PurchaseTally>();
 
-    // 진열 스냅샷 — 세이브 왕복용 (#925). ShopLineup이 Shop 씬 스코프라 SaveService가 직접 읽을 수
-    // 없어서, 라운드를 넘겨야 하는 값을 이미 들고 있는 이쪽에 둔다.
     private ShopSlotSaveEntry[] m_lineup = Array.Empty<ShopSlotSaveEntry>();
     private int m_lineupRound;
 
-    /// <summary>구매한 소지형 아이템 프리팹 목록(중복 포함). 배달(ShopDelivery)이 순회한다. 서버 전용.</summary>
     public IReadOnlyList<ItemBase> Carried => m_carried;
 
-    /// <summary>품목별 구매 집계 — 주문창·본부 게시판이 구독해 읽는다 (#840). 서버 외에는 읽기 전용.</summary>
     public NetworkList<PurchaseTally> Tallies => m_tallies;
 
-    /// <summary>세션 시작 시 1회 — 이어하기면 저장된 구매 목록을 되살린다 (#373).</summary>
+    /// <summary>세션 시작 시 1회 — 이어하기면 저장된 구매 목록을 되살린다.</summary>
     public override void OnNetworkSpawn()
     {
         if (!IsServer)
             return;
 
-        m_tallies.Clear(); // 재시작 시 이전 세션 항목이 남는다 (#209 패턴)
+        m_tallies.Clear();
 
-        // 배선이 없으면 집계가 통째로 비므로 여기서 한 번만 알린다 (구매마다 경고하지 않는다)
         if (m_catalog == null)
             Debug.LogWarning("[상점] 카탈로그가 배선되지 않아 구매 집계를 채울 수 없다 (#840)", this);
 
         RestoreFromSave();
     }
 
-    // 세이브에는 누적 구매가 남지 않는다 — 복원분은 "남은 것 = 산 것"으로 세운다.
     private void RestoreFromSave()
     {
         SessionSaveData save = SaveService.Pending;
@@ -91,23 +70,19 @@ public class ShopPurchases : NetworkedManagerBase
                 Debug.LogWarning($"[상점] 세이브의 설치형 '{installableName}'을(를) 알 수 없어 건너뛴다", this);
         }
 
-        // 진열은 여기서 해석하지 않는다 — 카탈로그 대조는 ShopLineup이 하고, 이쪽은 넘겨주기만 한다.
         m_lineup = save.ShopSlots ?? Array.Empty<ShopSlotSaveEntry>();
         m_lineupRound = save.Round;
 
         Debug.Log($"[상점] 세이브 복원 — 소지형 {m_carried.Count}개, 설치형 {m_installables.Count}종, 진열 {m_lineup.Length}칸({m_lineupRound}라운드)");
     }
 
-    /// <summary>구매한 설치형 목록. 배달(ShopDelivery)이 순회한다. 서버 전용.</summary>
     public IReadOnlyCollection<EInstallable> Installables => m_installables;
 
-    /// <summary>진열 스냅샷 — SaveService가 저장에, ShopLineup이 복원에 읽는다. (#925)</summary>
     public ShopSlotSaveEntry[] Lineup => m_lineup;
 
-    /// <summary>스냅샷이 속한 라운드 — 이 값이 현재 라운드와 다르면 복원하지 않고 새로 추첨한다.</summary>
     public int LineupRound => m_lineupRound;
 
-    /// <summary>진열이 바뀔 때 ShopLineup(서버)이 밀어 넣는다. (#925)</summary>
+    /// <summary>진열이 바뀔 때 ShopLineup(서버)이 밀어 넣는다.</summary>
     public void ServerSetLineup(int round, ShopSlotSaveEntry[] slots)
     {
         if (IsSpawned && !IsServer)
@@ -145,16 +120,12 @@ public class ShopPurchases : NetworkedManagerBase
         }
         if (installable == EInstallable.None) return;
 
-        // 재구매는 서버가 이미 거부하지만, 집계를 두 번 올리지 않도록 새로 들어온 것만 센다
         if (m_installables.Add(installable))
             BumpBought(IndexOf(installable));
         Debug.Log($"[상점] 설치형 구매 기록 — {installable}");
     }
 
-    /// <summary>
-    /// 소지형 구매 기록 1개를 지운다 — 소매치기에게 뺏긴 채 놓치면 영구 손실이다 (#303).
-    /// 같은 프리팹을 여러 개 샀으면 하나만 빠진다(중복 구매 허용이라 List).
-    /// </summary>
+    /// <summary>소지형 구매 기록 하나를 지운다.</summary>
     public void RemoveCarried(ItemBase itemPrefab)
     {
         if (!IsServer)
@@ -171,10 +142,7 @@ public class ShopPurchases : NetworkedManagerBase
         }
     }
 
-    /// <summary>
-    /// 구매 목록을 비운다 — 라운드 실패로 판이 끝났을 때 호출한다 (#395, TeamFund.ResetToStarting과 같은 자리).
-    /// 이 홀더는 씬을 넘어 유지되므로(#214) 새 판을 시작해도 스스로는 초기화되지 않는다.
-    /// </summary>
+    /// <summary>라운드 실패로 판이 끝났을 때 구매 목록을 비운다.</summary>
     public void Clear()
     {
         if (!IsServer)
@@ -188,22 +156,14 @@ public class ShopPurchases : NetworkedManagerBase
         m_installables.Clear();
         m_tallies.Clear();
 
-        // 진열 스냅샷도 버린다 (#927) — 안 버리면 진행도가 1라운드로 되돌아간 뒤 LineupRound가 다시
-        // 맞아떨어져(ShopLineup.TryRestoreLineup) 새 판인데도 지난 판 진열이 품절까지 복원된다.
         m_lineup = Array.Empty<ShopSlotSaveEntry>();
         m_lineupRound = 0;
     }
-
-    // ---- 집계 (서버 전용) ----
-    //
-    // 배달용 컬렉션과 집계는 같은 사실의 두 표현이라 어긋날 수 있다 — 위 네 메서드 안에서만 함께
-    // 갱신하고, 밖에서 컬렉션을 직접 만지는 경로는 두지 않는다. (#840)
 
     private int IndexOf(ItemBase itemPrefab) => m_catalog != null ? m_catalog.IndexOf(itemPrefab) : -1;
 
     private int IndexOf(EInstallable installable) => m_catalog != null ? m_catalog.IndexOf(installable) : -1;
 
-    // 산 개수를 올린다 — 없던 품목이면 줄을 새로 만든다.
     private void BumpBought(int catalogIndex)
     {
         if (!TryTallyIndex(catalogIndex, out ushort index))
@@ -222,7 +182,6 @@ public class ShopPurchases : NetworkedManagerBase
         m_tallies[row] = tally;
     }
 
-    // 남은 개수만 줄인다 — 산 기록(Bought)은 그대로 둔다.
     private void DropRemaining(int catalogIndex)
     {
         if (!TryTallyIndex(catalogIndex, out ushort index))
@@ -237,8 +196,6 @@ public class ShopPurchases : NetworkedManagerBase
         m_tallies[row] = tally;
     }
 
-    // 카탈로그에 없는 품목은 집계에서 건너뛴다 — 아이콘·이름을 카탈로그 항목에서 읽기 때문이다.
-    // 배선 누락 경고는 OnNetworkSpawn이 한 번만 낸다 — 여기서 내면 구매마다 쌓인다.
     private bool TryTallyIndex(int catalogIndex, out ushort index)
     {
         index = 0;

@@ -1,9 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// 밧줄 끌기 장력 튜닝 값. (#269/#369 — #390에서 PlayerEscorter에서 분리)
-/// 장력 계산이 끄는 플레이어가 아니라 끌리는 NPC로 옮겨오면서, 값도 다른 상태 config들과 같은 자리에 둔다.
-/// 여러 명이 한 대상을 함께 끄는 줄다리기(#390)가 들어오면 앵커만 늘어나고 이 값들은 그대로 쓰인다.
+/// 밧줄 끌기 장력 튜닝 SO.
 /// </summary>
 [CreateAssetMenu(fileName = "NpcRopeDragConfig", menuName = "Undercover/NPC/Rope Drag Config")]
 public class NpcRopeDragConfig : ScriptableObject

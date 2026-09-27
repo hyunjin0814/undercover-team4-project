@@ -2,19 +2,8 @@ using System.Collections;
 using UnityEngine;
 
 /// <summary>
-/// 구역 스캔 결과 링 (#490) — 사용 지점에서 서서히 퍼지는 원형 링으로 판정 결과(초록/빨강)를 보여준다.
-///
-/// <b>순수 로컬 연출이다</b> — 네트워크에 싣지 않고 각 피어가 자기 화면에 스스로 만든다
-/// (docs/architecture.md 연출 전파 규칙의 '일회성 연출' 행, <see cref="ShockArcEmitter"/>와 같은 방침).
-/// 그래서 <see cref="AreaScanner"/>가 <c>Instantiate</c>로 낳을 뿐 <c>DefaultNetworkPrefabs.asset</c>
-/// 등록이 필요 없다.
-///
-/// <see cref="LineRenderer"/> 세그먼트 원을 0 → 반경으로 확장한 뒤 색을 유지한 채 페이드 아웃하고
-/// 스스로 파괴된다. 반경·색은 <see cref="AreaScanner"/>가 판정에 쓴 값을 그대로 넘겨받는다(단일
-/// 출처) — 표시 반경이 판정 반경과 갈리면 안 되기 때문이다.
-///
-/// <see cref="RopeDragView"/>가 프로젝트 내 유일한 LineRenderer 선례라 월드 좌표·<c>sharedMaterial</c>
-/// 관례를 그대로 따른다.
+/// 구역 스캔 결과를 사용 지점에서 퍼지는 초록/빨강 LineRenderer 링으로 보여 주는 로컬 연출.
+/// 반경·색은 AreaScanner의 판정 값을 그대로 받는다.
 /// </summary>
 [RequireComponent(typeof(LineRenderer))]
 public class AreaScanRingView : MonoBehaviour
@@ -49,19 +38,14 @@ public class AreaScanRingView : MonoBehaviour
     private void Awake()
     {
         m_line = GetComponent<LineRenderer>();
-        m_line.useWorldSpace = true; // 부모 없이 월드에 독립 — 회전해도 원이 비틀리지 않는다
-        m_line.loop = true; // 닫힌 원 — 시작점과 끝점을 겹치는 보정이 필요 없다
+        m_line.useWorldSpace = true;
+        m_line.loop = true;
         m_line.numCapVertices = 0;
         m_line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         m_line.receiveShadows = false;
     }
 
-    /// <summary>
-    /// 링 재생을 시작한다 — <see cref="AreaScanner"/>가 인스턴스화 직후 즉시 호출한다.
-    /// </summary>
-    /// <param name="center">사용 지점(월드 좌표) — 지면 높이는 호출자가 넘긴 값을 그대로 쓴다</param>
-    /// <param name="radius">최종 반경(m) — <see cref="AreaScanner"/>의 판정 반경과 같은 값</param>
-    /// <param name="color">판정 결과색 — 초록(진범 있음) 또는 빨강(없음)</param>
+    /// <summary>링 재생을 시작한다 — <see cref="AreaScanner"/>가 인스턴스화 직후 즉시 호출한다.</summary>
     public void Play(Vector3 center, float radius, Color color)
     {
         m_line.widthMultiplier = m_lineWidth;
@@ -73,8 +57,6 @@ public class AreaScanRingView : MonoBehaviour
 
     private IEnumerator PlayRoutine(Vector3 center, float radius, Color color)
     {
-        // 확장 구간 — 색은 처음부터 결과색이다. 판정은 사용 시점 스냅샷이라 다 퍼진 뒤에
-        // 색을 정할 이유가 없고, 즉시 읽히는 편이 정보 도구로서 낫다.
         float elapsed = 0f;
         while (elapsed < m_expandSeconds)
         {
@@ -86,7 +68,6 @@ public class AreaScanRingView : MonoBehaviour
 
         DrawCircle(center, radius);
 
-        // 페이드 구간 — 다 퍼진 반경을 유지한 채 알파만 지운다(존재감만 사라진다).
         float fadeElapsed = 0f;
         while (fadeElapsed < m_fadeSeconds)
         {

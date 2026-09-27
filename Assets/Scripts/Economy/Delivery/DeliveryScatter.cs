@@ -1,9 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// 배달 아이템 흩뿌리기 계산 (#824) — 겹쳐 쌓이면 조준으로 골라 줍기 어려우니 지점 둘레에 흩뿌리고,
-/// 앵커의 authored 높이가 실제 표면과 어긋나도 메시에 파묻히지 않게 바닥에 스냅한다.
-/// ShopDelivery(실내 폴백)와 DeliveryPad(패드) 양쪽이 같은 계산을 쓴다.
+/// 배달 아이템을 지점 둘레에 흩뿌리고 바닥에 스냅하는 위치 계산 헬퍼.
 /// </summary>
 public static class DeliveryScatter
 {
@@ -42,8 +40,6 @@ public static class DeliveryScatter
         RaycastHit? closestGround = null;
         foreach (RaycastHit hit in hits)
         {
-            // 플레이어 몸(CharacterController)도 groundMask 기본값(Default)에 걸린다 — 착지 지점
-            // 아래 서 있으면 머리를 바닥으로 오인해 상자가 공중에서 멈춘다. 실제 바닥을 찾을 때까지 건너뛴다.
             if (hit.collider.GetComponentInParent<CharacterController>() != null)
                 continue;
 

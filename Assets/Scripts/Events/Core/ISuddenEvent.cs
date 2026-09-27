@@ -1,45 +1,21 @@
 /// <summary>
-/// 돌발 이벤트 1종 — 프레임워크(<see cref="SuddenEventManager"/>)가 서버 권위로 발생·틱시킨다. (GDD 6-4, #106)
-/// 구현체는 서버(또는 오프라인)에서만 상태를 바꾸며, 클라이언트는 표현만 한다. (#56 패턴)
-///
-/// 전 클라 전파는 <b>구현체가 스스로 책임진다</b> — 스폰형은 자기 NetworkObject로, 전역형은 자기 NetworkVariable로
-/// 전파한다(전역형 예: <see cref="DeviceBlackoutEvent"/>). 매니저는 이 인터페이스 뒤를 들여다보지 않으므로
-/// 이벤트별 상태를 매니저에 얹지 말 것 — 그러면 프레임워크가 특정 이벤트를 알게 된다.
+/// 돌발 이벤트 1종의 인터페이스 — SuddenEventManager가 서버 권위로 발생·틱·정리한다.
+/// 상태 전파(NetworkObject 또는 NetworkVariable)는 구현체가 스스로 책임진다.
 /// </summary>
 public interface ISuddenEvent
 {
-    /// <summary>사람이 읽는 이벤트 이름 — 로그·HUD 알림용.</summary>
     string DisplayName { get; }
 
-    /// <summary>현재 진행 중인지 — 진행 중이면 프레임워크가 재발생시키지 않고 <see cref="ServerTick"/>만 돌린다.</summary>
     bool IsActive { get; }
 
-    /// <summary>
-    /// 발생 즉시 전 클라에 알릴지 여부. 기본은 true — 대부분의 이벤트는 터지는 순간이 곧 알릴 순간이다.
-    /// false로 두면 매니저는 조용히 발생시키고, 이벤트가 원하는 시점에 <see cref="SuddenEventManager.Announce"/>를
-    /// 직접 부른다(예: 범인 탈출은 침입자가 자물쇠에 손댈 때까지 알리지 않는다 — 그 전 구간이 관찰 대상이므로).
-    /// </summary>
     bool AnnounceOnBegin => true;
 
-    /// <summary>
-    /// 이 이벤트의 알림 문구 키 (HudTable) — 비우면 <see cref="DisplayName"/>을 일반 포맷에 끼워 넣는다.
-    ///
-    /// 이벤트마다 키를 따로 두는 이유는 <b>한국어 조사</b> 때문이다: "난동자<b>가</b>" / "난동꾼<b>이</b>"처럼
-    /// 받침에 따라 갈려서 "{0}가 나타났습니다" 하나로는 문장이 깨진다. 문장 전체를 키에 담으면
-    /// 조사도 번역도 테이블 안에서 끝난다.
-    /// </summary>
     string NoticeKey => null;
 
     /// <summary>지금 발생 가능한지 — 선행 조건(예: 현장 플레이어 존재) 검사. 서버(또는 오프라인)에서만 호출된다.</summary>
     bool CanTrigger();
 
-    /// <summary>
-    /// 강제 발동 준비 — <see cref="CanTrigger"/>가 거절했을 때 개발자 단축키가 한 번 더 묻는다. (#775)
-    /// 조건을 스스로 채울 수 있으면 채우고 true. <b>기본은 거절</b>이라 대부분의 이벤트는 이 훅이 없다.
-    ///
-    /// 필요한 것은 <b>누적 조건</b>을 가진 이벤트뿐이다 — 납치는 "20초 동안 혼자였는가"를 재므로
-    /// 테스트하려면 그 20초를 기다려야 했다.
-    /// </summary>
+    /// <summary>강제 발동 시 누적 조건을 스스로 채울 수 있으면 채우고 true를 돌려준다. 기본은 거절.</summary>
     bool ServerPrepareForceTrigger() => false;
 
     /// <summary>발생 — 서버(또는 오프라인)에서 호출. 효과를 시작한다.</summary>

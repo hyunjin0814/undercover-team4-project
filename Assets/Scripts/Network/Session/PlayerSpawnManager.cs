@@ -4,13 +4,8 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 
 /// <summary>
-/// 플레이어 스폰/재배치 + 씬별 연결 승인 정책. (#214/#51)
-/// m_spawnPlayers=false(로비·타이틀): 접속만 승인, 플레이어는 안 만듦 — 남은 플레이어·아이템은 여기서 내린다.
-/// m_spawnPlayers=true(상점·게임): 없으면 스폰, 있으면 재배치. 둘 다 destroyWithScene:false라 씬을 넘어 유지된다.
-/// 게임 씬 진입 시 기본 장비 지급도 여기서 트리거한다(#370) — 피어별 씬 진입을 아는 유일한 지점.
-///
-/// 승인 콜백 자체는 <see cref="SessionManager"/>의 <see cref="ConnectionApprovalGate"/>가 쥔다 (#628) —
-/// 여긴 스폰 정책만 등록. SessionManager 없는 테스트 씬은 폴백으로 콜백을 직접 잡는다.
+/// 씬별 플레이어 스폰·재배치 정책과 게임 씬 진입 시 기본 장비 지급을 담당한다.
+/// 로비·타이틀은 접속만 승인하고, 상점·게임 씬은 없으면 스폰하고 있으면 재배치한다.
 /// </summary>
 public class PlayerSpawnManager : MonoBehaviour
 {
@@ -18,7 +13,7 @@ public class PlayerSpawnManager : MonoBehaviour
     [SerializeField] private bool m_spawnPlayers = true;
 
     [SerializeField] private Transform m_spawnPoint;
-    [SerializeField] private float m_spreadRadius = 1.5f; // 겹침 방지용 분산 반경(m)
+    [SerializeField] private float m_spreadRadius = 1.5f;
 
     private NetworkManager m_networkManager;
     private int m_placedCount;
@@ -49,11 +44,10 @@ public class PlayerSpawnManager : MonoBehaviour
         if (m_spawnPlayers)
         {
             m_networkManager.SceneManager.OnLoadComplete += HandleLoadComplete;
-            EnsureAndPlace(m_networkManager.LocalClientId); // 서버(호스트) 자신
+            EnsureAndPlace(m_networkManager.LocalClientId);
         }
         else
         {
-            // 플레이어를 먼저 내려야 소지품이 PlayerLoadout으로 정리되고, 남은 아이템만 이어서 쓸어 담는다
             DespawnAllPlayers();
             DespawnLooseItems();
         }
@@ -70,7 +64,7 @@ public class PlayerSpawnManager : MonoBehaviour
             m_networkManager.SceneManager.OnLoadComplete -= HandleLoadComplete;
     }
 
-    /// <summary>플레이어를 두지 않는 씬(로비·타이틀) 전용 — 남은 플레이어를 전부 내린다. (#395)</summary>
+    /// <summary>플레이어를 두지 않는 씬(로비·타이틀) 전용 — 남은 플레이어를 전부 내린다.</summary>
     private void DespawnAllPlayers()
     {
         var players = new List<NetworkObject>();
@@ -90,7 +84,7 @@ public class PlayerSpawnManager : MonoBehaviour
             Debug.Log($"[PlayerSpawnManager] 플레이어 {players.Count}개 정리 — 이 씬은 플레이어를 두지 않는다");
     }
 
-    /// <summary>플레이어를 두지 않는 씬 전용 — 바닥에 버려진 아이템(소지품 정리분 제외)을 내린다. (#395)</summary>
+    /// <summary>플레이어를 두지 않는 씬 전용 — 바닥에 버려진 아이템(소지품 정리분 제외)을 내린다.</summary>
     private void DespawnLooseItems()
     {
         var items = new List<NetworkObject>();
@@ -113,7 +107,7 @@ public class PlayerSpawnManager : MonoBehaviour
     private void HandleLoadComplete(ulong clientId, string sceneName, LoadSceneMode loadSceneMode)
     {
         if (sceneName != gameObject.scene.name) return;
-        if (clientId == m_networkManager.LocalClientId) return; // 서버는 Start에서 처리
+        if (clientId == m_networkManager.LocalClientId) return;
         EnsureAndPlace(clientId);
     }
 
@@ -127,11 +121,6 @@ public class PlayerSpawnManager : MonoBehaviour
         else
             RepositionPlayer(client.PlayerObject);
 
-        // 장비 지급은 여기서 한다 — 플레이어가 방금 스폰·재배치된 것이 확정된 유일한 지점이다.
-        // ShopManager.Start는 이보다 먼저 돌 수 있어 그 시점엔 호스트 몸이 아직 없다 (#843).
-        //
-        // 게임 씬에서는 상점에서 들려 준 카탈로그를 먼저 회수한다 — 손에 남아 있으면 보유 검사에
-        // 걸려 기본 장비가 통째로 지급되지 않는다.
         PlayerItemSupply supply = client.PlayerObject?.GetComponent<PlayerItemSupply>();
         if (supply == null)
             return;
@@ -143,7 +132,6 @@ public class PlayerSpawnManager : MonoBehaviour
         }
         else if (App.CurrentScene == EScene.Shop)
         {
-            // 회수는 ShopManager 몫(#370). 지급은 한 프레임 미뤄 도므로 그 회수보다 항상 뒤에 온다.
             supply.ServerGrantShopGear();
         }
     }
@@ -159,7 +147,7 @@ public class PlayerSpawnManager : MonoBehaviour
 
         (Vector3 pos, Quaternion rot) = NextPose();
         NetworkObject no = Instantiate(prefab, pos, rot).GetComponent<NetworkObject>();
-        no.SpawnAsPlayerObject(clientId, destroyWithScene: false); // 루프 내내 유지
+        no.SpawnAsPlayerObject(clientId, destroyWithScene: false);
         Debug.Log($"[PlayerSpawnManager] 클라이언트 {clientId} 플레이어 스폰: {pos}");
     }
 
@@ -171,11 +159,7 @@ public class PlayerSpawnManager : MonoBehaviour
         movement.ServerReposition(pos, rot);
     }
 
-    /// <summary>
-    /// 서버 전용 — 이미 스폰된 플레이어를 스폰 지점으로 되돌린다. 맵 이탈 복귀(<see cref="MapBoundary"/>)가 쓴다.
-    /// 씬 진입 재배치(<see cref="RepositionPlayer"/>)와 달리 라운드 도중이라 ServerTeleport를 쓴다 —
-    /// 재배치 회차를 올리면 이미 끝난 로딩 화면이 기다릴 대상이 되어 버린다(PlayerMovement 참고).
-    /// </summary>
+    /// <summary>스폰된 플레이어를 스폰 지점으로 순간이동시킨다(맵 이탈 복귀용). 서버 전용.</summary>
     public void ServerReturnToSpawn(PlayerMovement movement)
     {
         if (movement == null) return;
@@ -190,15 +174,13 @@ public class PlayerSpawnManager : MonoBehaviour
         return (basePos + GetSpreadOffset(m_placedCount++), rot);
     }
 
-    // SessionManager가 있는 씬에서 ConnectionApprovalGate가 부르는 스폰 정책 (#628)
     private void ConfigureSpawn(NetworkManager.ConnectionApprovalResponse response)
     {
-        response.CreatePlayerObject = m_spawnPlayers; // 로비=false → 접속만, 플레이어 안 만듦
+        response.CreatePlayerObject = m_spawnPlayers;
         if (m_spawnPlayers && m_spawnPoint != null)
             (response.Position, response.Rotation) = NextPose();
     }
 
-    // SessionManager가 없는 테스트 씬 전용 폴백 — 승인까지 직접 한다
     private void OnConnectionApproval(
         NetworkManager.ConnectionApprovalRequest request,
         NetworkManager.ConnectionApprovalResponse response)

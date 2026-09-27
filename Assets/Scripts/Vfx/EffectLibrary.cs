@@ -2,13 +2,7 @@ using System;
 using UnityEngine;
 
 /// <summary>
-/// 일회성 이펙트 카탈로그 — <see cref="EEffect"/> → 프리팹·수명·사전 생성 개수. (#478)
-/// <see cref="EffectManager"/>가 유일한 소비자이며, 어떤 연출이 존재하는지 한눈에 보는 자리이기도 하다.
-///
-/// <b>수명을 데이터로 두는 이유</b> — 매니저가 <c>ParticleSystem.IsAlive()</c>를 폴링하지 않고
-/// 여기 적힌 초가 지나면 회수한다. 폴링은 매 프레임 비용이 있고, 프리팹에 파티클 외의 것
-/// (오디오·라이트 등)이 붙었을 때 무엇이 '끝'인지를 코드가 판단해야 한다. 값 하나를 적는 편이
-/// 예측 가능하고, 연출을 만든 사람이 직접 조절할 수 있다.
+/// 일회성 이펙트 카탈로그 SO — EEffect별 프리팹·수명·사전 생성 개수.
 /// </summary>
 [CreateAssetMenu(fileName = "EffectLibrary", menuName = "Scriptable Objects/EffectLibrary")]
 public class EffectLibrary : ScriptableObject
@@ -34,6 +28,5 @@ public class EffectLibrary : ScriptableObject
     [Tooltip("이펙트 목록. 같은 Id가 둘 이상이면 먼저 오는 것만 쓰이고 매니저가 경고한다")]
     [SerializeField] private Entry[] m_entries;
 
-    /// <summary>등록된 항목 전부 — 매니저가 시작 시 사전 생성 대상을 훑는 용도.</summary>
     public Entry[] Entries => m_entries ?? Array.Empty<Entry>();
 }

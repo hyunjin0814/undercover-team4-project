@@ -3,9 +3,7 @@ using UnityEngine;
 using UnityEngine.Localization;
 
 /// <summary>
-/// 배달 상자 (#824) — DeliveryPad에 놓인다. 내용물 상태를 들고 있지 않는다: 열 때 서버가
-/// ShopPurchases.Carried를 다시 읽어 그 자리에서 스폰한다. 오너 없는 서버 소유 오브젝트라
-/// JailSirenButton과 같은 Everyone 권한 RPC를 쓴다.
+/// DeliveryPad에 놓이는 배달 상자 — 열면 서버가 구매 목록을 읽어 그 자리에 아이템을 스폰한다.
 /// </summary>
 [RequireComponent(typeof(NetworkObject))]
 public class DeliveryCrate : NetworkBehaviour, IInteractable
@@ -21,7 +19,6 @@ public class DeliveryCrate : NetworkBehaviour, IInteractable
 
     public float DescentSeconds => m_descentSeconds;
 
-    // 오프라인 폴백(IsSpawned false)은 착지 판정 없이 즉시 상호작용 가능하다.
     private bool HasLanded =>
         !IsSpawned || NetworkManager == null || NetworkManager.ServerTime.Time >= m_landTimeSynced.Value;
 
@@ -38,8 +35,7 @@ public class DeliveryCrate : NetworkBehaviour, IInteractable
         RequestOpenRpc();
     }
 
-    /// <summary>서버가 스폰 전에 착지 시각(ServerTime 기준)을 정한다 — Spawn() 이전에 불러야
-    /// 초기 동기화 페이로드에 실려 늦게 접속한 클라도 남은 시간을 정확히 계산한다.</summary>
+    /// <summary>스폰 전에 착지 시각(ServerTime 기준)을 정한다. Spawn 이전에 호출해야 한다.</summary>
     public void ServerScheduleLanding(double landTime)
     {
         m_landTimeSynced.Value = landTime;
@@ -51,8 +47,6 @@ public class DeliveryCrate : NetworkBehaviour, IInteractable
         double remaining = m_landTimeSynced.Value - NetworkManager.ServerTime.Time;
         if (remaining <= 0d)
         {
-            // 초기 동기화로 받은 위치는 호스트가 이미 상승시킨 시점의 값일 수 있어 신뢰할 수
-            // 없다 — 착지 지점을 다시 계산해 확정한다 (#884).
             if (pad != null)
                 transform.position = pad.ResolveCratePosition();
             return;
@@ -124,7 +118,6 @@ public class DeliveryCrate : NetworkBehaviour, IInteractable
             ItemBase item = Instantiate(itemPrefab, position, Quaternion.identity);
             WorldItemPickup.SettleOnGround(item.gameObject, position.y);
 
-            // 구매품 표식 — 소매치기에게 잃으면 구매 목록에서도 빼야 한다 (#303)
             item.gameObject.AddComponent<ShopDeliveredItem>().SourcePrefab = itemPrefab;
             item.NetworkObject.Spawn(destroyWithScene: false);
         }

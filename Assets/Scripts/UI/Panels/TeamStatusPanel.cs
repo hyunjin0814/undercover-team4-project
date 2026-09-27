@@ -4,11 +4,7 @@ using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// 팀 상황판 (#720) — Tab 홀드 중 대원 전원(나 포함)의 상태와 이번 라운드 수배 몽타주를 함께 띄운다.
-/// 여는 것은 <see cref="PlayerTeamStatusInput"/>(오너 로컬)이고 여기는 그리기만 한다.
-///
-/// 커서를 풀지 않는다 — 표시용 창인데 커서가 풀리면 E가 통째로 막힌다(#352). 같은 이유로
-/// ESC 스택에도 쌓지 않는다. 새 동기화도 없다 — 체력·무력화·이름이 전부 이미 NetworkVariable이다.
+/// Tab 홀드 중 대원 전원의 상태와 이번 라운드 수배 몽타주를 표시하는 팀 상황판(커서·ESC 스택 미사용).
 /// </summary>
 public class TeamStatusPanel : PanelBase
 {
@@ -27,17 +23,13 @@ public class TeamStatusPanel : PanelBase
     [SerializeField] private RectTransform m_rowContainer;
     [SerializeField] private TeamStatusRowView m_rowPrefab;
 
-    // 행은 지우지 않고 재사용한다 — 홀드마다 파괴·생성하면 레이아웃이 매번 다시 돈다.
     private readonly List<TeamStatusRowView> m_rows = new List<TeamStatusRowView>();
     private readonly List<NetworkObject> m_players = new List<NetworkObject>();
 
-    // 직전 구성과 비교할 임시 자리 — 매 프레임 도는 경로라 새로 할당하지 않는다.
     private readonly List<NetworkObject> m_scratch = new List<NetworkObject>();
 
-    // 내 몸 — 카드가 "나"를 표시할 때 쓴다. 첫 칸이라는 자리와 별개로 대조해 둔다 (#894).
     private NetworkObject m_mine;
 
-    // 인원이 바뀔 때만 찾아 둔다 — 아니면 떠 있는 동안 매 프레임 인원수만큼 GetComponent가 돈다.
     private readonly List<PlayerHealth> m_health = new List<PlayerHealth>();
     private readonly List<PlayerIncapacitation> m_incapacitation = new List<PlayerIncapacitation>();
     private readonly List<PlayerNameTag> m_nameTags = new List<PlayerNameTag>();
@@ -51,7 +43,6 @@ public class TeamStatusPanel : PanelBase
         base.OpenPanel();
     }
 
-    // 열 때마다 채운다 — 닫힌 사이에 언어가 바뀌었을 수 있다. 매 프레임 도는 경로가 아니라 비용도 무해하다.
     private void ApplyLabels()
     {
         if (m_titleText != null)
@@ -69,20 +60,12 @@ public class TeamStatusPanel : PanelBase
         if (!IsOpened)
             return;
 
-        // 인원 변화(합류·이탈)는 홀드 중에도 일어날 수 있다.
         if (CollectPlayers())
             Rebuild();
         else
             RefreshRows();
     }
 
-    // 스폰된 플레이어 오브젝트를 모은다 — 이름·체력·상태가 전부 여기 달려 있어 명부와 합칠 것이 없다.
-    // 내 것도 넣되 맨 앞에 고정한다 — 스폰 순서는 피어마다 달라 그냥 넣으면 내 카드 자리가 매번 바뀐다.
-    // 반환값은 "인원 구성이 바뀌었는가".
-    //
-    // ⚠ 내 몸은 IsLocalPlayer로 찾지 않는다 (#863) — 그 값은 소유권을 타는데, 죽으면 시체 소유권이
-    // 서버로 넘어가(#763) 내 카드가 첫 칸에서 밀려난다. 스폰 때 정해지고 소유권 이관에 흔들리지 않는
-    // LocalClient.PlayerObject로 판정한다.
     private bool CollectPlayers()
     {
         NetworkManager manager = NetworkManager.Singleton;
@@ -111,7 +94,6 @@ public class TeamStatusPanel : PanelBase
                 m_scratch.Add(player);
         }
 
-        // 정렬한 뒤에 비교한다 — 원본 목록과 대조하면 내 것을 앞으로 옮긴 만큼 인덱스가 어긋난다.
         bool changed = m_scratch.Count != m_players.Count;
 
         if (!changed)
@@ -167,23 +149,16 @@ public class TeamStatusPanel : PanelBase
             if (!used)
                 continue;
 
-            // 행은 재사용하므로 여기서 한 번 덮어쓴다 — 아니면 자리를 물려받은 카드에 떠난 사람
-            // 이름이 남는다. 아직 안 온 이름은 RefreshRows가 채운다.
             m_rows[i].SetName(NameOf(i));
 
-            // 직전에 거친 상점에서 구운 얼굴을 쓴다 — 게임 씬에서 다시 구우면 맵 조명을 타 어둡게 나온다.
-            // 사람마다 색·치장이 다르므로 그 조합으로 찾는다 (#432 · #863)
             m_rows[i].SetPortrait(PortraitOf(i));
 
-            // 자리가 아니라 대조로 정한다 — 내 몸을 못 찾은 구성(오프라인 등)에서 첫 칸이
-            // 남의 카드인데도 "나"가 붙는 것을 막는다.
             m_rows[i].SetOwnership(m_mine != null && m_players[i] == m_mine);
         }
 
         RefreshRows();
     }
 
-    // 색을 아직 못 읽었으면(스폰 직후) 얼굴 없이 둔다 — 남의 얼굴을 대신 띄우지 않는다
     private Texture PortraitOf(int index)
     {
         PlayerCosmetics cosmetics = index < m_cosmetics.Count ? m_cosmetics[index] : null;
@@ -210,14 +185,9 @@ public class TeamStatusPanel : PanelBase
 
             m_rows[i].SetStatus(hp, max, StateOf(i < m_incapacitation.Count ? m_incapacitation[i] : null));
 
-            // 이름은 비어 있는 동안만 다시 묻는다 — 오너 쓰기 NetworkVariable이라 스폰과 같은
-            // 프레임에 행을 만들면 아직 안 와 있고, 그때 한 번만 넣으면 그대로 빈 칸으로 굳는다.
-            // 채워진 뒤엔 바뀌지 않으므로 매 프레임 문자열을 만들지 않는다.
             if (!m_rows[i].HasName)
                 m_rows[i].SetName(NameOf(i));
 
-            // 얼굴도 같은 이유로 다시 묻는다 — 색은 오너 쓰기 NetworkVariable이라 스폰과 같은
-            // 프레임에는 아직 안 와 있고, 그때 한 번만 넣으면 빈 칸으로 굳는다. (#432)
             if (!m_rows[i].HasPortrait)
                 m_rows[i].SetPortrait(PortraitOf(i));
         }
@@ -229,11 +199,6 @@ public class TeamStatusPanel : PanelBase
         return tag != null ? tag.DisplayName : string.Empty;
     }
 
-    // 기절·오검거 매달기는 스스로 풀려서 생존으로 묶는다. 동료가 움직여야 하는 것은 납치와 기능 정지뿐이다.
-    //
-    // ⚠ <b>Down이 여기서 생존으로 떨어진다.</b> "#524 이후 발생하지 않는다"고 적혀 있던 근거는
-    // #725가 유예를 되살리면서 이미 거짓이 됐다 — 유예 중인 동료가 이 판에서 멀쩡해 보인다.
-    // 어느 칸으로 보낼지는 기획 결정이라 이번(#865) 범위에서는 손대지 않고 사실만 적어 둔다.
     private static ETeamMemberState StateOf(PlayerIncapacitation incapacitation)
     {
         if (incapacitation == null)
@@ -244,7 +209,6 @@ public class TeamStatusPanel : PanelBase
             case IncapacitationCause.Die:
                 return ETeamMemberState.Dead;
 
-            // UFO 흡입(#819)도 같은 칸을 쓴다 — 동료 입장에서는 둘 다 끌려가고 있는 것이다
             case IncapacitationCause.Abducted:
             case IncapacitationCause.Beamed:
                 return ETeamMemberState.Abducted;

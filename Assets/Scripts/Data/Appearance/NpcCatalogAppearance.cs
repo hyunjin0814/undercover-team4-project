@@ -2,9 +2,8 @@ using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// SciFi 경로 외형 — 통짜 바디 20종 중 하나를 토글하고, 그 모델의 고정 몽타주 조합을
-/// AppearanceModelCatalog에서 룩업해 노출한다. 프롭 부착 없음(바디가 외형 100% 전담). (#221)
-/// 모델 인덱스는 서버 권위로 NetworkVariable 동기화 — NpcAppearance의 모델 토글 패턴 재사용.
+/// SciFi 경로 NPC 외형 — 통짜 바디 중 하나를 토글하고 그 모델의 고정 몽타주 조합을 노출한다.
+/// 모델 인덱스는 서버 권위 NetworkVariable로 동기화한다.
 /// </summary>
 public class NpcCatalogAppearance : NetworkBehaviour, IAppearanceProfileSource
 {
@@ -24,7 +23,7 @@ public class NpcCatalogAppearance : NetworkBehaviour, IAppearanceProfileSource
     private AppearanceProfile m_profile = AppearanceProfile.Unassigned;
 
     public AppearanceProfile Profile => m_profile;
-    
+
     private SkinnedMeshRenderer[] BodyVariants
     {
         get

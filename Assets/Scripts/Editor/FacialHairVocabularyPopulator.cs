@@ -6,17 +6,8 @@ using UnityEngine.Localization;
 using UnityEngine.Localization.Tables;
 
 /// <summary>
-/// 수염 어휘 배선 (#619) — 메뉴: Tools/수염 어휘 배선
-///
-/// 수염 축을 아래 표대로 통째로 다시 쓴다. <see cref="HairVocabularyPopulator"/>와 같은 이유로 코드에 표를 둔다:
-/// Synty 부착물이 FBX의 <b>프리팹 변형</b>이라 참조를 텍스트로 쓸 수 없고, 값·이름·메시의 대응이
-/// 문서(appearance-montage.md §13-10)와 어긋나면 안 되기 때문이다.
-///
-/// 값 묶음은 <c>Tools/몽타주 레이어 굽기</c>의 비교 시트를 16px로 보고 정했다 — 몽타주에서 갈리는 것은
-/// <b>덮는 범위</b> 세 단계(얇게 깔림 / 턱 덩어리 / 뺨까지)와 자리(입술 위만 / 양옆만)다.
-/// 한 값에 함께 넣은 메시는 그 해상도에서 서로 구분되지 않는 것들이고, 그림은 0번으로 한 장만 굽는다.
-///
-/// 배선 후에는 <c>Tools/몽타주 레이어 굽기</c>로 레이어를 다시 구워야 새 값의 그림이 생긴다.
+/// 수염 외형 축을 코드에 정의한 표대로 다시 쓴다. 메뉴: Tools/수염 어휘 배선.
+/// 배선 후 몽타주 레이어를 다시 구워야 한다.
 /// </summary>
 public static class FacialHairVocabularyPopulator
 {
@@ -26,11 +17,8 @@ public static class FacialHairVocabularyPopulator
 
     private const string k_table = "NpcTable";
 
-    // 머리와 달리 실루엣으로 굽지 않는 축이라(MontageLayerBaker.IsSilhouetteAxis) 값이 색을 직접 들고 있다.
-    // 기존 세 값이 쓰던 색을 그대로 쓴다 — 수염은 머리색 축의 틴트를 받지 않으므로 이 색이 곧 화면 색이다.
     private static readonly Color k_beardColor = new Color(0.15f, 0.12f, 0.1f, 1f);
 
-    /// <summary>값 하나 — 이름 키(+없으면 새로 팔 번역) + 그 값이 쓰는 메시들(0번이 몽타주 대표).</summary>
     private readonly struct Value
     {
         public readonly string Key;
@@ -47,11 +35,9 @@ public static class FacialHairVocabularyPopulator
         }
     }
 
-    // 순서가 곧 인덱스다. 기존 네 값(없음·콧수염·턱수염·구레나룻)의 자리를 그대로 두고 뒤에 셋만 붙인다 —
-    // AppearanceModelCatalog가 인덱스로 이 축을 가리키므로, 자리를 유지하면 카탈로그를 고치지 않아도 된다.
     private static readonly Value[] s_values =
     {
-        new Value("Npc.Appearance.None", "없음", "None"), // [0] 프롭 없음
+        new Value("Npc.Appearance.None", "없음", "None"),
 
         new Value(
             "Npc.Appearance.FacialHair.Mustache",
@@ -133,8 +119,6 @@ public static class FacialHairVocabularyPopulator
             return;
         }
 
-        // Options는 직렬화되는 public 필드라 그대로 갈아끼우면 된다. 새 값은 MontageLayer가 비어 있으니
-        // 굽기 전까지 CanDepict가 그 값을 공개 축 후보에서 빼 준다 — 그림 없는 값이 공개되는 일은 없다.
         database.GetAxis(AppearanceAxis.FacialHair).Options = options.ToArray();
         EditorUtility.SetDirty(database);
         AssetDatabase.SaveAssets();

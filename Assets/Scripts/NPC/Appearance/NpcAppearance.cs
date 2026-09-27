@@ -3,19 +3,11 @@ using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// NPC 외형(메시·머티리얼) 랜덤 교체 + 네트워크 동기화. (#56)
-/// 서버가 스폰 시 모델 인덱스를 뽑아 NetworkVariable로 동기화하고, 각 피어가
-/// 자기 쪽 SkinnedMeshRenderer에 같은 모델을 적용한다 — 외형으로 용의자를
-/// 대조·식별하는 게임이라 전 클라이언트가 반드시 같은 외형을 봐야 한다.
-/// 네트워크를 켜지 않은 로컬 Play 테스트에서는 로컬에서 바로 랜덤 적용한다.
-///
-/// 외형 특징 축(머리색/수염/액세서리 등)도 같은 방식으로 동기화한다. (#74)
-/// 서버(AppearanceAssigner)가 SetProfile로 배정하면 인덱스만 전송되고,
-/// 각 피어가 AppearanceDatabase에서 시각 리소스를 찾아 적용한다.
+/// NPC 외형(바디 모델·특징 축 프로필)을 서버가 정해 인덱스로 동기화하고, 각 피어가 같은 외형을 적용한다.
+/// 오프라인 Play에서는 로컬에서 바로 적용한다.
 /// </summary>
 public class NpcAppearance : NetworkBehaviour, IAppearanceProfileSource
 {
-    // 아직 인덱스가 정해지지 않음(프리팹 기본 외형)을 뜻하는 값
     private const int k_unassigned = -1;
 
     [Header("외형 후보 (바디 변형)")]
@@ -58,26 +50,19 @@ public class NpcAppearance : NetworkBehaviour, IAppearanceProfileSource
     [SerializeField]
     private string m_skinColorPropertyName = "_Skin_Color";
 
-    // 서버 권위 모델 인덱스 — 서버만 쓰고 모든 클라이언트가 읽는다
     private readonly NetworkVariable<int> m_modelIndex = new NetworkVariable<int>(k_unassigned);
 
-    // 서버 권위 외형 특징 조합 — 축별 인덱스만 동기화된다 (#74)
     private readonly NetworkVariable<AppearanceProfile> m_syncedProfile =
         new NetworkVariable<AppearanceProfile>(AppearanceProfile.Unassigned);
 
-    // 이 피어에 실제로 적용된 프로필 — 오프라인 폴백에서도 유지된다
     private AppearanceProfile m_appliedProfile = AppearanceProfile.Unassigned;
 
-    // 축별로 부착한 프롭 인스턴스 — 재배정 시 교체를 위해 기억한다
     private readonly GameObject[] m_axisProps = new GameObject[AppearanceProfile.k_axisCount];
 
-    // 바디 변형 렌더러 캐시 — 배열 인덱스 순서가 곧 네트워크 동기화 기준
     private SkinnedMeshRenderer[] m_bodyVariants;
 
-    // 현재 활성 바디 — 피부색·바디 틴트 대상
     private SkinnedMeshRenderer m_activeBody;
 
-    /// <summary>바디 변형 후보. 컨테이너 아래 SkinnedMeshRenderer들을 계층 순서대로 캐시한다.</summary>
     private SkinnedMeshRenderer[] BodyVariants
     {
         get
@@ -91,7 +76,6 @@ public class NpcAppearance : NetworkBehaviour, IAppearanceProfileSource
         }
     }
 
-    /// <summary>현재 적용된 외형 특징 조합. 배정 전에는 Unassigned.</summary>
     public AppearanceProfile Profile => m_appliedProfile;
 
     public override void OnNetworkSpawn()
@@ -99,14 +83,11 @@ public class NpcAppearance : NetworkBehaviour, IAppearanceProfileSource
         m_modelIndex.OnValueChanged += HandleModelIndexChanged;
         m_syncedProfile.OnValueChanged += HandleProfileChanged;
 
-        // 인덱스 추첨은 서버 권위 — 클라이언트는 동기화된 값을 받아 적용만 한다
         if (IsServer && m_modelIndex.Value == k_unassigned && BodyVariants.Length > 0)
             m_modelIndex.Value = Random.Range(0, BodyVariants.Length);
 
-        // 클라이언트는 스폰 페이로드에 이미 값이 실려 오므로 이 시점에 바로 적용된다
         ApplyModel(m_modelIndex.Value);
 
-        // 늦게 접속한 클라이언트는 프로필도 스폰 페이로드에 실려 온다
         if (m_syncedProfile.Value.IsAssigned)
             ApplyProfile(m_syncedProfile.Value);
     }
@@ -119,16 +100,11 @@ public class NpcAppearance : NetworkBehaviour, IAppearanceProfileSource
 
     private void Start()
     {
-        // 오프라인 폴백 — 네트워크 세션 없이 Play한 로컬 테스트에서는 바로 랜덤 적용
         if (!IsSpawned && BodyVariants.Length > 0)
             ApplyModel(Random.Range(0, BodyVariants.Length));
     }
 
-    /// <summary>
-    /// 외형 특징 조합을 배정한다. 네트워크 세션에서는 서버 전용 —
-    /// NetworkVariable로 전 클라이언트에 인덱스가 동기화된다. (#74)
-    /// 오프라인(로컬 Play)에서는 바로 적용한다.
-    /// </summary>
+    /// <summary>외형 특징 조합을 배정한다. 세션에서는 서버 전용, 오프라인에서는 바로 적용한다.</summary>
     public void SetProfile(AppearanceProfile profile)
     {
         if (IsSpawned)
@@ -141,7 +117,7 @@ public class NpcAppearance : NetworkBehaviour, IAppearanceProfileSource
                 );
                 return;
             }
-            m_syncedProfile.Value = profile; // OnValueChanged로 서버 포함 전 피어에 적용된다
+            m_syncedProfile.Value = profile;
         }
         else
         {
@@ -153,7 +129,6 @@ public class NpcAppearance : NetworkBehaviour, IAppearanceProfileSource
     {
         ApplyModel(current);
 
-        // 바디가 바뀌면 이전 바디에만 입힌 피부색·틴트가 사라지므로 특징 축을 다시 입힌다
         if (m_appliedProfile.IsAssigned)
             ApplyProfile(m_appliedProfile);
     }
@@ -163,13 +138,7 @@ public class NpcAppearance : NetworkBehaviour, IAppearanceProfileSource
         ApplyProfile(current);
     }
 
-    /// <summary>
-    /// 바디를 다시 뽑는다 — 서버 전용. <paramref name="allowFemale"/>가 false면 여성 바디를 후보에서 뺀다.
-    ///
-    /// 수염이 붙는 NPC의 바디를 고르는 데 쓴다 (#619). 반대 방향(바디를 보고 수염을 지우는 것)으로 하면
-    /// 프로필이 바뀌어 디코이가 범인의 공개 축을 복사하는 경로가 깨진다 — 프로필은 그대로 두고
-    /// <b>바디를 프로필에 맞추는</b> 쪽이 몽타주 부합 보장을 건드리지 않는다.
-    /// </summary>
+    /// <summary>바디를 다시 뽑는다. allowFemale이 false면 여성 바디를 제외한다. 서버 전용.</summary>
     public void ServerPickBody(bool allowFemale)
     {
         SkinnedMeshRenderer[] variants = BodyVariants;
@@ -185,28 +154,20 @@ public class NpcAppearance : NetworkBehaviour, IAppearanceProfileSource
                 candidates.Add(i);
         }
 
-        // 후보가 없으면(여성 바디만 있는 프리팹) 제한을 버린다 — 바디 없는 NPC보다 낫다
         int picked = candidates.Count > 0
             ? candidates[Random.Range(0, candidates.Count)]
             : Random.Range(0, variants.Length);
 
         if (IsSpawned)
-            m_modelIndex.Value = picked; // 클라이언트는 OnValueChanged로 따라온다
+            m_modelIndex.Value = picked;
         else
-            ApplyModel(picked); // 오프라인 폴백
+            ApplyModel(picked);
     }
 
-    // Synty Generic 바디는 이름에 성별이 들어 있다 (SM_Gen_Chr_Street_Female_01 등).
-    // 성별을 따로 데이터로 두지 않는 이유는 바디 목록 자체가 프리팹 계층이라, 표를 만들면
-    // 계층과 표 둘을 맞춰야 하는 자리가 하나 더 생기기 때문이다.
     private static bool IsFemaleBody(SkinnedMeshRenderer body) =>
         body.name.IndexOf("Female", System.StringComparison.OrdinalIgnoreCase) >= 0;
 
-    /// <summary>
-    /// 바디 변형 목록에서 index번 하나만 활성화하고 나머지는 끈다.
-    /// 모든 바디가 같은 Root 스켈레톤에 이미 바인딩돼 있어(프리팹 토글 방식)
-    /// mesh 교체 없이 SetActive만으로 외형이 바뀌고 본 배열이 유지된다.
-    /// </summary>
+    /// <summary>바디 변형 중 index번만 활성화하고 나머지는 끈다.</summary>
     private void ApplyModel(int index)
     {
         SkinnedMeshRenderer[] variants = BodyVariants;
@@ -221,30 +182,24 @@ public class NpcAppearance : NetworkBehaviour, IAppearanceProfileSource
         m_activeBody = variants[index];
     }
 
-    /// <summary>축별 옵션의 시각 리소스를 데이터베이스에서 찾아 이 NPC에 입힌다. (#74)</summary>
+    /// <summary>축별 옵션의 시각 리소스를 데이터베이스에서 찾아 이 NPC에 입힌다.</summary>
     private void ApplyProfile(AppearanceProfile profile)
     {
         m_appliedProfile = profile;
         if (!profile.IsAssigned || m_appearanceDatabase == null)
             return;
 
-        // 1) 프롭 축
         ApplyPropAxis(AppearanceAxis.HairStyle, profile);
         ApplyPropAxis(AppearanceAxis.FacialHair, profile);
         ApplyPropAxis(AppearanceAxis.Headwear, profile);
         ApplyPropAxis(AppearanceAxis.Eyewear, profile);
 
-        // 2) 머리색 — 베이스 머티리얼을 통째로 칠한다. 마스크 채널로 칠하면 마스크를 그린 팩의 메시에만
-        //    먹어서, 다른 팩 부착물이 섞인 어휘에서는 색이 통째로 무시된다 (#619 — docs §13-13)
         TintPropAxis(AppearanceAxis.HairColor, AppearanceAxis.HairStyle, profile, m_hairColorPropertyName);
 
-        // 3) 피부색
         ApplySkinColor(AppearanceAxis.SkinColor, profile);
     }
 
-    /// <summary> 프롭 축 하나를 적용한다.
-    /// — 기존 프롭 제거 후 새 프롭 부착(옵션 색으로 틴트).
-    /// 옵션에 프롭이 없으면('없음/대머리') 미부착이 정상.</summary>
+    /// <summary>프롭 축 하나를 적용한다 — 기존 프롭을 제거하고 새 프롭을 옵션 색으로 틴트해 붙인다.</summary>
     private void ApplyPropAxis(AppearanceAxis axis, in AppearanceProfile profile)
     {
         AppearanceDatabase.AppearanceOption option = m_appearanceDatabase.GetOption(
@@ -257,9 +212,6 @@ public class NpcAppearance : NetworkBehaviour, IAppearanceProfileSource
             Destroy(m_axisProps[slot]);
         m_axisProps[slot] = null;
 
-        // 한 값이 메시를 여럿 가질 수 있다 (#619). 어느 것을 쓸지는 프로필에 없어 네트워크로 오지 않으므로,
-        // 이미 동기화된 NetworkObjectId에서 결정론적으로 뽑는다 — 안 그러면 피어마다 다른 머리가 보인다.
-        // 축을 섞는 것은 한 NPC의 모든 축이 같은 자리 변형으로 몰리지 않게 하기 위한 것이다.
         ulong seed = (IsSpawned ? NetworkObjectId : (ulong)GetInstanceID()) * 31UL + (ulong)axis;
         GameObject prefab = option?.PickProp(seed);
         if (prefab == null)
@@ -273,16 +225,13 @@ public class NpcAppearance : NetworkBehaviour, IAppearanceProfileSource
         }
 
         GameObject prop = Instantiate(prefab, anchor, false);
-        // 머리 프롭은 밝은 중립 베이스로 갈아끼워야 HairColor 곱셈 틴트가 선명하다 (#221)
         if (axis == AppearanceAxis.HairStyle && m_hairBaseMaterial != null)
             ApplyBaseMaterial(prop, m_hairBaseMaterial);
         TintRenderers(prop, option.Color);
         m_axisProps[slot] = prop;
     }
 
-    /// <summary>프롭의 모든 렌더러 머티리얼을 중립 베이스로 교체한다.
-    /// 곱셈 틴트가 프롭 원본(어두운 아틀라스)에 눌리지 않게 밝은 베이스를 깔 때 쓴다.
-    /// 공유 머티리얼을 그대로 대입 — 색은 이후 MaterialPropertyBlock으로 렌더러별 적용(인스턴스 누수 없음).</summary>
+    /// <summary>프롭의 모든 렌더러 머티리얼을 중립 베이스로 교체한다.</summary>
     private static void ApplyBaseMaterial(GameObject prop, Material baseMaterial)
     {
         foreach (Renderer renderer in prop.GetComponentsInChildren<Renderer>())
@@ -310,8 +259,7 @@ public class NpcAppearance : NetworkBehaviour, IAppearanceProfileSource
         return m_headAnchor;
     }
 
-    /// <summary>색 전용 축을 다른 축의 프롭에 틴트. (예: 머리색 -> 머리스타일 프롭)
-    /// 대상 프롭이 없으면 건너 뛴다.</summary>
+    /// <summary>색 전용 축을 다른 축의 프롭에 틴트한다(예: 머리색 → 머리 프롭). 프롭이 없으면 건너뛴다.</summary>
     private void TintPropAxis(
         AppearanceAxis colorAxis,
         AppearanceAxis targetPropAxis,
@@ -347,10 +295,7 @@ public class NpcAppearance : NetworkBehaviour, IAppearanceProfileSource
         }
     }
 
-    /// <summary>피부색을 바디 렌더러에 적용한다.
-    /// '메탈' 등 머티리얼 교체가 필요한 옵션은 MaterialOverride로,
-    /// 일반 피부톤은 마스크된 _Skin_Color로.
-    /// 둘 다 렌더러별 적용이라 공유 머티리얼은 불변.</summary>
+    /// <summary>피부색을 바디 렌더러에 적용한다(머티리얼 교체 또는 _Skin_Color).</summary>
     private void ApplySkinColor(AppearanceAxis axis, in AppearanceProfile profile)
     {
         AppearanceDatabase.AppearanceOption option = m_appearanceDatabase.GetOption(

@@ -2,20 +2,8 @@ using System;
 using UnityEngine;
 
 /// <summary>
-/// 오디오 카탈로그 — 효과음(<see cref="EAudioClip"/>)과 BGM(<see cref="EBgm"/>)의 클립·볼륨. (#478, #483)
-/// <see cref="SoundManager"/>가 유일한 소비자다.
-///
-/// <b>클립 앞을 건너뛰는 이유</b> — 라이브러리 음원은 도입부가 여린 것이 많다(밧줄이 조여지기
-/// 전의 스치는 소리 같은 것). 트리거는 제때 걸려도 <b>들리는 순간</b>이 늦어 조작과 어긋나 보인다.
-/// 음원을 잘라 두는 대신 항목에 시작 위치를 두면 인스펙터에서 귀로 맞출 수 있다. (#549)
-///
-/// <b>감쇠 거리를 항목마다 두는 이유</b> — 소리마다 들려야 할 범위가 다르다. 진압봉 스윙음은
-/// 바로 옆에서만 들리면 되지만 타격음은 조금 더 멀리 가야 "저기서 누가 치고 있다"가 읽힌다.
-/// 매니저에 고정값을 박으면 이 차이를 만들 수 없다.
-///
-/// <b>BGM을 같은 에셋에 두는 이유</b> — 나누면 매니저에 SO 참조가 하나 더 붙고 AppBootstrap
-/// 프리팹을 다시 배선해야 한다. BGM은 항목이 씬 수만큼밖에 안 되므로 표 하나를 더 얹는 편이 싸다.
-/// 3D 감쇠 거리가 필요 없다는 점만 달라 항목 타입을 따로 뒀다.
+/// 효과음(EAudioClip)과 BGM(EBgm)의 클립·볼륨·시작 위치·감쇠 거리를 담는 오디오 카탈로그 SO.
+/// SoundManager가 유일한 소비자다.
 /// </summary>
 [CreateAssetMenu(fileName = "AudioLibrary", menuName = "Scriptable Objects/AudioLibrary")]
 public class AudioLibrary : ScriptableObject
@@ -46,7 +34,6 @@ public class AudioLibrary : ScriptableObject
         public float MaxDistance = 25f;
     }
 
-    /// <summary>BGM 한 곡 — 3D 감쇠가 없어(2D 재생) 거리 항목이 없다.</summary>
     [Serializable]
     public class BgmEntry
     {
@@ -61,7 +48,6 @@ public class AudioLibrary : ScriptableObject
         public float Volume = 0.5f;
     }
 
-    /// <summary>씬에 들어갈 때 자동으로 틀 곡 — 표에 없는 씬은 무음이다.</summary>
     [Serializable]
     public class SceneBgmEntry
     {

@@ -2,9 +2,7 @@ using UnityEngine;
 using UnityEngine.Localization;
 
 /// <summary>
-/// 세션 드롭 사유 토스트 (#764). 끊기는 시점엔 토스트 자리가 없는 씬일 수 있어 사유를 들고 있다가
-/// 타이틀 복귀 + 로딩 종료 후 띄운다 (PlayerPresenceToastView·SuddenEventToastView와 같은 폴링 방식).
-/// 매니저가 아니다 — 참조자가 없으므로 App에 올리지 않는다 (R3).
+/// 세션 끊김 사유를 보관했다가 타이틀 복귀·로딩 종료 후 토스트로 띄운다.
 /// </summary>
 public class ConnectionLostToastView : MonoBehaviour
 {

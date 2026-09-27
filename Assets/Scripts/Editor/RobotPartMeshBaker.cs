@@ -3,19 +3,14 @@ using UnityEditor;
 using UnityEngine;
 
 /// <summary>
-/// 로봇 메시를 부위별 서브메시 3개로 갈라 굽는다 (#432) — 서브메시 순서 = <see cref="EBodyPart"/> 순서.
-/// 원본은 서브메시가 하나라 몸 전체가 한 색으로만 칠해진다. UV 마스크로는 못 나눈다(아틀라스가
-/// UV 섬을 부위끼리 재사용한다) — 그래서 본으로 나눈다. 근거·재생성 절차는 docs/design/player-color.md.
-///
-/// <b>결과물은 원본과 끊긴 사본이다</b> — Synty 원본이 바뀌거나 모델을 갈아 끼우면 직접 다시 돌려야 한다.
-/// 안 돌려도 에러는 나지 않고 옛 메시가 그대로 쓰인다.
+/// 로봇 메시를 본 기준으로 부위별 서브메시 3개(EBodyPart 순서)로 갈라 굽는다.
+/// 원본과 끊긴 사본이므로 원본 모델이 바뀌면 다시 돌려야 한다.
 /// </summary>
 public static class RobotPartMeshBaker
 {
     private const string k_sourcePath = "Assets/Imported/Synty/PolygonGeneric/Prefabs/Characters/SM_Gen_Chr_Robot_01.prefab";
     private const string k_outputPath = "Assets/Meshes/SM_Gen_Chr_Robot_01_Parts.asset";
 
-    // 본 이름 앞부분으로 부위를 정한다 — 목록에 없는 본은 상체로 본다
     private static readonly string[] s_headBones = { "Head", "Neck", "Eye", "Jaw" };
     private static readonly string[] s_legBones = { "Hips", "UpperLeg", "LowerLeg", "Ankle", "Ball", "Toe" };
 
@@ -47,7 +42,6 @@ public static class RobotPartMeshBaker
         for (int i = 0; i < buckets.Length; i++)
             buckets[i] = new List<int>();
 
-        // 삼각형은 정점 셋의 다수결로 정한다 — 경계에서 한 조각이 옆 부위로 넘어가도 티가 나지 않는다
         for (int t = 0; t < triangles.Length; t += 3)
         {
             EBodyPart part = MajorityPart(

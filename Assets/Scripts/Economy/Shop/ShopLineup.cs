@@ -5,27 +5,15 @@ using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// 상점 진열 추첨과 주문 (#814, #843). 카탈로그에서 소모형 고정 칸 + 랜덤 칸을 뽑아 이번 라운드
-/// 칸에 배정하고, 주문창(<see cref="ShopBrowserPanel"/>)이 누른 주문을 서버 권위로 판정한다.
-/// <b>추첨은 라운드당 1회다</b> — 예전에는 "Shop 씬 로드 1회 = 라운드 1회"로 봤지만 이어하기도 씬
-/// 로드라 그때마다 다시 뽑히고 팔린 칸이 열렸다 (#925). 진열은 세이브에 실려(<see cref="ShopPurchases"/>
-/// 경유) 같은 라운드면 복원된다.
-///
-/// <b>진열대가 없어지며 칸 상태가 여기로 모였다.</b> 예전에는 칸마다 씬 오브젝트(ShopStand)가
-/// 자기 NetworkVariable과 구매 RPC를 들고 있었지만, 전시가 사라진 지금 칸은 주문창의 칸일 뿐이라
-/// 씬 오브젝트로 둘 이유가 없다. 클라가 보내는 것이 "몇 번 칸"뿐이라 가격·품절을 위조할 수 없는
-/// 성질은 그대로다 — 품목과 상태의 주인은 여전히 서버다.
-///
-/// App 파사드에 올리지 않는 이유: Shop 씬에서만 사는 씬 스코프 오브젝트다(주문창이 같은 씬이라
-/// 인스펙터로 잡는다). 라운드를 넘겨야 하는 값은 <see cref="ShopPurchases"/>가 이미 들고 있다.
+/// 상점 진열 추첨(라운드당 1회)과 주문창 주문의 서버 권위 판정.
+/// 진열은 세이브에 실려 같은 라운드면 복원된다.
 /// </summary>
 [RequireComponent(typeof(NetworkObject))]
 public class ShopLineup : NetworkBehaviour
 {
-    /// <summary>칸 하나 — 카탈로그 인덱스와 판매 상태. NetworkList로 전 클라에 동기화된다.</summary>
     public struct Slot : INetworkSerializable, IEquatable<Slot>
     {
-        public int EntryIndex; // -1 = 빈 칸
+        public int EntryIndex;
         public EShopSlotStatus Status;
 
         public void NetworkSerialize<T>(BufferSerializer<T> serializer)
@@ -46,16 +34,12 @@ public class ShopLineup : NetworkBehaviour
     [SerializeField]
     private int m_slotCount = 7;
 
-    // 서버만 쓰기, 전 클라 읽기 — DirectoryManager와 같은 패턴 (#223)
     private readonly NetworkList<Slot> m_slots = new NetworkList<Slot>();
 
-    /// <summary>이번 라운드 칸 수 — 스폰 전이면 0.</summary>
     public int SlotCount => IsSpawned ? m_slots.Count : 0;
 
-    /// <summary>칸의 품목·상태가 바뀌었다 — 주문창이 열려 있으면 목록을 다시 그린다.</summary>
     public event Action OnChanged;
 
-    /// <summary>구매 응답(성공·자금 부족 등). 요청자 클라에서만 울린다.</summary>
     public event Action<EShopReply> OnPurchaseReply;
 
     /// <summary>칸이 파는 품목 — 빈 칸이거나 범위 밖이면 null.</summary>
@@ -74,12 +58,11 @@ public class ShopLineup : NetworkBehaviour
 
         if (IsServer)
         {
-            // 재시작 시 씬 NetworkObject의 NetworkList에 이전 세션 항목이 남는다 (#209 패턴)
             m_slots.Clear();
             AssignLineupAsync().Forget();
         }
 
-        OnChanged?.Invoke(); // late-join도 여기서 처음 그린다
+        OnChanged?.Invoke();
     }
 
     public override void OnNetworkDespawn()
@@ -101,14 +84,10 @@ public class ShopLineup : NetworkBehaviour
         return false;
     }
 
-    // ---- 추첨 (서버 전용) ----
-
-    // 씬 로드 콜백 안에서 바로 네트워크 상태를 건드리지 않는다 — ShopDelivery.DeliverAsync와 같은 이유.
     private async UniTaskVoid AssignLineupAsync()
     {
         await UniTask.NextFrame(this.GetCancellationTokenOnDestroy());
 
-        // 이어하기로 돌아온 같은 라운드면 그때 진열을 그대로 세운다 (#925)
         if (TryRestoreLineup())
             return;
 
@@ -141,7 +120,6 @@ public class ShopLineup : NetworkBehaviour
         int stapleSlots = Mathf.Clamp(m_catalog.StapleSlots, 0, slotCount);
         int randomSlots = Mathf.Clamp(m_catalog.RandomSlots, 0, slotCount - stapleSlots);
 
-        // 설정값 합이 칸 수와 다르면(모자라거나 후보가 한쪽뿐이면) 남는 칸을 다른 쪽으로 넘긴다.
         if (staples.Count == 0)
         {
             randomSlots = Mathf.Min(slotCount, randomSlots + stapleSlots);
@@ -174,18 +152,13 @@ public class ShopLineup : NetworkBehaviour
             $"[상점] 진열 추첨 — 소모형 {stapleSlots}칸, 랜덤 {randomSlots}칸, 빈 칸 {slotCount - stapleSlots - randomSlots}"
         );
 
-        // 추첨이 곧 이 라운드 진열이 확정되는 시점이다 — 여기서 저장하지 않으면 아무것도 안 사고
-        // 나갔다 이어했을 때 다시 뽑혀 리롤이 된다 (#925).
         PushSnapshot();
         SaveService.SaveAsync().Forget();
     }
 
-    // ---- 세이브 왕복 (#925) ----
-
     private int CurrentRound =>
         App.Game.RoundProgress != null ? App.Game.RoundProgress.Current : RoundProgress.k_firstRound;
 
-    // 같은 라운드의 스냅샷이 있으면 그것으로 칸을 세운다 — 돌려주는 값은 복원했는가다.
     private bool TryRestoreLineup()
     {
         ShopPurchases purchases = App.Game.ShopPurchases;
@@ -201,15 +174,12 @@ public class ShopLineup : NetworkBehaviour
             ShopSlotSaveEntry e = saved[i];
             int index = string.IsNullOrEmpty(e.Id) ? -1 : IndexOfId(e.Id, e.Installable);
 
-            // 품목을 못 찾으면 그 칸만 빈 칸으로 둔다 — 카탈로그가 바뀐 세이브에서 통째로 새로
-            // 뽑으면 이미 산 칸까지 열려 원래 버그가 되살아난다.
             if (index < 0 && !string.IsNullOrEmpty(e.Id))
                 Debug.LogWarning($"[상점] 세이브의 진열 품목 '{e.Id}'을(를) 카탈로그에서 찾지 못해 빈 칸으로 둔다", this);
 
             if (!Enum.TryParse(e.Status, out EShopSlotStatus status))
                 status = EShopSlotStatus.Available;
 
-            // 설치형은 저장값을 믿지 않고 다시 판정한다 — MakeSlot과 같은 기준이라 어긋날 자리가 없다.
             ShopCatalog.Entry restored = m_catalog.Get(index);
             if (restored != null && restored.IsInstallable && purchases.HasInstallable(restored.Installable))
                 status = EShopSlotStatus.Owned;
@@ -221,7 +191,6 @@ public class ShopLineup : NetworkBehaviour
         return true;
     }
 
-    // 지금 칸을 스냅샷으로 만들어 ShopPurchases에 맡긴다(세이브가 거기서 읽는다).
     private void PushSnapshot()
     {
         ShopPurchases purchases = App.Game.ShopPurchases;
@@ -244,7 +213,6 @@ public class ShopLineup : NetworkBehaviour
         purchases.ServerSetLineup(CurrentRound, snapshot);
     }
 
-    // 저장 id — 소지형은 프리팹 이름(SaveItemLookup 관례), 설치형은 enum 이름. 빈 칸은 빈 문자열.
     private static string IdOf(ShopCatalog.Entry entry)
     {
         if (entry == null)
@@ -267,7 +235,6 @@ public class ShopLineup : NetworkBehaviour
         return -1;
     }
 
-    // 이미 산 설치형은 처음부터 Owned로 연다 — 옛 ShopStand.ServerAssign이 하던 판정이다.
     private Slot MakeSlot(int entryIndex, ShopPurchases purchases)
     {
         ShopCatalog.Entry entry = m_catalog.Get(entryIndex);
@@ -284,7 +251,6 @@ public class ShopLineup : NetworkBehaviour
         };
     }
 
-    // 종류별 최소 1칸을 먼저 배정하고, 남는 칸은 복원 추첨으로 채운다.
     private static List<int> PickStapleSlots(List<int> staples, int count)
     {
         List<int> result = new List<int>(count);
@@ -302,7 +268,6 @@ public class ShopLineup : NetworkBehaviour
         return result;
     }
 
-    // 설치형은 뽑히면 사본에서 제거해 라운드 내 중복을 막는다. 소지형은 남겨 중복을 허용한다.
     private List<int> PickRandomSlots(List<int> others, int count)
     {
         List<int> result = new List<int>(count);
@@ -332,8 +297,6 @@ public class ShopLineup : NetworkBehaviour
         }
     }
 
-    // ---- 주문 (서버 권위) ----
-
     /// <summary>주문창이 칸의 주문 버튼을 눌렀을 때 부른다.</summary>
     public void RequestPurchase(int slot)
     {
@@ -349,7 +312,7 @@ public class ShopLineup : NetworkBehaviour
         RequestPurchaseRpc(slot);
     }
 
-    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)] // 오너 없는 씬 오브젝트
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
     private void RequestPurchaseRpc(int slot, RpcParams rpcParams = default)
     {
         ulong requester = rpcParams.Receive.SenderClientId;
@@ -413,11 +376,9 @@ public class ShopLineup : NetworkBehaviour
         else
             purchases.AddCarried(entry.ItemPrefab);
 
-        value.Status = EShopSlotStatus.SoldOut; // 다음 라운드 재추첨 때 다시 판정된다
+        value.Status = EShopSlotStatus.SoldOut;
         m_slots[slot] = value;
 
-        // 여기서 저장한다 (#925) — 출동·라운드 종료에만 저장하면 상점에서 산 뒤 나갔다 이어했을 때
-        // 이 칸이 다시 열린다. 진열 스냅샷도 같이 최신으로 만든다.
         PushSnapshot();
         SaveService.SaveAsync().Forget();
 
@@ -428,8 +389,7 @@ public class ShopLineup : NetworkBehaviour
         );
     }
 
-    // 사유는 enum으로만 싣는다 — 완성 문장을 실으면 서버 언어가 요청자 화면에 그대로 뜬다 (#525).
-    [Rpc(SendTo.SpecifiedInParams)] // 거절은 무음 — 값만 보려고 눌러도 실패음이 나지 않게
+    [Rpc(SendTo.SpecifiedInParams)]
     private void ReplyRpc(EShopReply reply, EAudioClip sound, RpcParams rpcParams)
     {
         OnPurchaseReply?.Invoke(reply);

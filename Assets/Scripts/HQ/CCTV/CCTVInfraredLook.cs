@@ -1,7 +1,9 @@
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
 
-/// <summary>CCTV 야시경 룩 적용 — 상태 없는 정적 헬퍼, URP 심볼을 여기에만 가둔다. (#677)</summary>
+/// <summary>
+/// CCTV 야시경 룩 적용 — 상태 없는 정적 헬퍼, URP 심볼을 여기에만 가둔다.
+/// </summary>
 public static class CCTVInfraredLook
 {
     /// <summary>포스트 프로세싱 on/off — 실제 룩은 전용 Volume 프로필이 낸다.</summary>
@@ -24,7 +26,6 @@ public static class CCTVInfraredLook
     private static readonly int s_emissionColorId = Shader.PropertyToID("_EmissionColor");
     private static MaterialPropertyBlock s_monitorBlock;
 
-    // 백라이트는 콘텐츠 무관 균일 발광("화면은 켜져 있다"), IR 발광은 RT를 그대로 밝힌다. (#677)
     public static void ApplyMonitorEmission(
         Renderer monitorRenderer,
         bool displaying,

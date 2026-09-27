@@ -4,8 +4,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 
 /// <summary>
-/// 씬당 하나의 UI 매니저 베이스. 패널을 타입으로 관리하고 ESC 스택을 처리한다.
-/// 패널은 PanelBase.Awake에서 스스로 등록된다 — 실행 순서(UIManagement < UIPanel)가 이를 보장.
+/// 씬당 하나인 UI 매니저 베이스 — 패널을 타입으로 관리하고 ESC 스택을 처리한다.
 /// </summary>
 [DefaultExecutionOrder((int)EExecutionOrder.UIManagement)]
 public abstract class UIManagerBase : CommonManagerBase
@@ -13,15 +12,9 @@ public abstract class UIManagerBase : CommonManagerBase
     private readonly Dictionary<Type, PanelBase> m_panels = new();
     private readonly Stack<PanelBase> m_escStack = new();
 
-    // 스택이 비었을 때 ESC로 여는 씬의 진입 메뉴(일시정지·종료 확인). 씬당 하나 — 패널이 스스로 등록.
     private PanelBase m_escMenuPanel;
 
 #if UNITY_EDITOR
-    // 에디터는 Game 뷰에서 ESC를 누르면 커서 잠금을 스스로 푼다(문서화된 동작).
-    // 그래서 ESC로 모달을 닫아 CursorLock이 같은 프레임에 다시 잠가도 에디터가 이겨, 커서가 풀린 채 남는다.
-    // 다음 프레임에 한 번 더 적용해 되돌린다 — 요청 수는 건드리지 않으므로 판정 결과는 그대로다.
-    // ESC로 일시정지가 열린 경우엔 그쪽이 Push한 상태라 재적용해도 계속 풀림이다(원하는 동작).
-    // 빌드에는 이 보정이 아예 들어가지 않는다.
     private bool m_reassertCursorNextFrame;
 #endif
 
@@ -42,7 +35,6 @@ public abstract class UIManagerBase : CommonManagerBase
         m_reassertCursorNextFrame = true;
 #endif
 
-        // 창이 쌓여 있으면 ESC는 그 창만 처리한다 — 닫든(닫기 가능) 말든 진입 메뉴로는 새지 않는다.
         if (m_escStack.TryPeek(out PanelBase top) && top != null)
         {
             if (top.CanCloseWithESC)
@@ -50,8 +42,6 @@ public abstract class UIManagerBase : CommonManagerBase
             return;
         }
 
-        // 스택이 비었을 때만 진입 메뉴를 연다. 다른 모달(명부·폭탄 매뉴얼 등)이 화면을 잡고 있으면
-        // 그 패널이 CanOpenFromEsc로 거부해 이중 동작을 막는다.
         if (m_escMenuPanel != null && m_escMenuPanel.CanOpenFromEsc)
             m_escMenuPanel.OpenPanel();
     }
@@ -84,7 +74,6 @@ public abstract class UIManagerBase : CommonManagerBase
         if (panel == null)
             return;
 
-        // 내가 등록한 그 인스턴스일 때만 제거 (ManagerHandler와 같은 방침)
         if (
             m_panels.TryGetValue(panel.GetType(), out PanelBase current)
             && ReferenceEquals(current, panel)
@@ -103,7 +92,6 @@ public abstract class UIManagerBase : CommonManagerBase
 
     public void PopUIStack(PanelBase panel)
     {
-        // 최상단일 때만 pop — 중간 패널을 코드로 닫아도 스택이 꼬이지 않는다 (템플릿 버그 수정)
         if (m_escStack.TryPeek(out PanelBase top) && ReferenceEquals(top, panel))
             m_escStack.Pop();
     }
@@ -137,8 +125,6 @@ public abstract class UIManagerBase : CommonManagerBase
     {
         if (!TryGetPanel(out T panel))
         {
-            // 호출부는 모두 반환값을 버린다 — 씬에 패널을 두는 걸 잊으면 버튼이 조용히 죽어 원인을 찾기 어렵다.
-            // 배치 누락(또는 프리팹에 스크립트 미부착)을 콘솔에서 바로 드러낸다 (#441).
             Debug.LogError(
                 $"[{GetType().Name}] 등록되지 않은 패널을 열려 했습니다: {typeof(T).Name} — 씬에 배치됐는지 확인하세요."
             );

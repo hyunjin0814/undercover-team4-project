@@ -1,8 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// Idle(정지 대기) 상태 튜닝 값. (#259 — NpcController에서 분리)
-/// 배회 루프에서 걷다 잠깐 서 있는 구간의 길이·확률을 정한다.
+/// Idle(정지 대기) 상태 튜닝 SO — 대기 시간과 긴 대기 확률.
 /// </summary>
 [CreateAssetMenu(fileName = "NpcIdleConfig", menuName = "Undercover/NPC/Idle Config")]
 public class NpcIdleConfig : ScriptableObject

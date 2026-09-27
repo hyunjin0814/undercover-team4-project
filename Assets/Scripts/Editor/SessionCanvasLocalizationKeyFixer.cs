@@ -4,11 +4,7 @@ using UnityEngine;
 using UnityEngine.Localization.Components;
 
 /// <summary>
-/// SessionCanvas 버튼 배선을 다시 하면서 지워진 LocalizeStringEvent 키 11개를 복원한다.
-/// 원인: 버튼 오브젝트를 새로 만들면서(예: SignUpButton → SignUpBtn) 이전 인스턴스에 걸려있던
-/// Table Entry Reference 오버라이드가 유실되고 새 오브젝트는 빈 키인 채로 남음.
-/// 경로/키 매핑은 커밋된 HEAD 버전의 SessionCanvas.prefab에서 추출한 원래 키를
-/// 현재(재배선 후) 계층 구조에 대응시킨 것이다.
+/// SessionCanvas 버튼 재배선으로 지워진 LocalizeStringEvent 키 11개를 복원한다.
 /// </summary>
 public static class SessionCanvasLocalizationKeyFixer
 {
