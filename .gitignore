@@ -74,3 +74,8 @@ Assets/StreamingAssets/HockeyAppUnityAndroid
 # 빌드 시 생성되는 커밋 sha 도장 (#622) — 빌드마다 바뀌어 추적하지 않는다
 /[Aa]ssets/[Ss]cripts/[Nn]etwork/[Cc]onfig/[Rr]esources/
 /[Aa]ssets/[Ss]cripts/[Nn]etwork/[Cc]onfig/[Rr]esources.meta
+# 빌드 zip은 릴리스 Assets로만 배포
+*.zip
+
+# 빌드 문서는 위 [Bb]uilds/ 규칙에서 제외해 추적한다
+!/docs/builds/
